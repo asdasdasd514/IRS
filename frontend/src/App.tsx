@@ -1,33 +1,95 @@
-import React from 'react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { Compass, CheckCircle } from 'lucide-react';
+import { Routes, Route, Navigate } from 'react-router-dom';
+import { HomePage, TripMapPage, CreateTripPage, EditTripPage, LoginPage, AdminPage } from './pages';
+import { ReportPage } from './pages/Report';
+import { ReportsListPage } from './pages/ReportsList';
+import { useAppStore } from './store/useAppStore';
+import { useEffect } from 'react';
+import { authApi } from './services/api';
 
-const queryClient = new QueryClient();
+// Protected Route Component
+function ProtectedRoute({ children }: { children: React.ReactNode }) {
+  const token = useAppStore((state) => state.token);
 
-export const App: React.FC = () => {
+  if (!token) {
+    return <Navigate to="/login" replace />;
+  }
+
+  return <>{children}</>;
+}
+
+function App() {
+  const { token, setAuth } = useAppStore();
+
+  // Check token validity on mount
+  useEffect(() => {
+    const checkAuth = async () => {
+      if (token) {
+        try {
+          const user = await authApi.getMe();
+          setAuth(user, token);
+        } catch (err) {
+          setAuth(null, null);
+        }
+      }
+    };
+    checkAuth();
+  }, []);
+
   return (
-    <QueryClientProvider client={queryClient}>
-      <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center justify-center p-6 text-center">
-        <div className="w-16 h-16 rounded-2xl bg-indigo-600/20 text-indigo-400 flex items-center justify-center mb-4 border border-indigo-500/30">
-          <Compass className="w-8 h-8" />
-        </div>
+    <Routes>
+      <Route path="/login" element={<LoginPage />} />
+      <Route path="/admin" element={<AdminPage />} />
 
-        <h1 className="text-2xl sm:text-3xl font-extrabold mb-2">
-          IRS Mobile Admissions Platform
-        </h1>
-
-        <p className="text-sm text-slate-400 max-w-md mb-6">
-          Dự án đã được khởi tạo cấu trúc chuẩn và cài đặt đầy đủ các thư viện phụ thuộc (Zustand, React Query, Tailwind CSS, Vite PWA, heic2any).
-        </p>
-
-        <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 text-left space-y-2 text-xs max-w-md w-full">
-          <div className="flex items-center gap-2 text-emerald-400 font-semibold">
-            <CheckCircle className="w-4 h-4" /> Đã sẵn sàng phát triển giao diện!
-          </div>
-          <p className="text-slate-400">• Thư mục <code>src/pages/</code> đã được dọn dẹp sạch sẽ.</p>
-          <p className="text-slate-400">• Đã xóa toàn bộ thư mục <code>dist/</code>.</p>
-        </div>
-      </div>
-    </QueryClientProvider>
+      <Route
+        path="/"
+        element={
+          <ProtectedRoute>
+            <HomePage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/trips/new"
+        element={
+          <ProtectedRoute>
+            <CreateTripPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/trips/:tripId"
+        element={
+          <ProtectedRoute>
+            <TripMapPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/trips/:tripId/edit"
+        element={
+          <ProtectedRoute>
+            <EditTripPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/reports"
+        element={
+          <ProtectedRoute>
+            <ReportsListPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/reports/:reportId"
+        element={
+          <ProtectedRoute>
+            <ReportPage />
+          </ProtectedRoute>
+        }
+      />
+    </Routes>
   );
-};
+}
+
+export default App;

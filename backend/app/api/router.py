@@ -1,9 +1,9 @@
 from fastapi import APIRouter
-from app.api.endpoints import auth, campaigns, routes, upload
+from app.api import auth, trips, upload, waypoint_info
 
-api_router = APIRouter()
+api_router = APIRouter(prefix="/api")
 
-api_router.include_router(auth.router, prefix="/auth", tags=["Authentication"])
-api_router.include_router(campaigns.router, prefix="/campaigns", tags=["Admissions Campaigns"])
-api_router.include_router(routes.router, prefix="/routes", tags=["Route Optimization & Distance Matrix"])
-api_router.include_router(upload.router, prefix="/upload", tags=["Cloudinary Image Upload"])
+api_router.include_router(auth.router)
+api_router.include_router(trips.router)
+api_router.include_router(upload.router)
+api_router.include_router(waypoint_info.router)

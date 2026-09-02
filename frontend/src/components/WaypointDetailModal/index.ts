@@ -1,0 +1,1 @@
+export { WaypointDetailModal } from './WaypointDetailModal';

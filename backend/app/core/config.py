@@ -1,33 +1,41 @@
-import os
+from pathlib import Path
 from pydantic_settings import BaseSettings
+from functools import lru_cache
+from typing import Optional
+
 
 class Settings(BaseSettings):
-    PROJECT_NAME: str = "IRS Mobile Admissions Platform API"
-    ENV: str = "development"
+    # App
+    APP_NAME: str = "IRS Mobile Admissions System"
+    DEBUG: bool = True
     PORT: int = 8000
-    
-    # Database
-    MONGODB_URL: str = "mongodb://localhost:27017"
-    DATABASE_NAME: str = "irs_admissions_db"
-    
-    # JWT
+    SECRET_KEY: str = "irs_super_secret_jwt_key_2026_admissions_platform"
     JWT_SECRET_KEY: str = "irs_super_secret_jwt_key_2026_admissions_platform"
-    JWT_ALGORITHM: str = "HS256"
+    ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 43200
     
-    # External APIs
+    # Database MongoDB
+    MONGODB_URL: str = "mongodb://localhost:27017"
+    DATABASE_NAME: str = "IRS"
+    
+    # SerpAPI (for Google Maps)
     SERPAPI_KEY: str = ""
-    GOOGLE_MAPS_API_KEY: str = ""
     
-    # Cloudinary
-    CLOUDINARY_CLOUD_NAME: str = ""
-    CLOUDINARY_API_KEY: str = ""
-    CLOUDINARY_API_SECRET: str = ""
+    # CORS
+    FRONTEND_URL: str = "http://localhost:5173"
+    ALLOWED_ORIGINS: str = "http://localhost:5173,http://localhost:4173,http://localhost:3000"
     
-    ALLOWED_ORIGINS: str = "http://localhost:5173,http://localhost:4173"
-
+    # Upload
+    UPLOAD_DIR: str = "uploads"
+    
     class Config:
         env_file = ".env"
         extra = "ignore"
 
-settings = Settings()
+
+@lru_cache()
+def get_settings() -> Settings:
+    return Settings()
+
+
+settings = get_settings()
