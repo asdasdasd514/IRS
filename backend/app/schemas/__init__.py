@@ -20,8 +20,11 @@ from .schemas import (
     ReportCreate,
     ReportResponse,
     ReportListResponse,
-    ReportJobStatus,
-    ReportJobResponse,
+    CampaignStatus,
+    CampaignCreate,
+    CampaignResponse,
+    SchoolCreate,
+    SchoolResponse,
 )
 
 from .waypoint_schemas import (

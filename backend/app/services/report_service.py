@@ -1,23 +1,26 @@
 """
 Report Service (MongoDB IRS Database)
-Handles report generation for trips
+Handles report generation for trips directly into trip_reports (No report_jobs collection)
 """
 
 import logging
 import os
 import asyncio
-from typing import List, Optional
+from typing import List, Optional, Dict
 from datetime import datetime, timedelta, timezone
 import uuid
 import httpx
 
 from app.core.database import get_database
-from app.schemas import WaypointType, ReportJobStatus
+from app.schemas import WaypointType
 
 logger = logging.getLogger(__name__)
 
 REPORT_API_URL = os.getenv("REPORT_API_URL", "http://localhost:8001/report")
 REPORT_API_TIMEOUT = float(os.getenv("REPORT_API_TIMEOUT", "3600.0"))
+
+# In-memory tracking for polling without needing a MongoDB collection
+_memory_job_status: Dict[str, dict] = {}
 
 
 def to_vietnam_time(dt) -> str:
@@ -224,11 +227,12 @@ async def generate_trip_report(trip_id: str, created_at: Optional[datetime] = No
 
     total_tickets = trip.get("total_tickets", 0)
     report_id = str(uuid.uuid4())
-    now = created_at or datetime.utcnow()
+    now = created_at or datetime.now(timezone.utc)
 
     report_doc = {
         "id": report_id,
         "trip_id": trip_id,
+        "campaign_id": trip.get("campaign_id"),
         "report_content": report_content,
         "total_schools": len(schools),
         "schools_visited": len(schools_visited),
@@ -268,68 +272,66 @@ async def get_report_by_id(report_id: str) -> Optional[dict]:
 
 async def start_report_generation_job(trip_id: str, created_at: Optional[datetime] = None) -> dict:
     job_id = str(uuid.uuid4())
-    now = created_at or datetime.utcnow()
+    now = created_at or datetime.now(timezone.utc)
 
-    job_doc = {
+    _memory_job_status[job_id] = {
         "id": job_id,
         "trip_id": trip_id,
-        "status": ReportJobStatus.PENDING.value,
+        "status": "pending",
         "progress": 0,
         "result_report_id": None,
         "error_message": None,
         "created_at": now,
         "updated_at": now
     }
-
-    db = get_database()
-    await db.report_jobs.insert_one(job_doc)
-    return job_doc
+    return _memory_job_status[job_id]
 
 
 async def process_report_job_background(job_id: str, trip_id: str):
-    db = get_database()
-    if db is None:
-        return
-
     try:
-        await db.report_jobs.update_one({"id": job_id}, {"$set": {"status": ReportJobStatus.PROCESSING.value, "progress": 10}})
-        job = await db.report_jobs.find_one({"id": job_id})
-        created_at = job.get("created_at") if job else None
+        if job_id in _memory_job_status:
+            _memory_job_status[job_id]["status"] = "processing"
+            _memory_job_status[job_id]["progress"] = 25
+
+        job = _memory_job_status.get(job_id, {})
+        created_at = job.get("created_at")
 
         report = await generate_trip_report(trip_id, created_at=created_at)
 
-        await db.report_jobs.update_one(
-            {"id": job_id},
-            {"$set": {
-                "status": ReportJobStatus.COMPLETED.value,
-                "progress": 100,
-                "result_report_id": report["id"],
-                "updated_at": datetime.utcnow()
-            }}
-        )
+        if job_id in _memory_job_status:
+            _memory_job_status[job_id]["status"] = "completed"
+            _memory_job_status[job_id]["progress"] = 100
+            _memory_job_status[job_id]["result_report_id"] = report["id"]
+            _memory_job_status[job_id]["updated_at"] = datetime.now(timezone.utc)
     except Exception as e:
         logger.error(f"Job {job_id} failed: {e}")
-        await db.report_jobs.update_one(
-            {"id": job_id},
-            {"$set": {
-                "status": ReportJobStatus.FAILED.value,
-                "error_message": str(e),
-                "updated_at": datetime.utcnow()
-            }}
-        )
+        if job_id in _memory_job_status:
+            _memory_job_status[job_id]["status"] = "failed"
+            _memory_job_status[job_id]["error_message"] = str(e)
+            _memory_job_status[job_id]["updated_at"] = datetime.now(timezone.utc)
 
 
 async def get_report_job_status(job_id: str) -> Optional[dict]:
+    # Check in-memory status first
+    if job_id in _memory_job_status:
+        return _memory_job_status[job_id]
+    
+    # Or check if report exists directly in trip_reports
     db = get_database()
-    return await db.report_jobs.find_one({"id": job_id})
+    report = await db.trip_reports.find_one({"id": job_id})
+    if report:
+        return {
+            "id": job_id,
+            "trip_id": report["trip_id"],
+            "status": "completed",
+            "progress": 100,
+            "result_report_id": report["id"],
+            "error_message": None
+        }
+    return None
 
 
 async def delete_report(report_id: str) -> bool:
     db = get_database()
-    report = await db.trip_reports.find_one({"id": report_id})
-    if not report:
-        return False
-
-    await db.report_jobs.delete_many({"result_report_id": report_id})
     res = await db.trip_reports.delete_one({"id": report_id})
     return res.deleted_count > 0

@@ -1,5 +1,6 @@
 """
 IRS Mobile Admissions System - FastAPI Backend (MongoDB Database IRS)
+Hệ thống Hỗ trợ Ra quyết định Lộ trình và Quản lý Chiến dịch Tuyển sinh Lưu động
 """
 
 from pathlib import Path
@@ -12,7 +13,7 @@ import uvicorn
 from app.core.config import settings
 from app.core.database import connect_to_mongo, close_mongo_connection
 from app.api.router import api_router
-from app.api import auth, waypoint_info, upload, trips
+from app.api import auth, waypoint_info, upload, trips, campaigns, schools
 
 
 @asynccontextmanager
@@ -24,9 +25,9 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title=settings.APP_NAME,
-    description="Hệ thống định tuyến tuyển sinh với thuật toán Dynamic Next-Hop Routing (MongoDB IRS)",
-    version="1.0.0",
+    title="Hệ thống Hỗ trợ Ra quyết định Lộ trình và Quản lý Chiến dịch Tuyển sinh Lưu động",
+    description="Backend API nền tảng tuyển sinh lưu động với thuật toán Dynamic Next-Hop Routing (MongoDB IRS)",
+    version="2.0.0",
     docs_url="/docs",
     redoc_url="/redoc",
     lifespan=lifespan
@@ -40,12 +41,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Thêm routes với prefix /api và không prefix để khớp với tất cả request
+# Thêm routes với prefix /api và không prefix
 app.include_router(api_router)
 app.include_router(auth.router)
 app.include_router(trips.router)
 app.include_router(waypoint_info.router)
 app.include_router(upload.router)
+app.include_router(campaigns.router)
+app.include_router(schools.router)
 
 UPLOAD_DIR = Path(settings.UPLOAD_DIR)
 UPLOAD_DIR.mkdir(exist_ok=True)
@@ -56,9 +59,9 @@ app.mount("/uploads", StaticFiles(directory=str(UPLOAD_DIR)), name="uploads")
 async def root():
     return {
         "status": "ok",
-        "app": settings.APP_NAME,
+        "app": "Nền tảng Hỗ trợ Ra quyết định Lộ trình & Quản lý Chiến dịch Tuyển sinh Lưu động",
         "database": settings.DATABASE_NAME,
-        "version": "1.0.0"
+        "version": "2.0.0"
     }
 
 

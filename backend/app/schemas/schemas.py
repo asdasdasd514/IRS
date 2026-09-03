@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field, field_serializer
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from datetime import datetime, timezone
 from enum import Enum
 
@@ -18,15 +18,89 @@ class WaypointType(str, Enum):
     REST_STOP = "REST_STOP"
 
 
-# Waypoint Schemas
+class CampaignStatus(str, Enum):
+    PLANNING = "planning"
+    IN_PROGRESS = "in_progress"
+    COMPLETED = "completed"
+    PAUSED = "paused"
+
+
+# Campaign Schemas (Chiến dịch Tuyển sinh)
+class CampaignBase(BaseModel):
+    name: str = Field(..., min_length=1, max_length=255)
+    academic_year: str = "2026-2027"
+    description: Optional[str] = None
+    start_date: Optional[datetime] = None
+    end_date: Optional[datetime] = None
+    status: CampaignStatus = CampaignStatus.IN_PROGRESS
+
+
+class CampaignCreate(CampaignBase):
+    pass
+
+
+class CampaignResponse(CampaignBase):
+    id: str
+    manager_id: Optional[str] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+# School Schemas (Danh mục Trường THPT mục tiêu)
+class SchoolBoard(BaseModel):
+    principal_name: Optional[str] = None
+    principal_phone: Optional[str] = None
+    vice_principal_name: Optional[str] = None
+    vice_principal_phone: Optional[str] = None
+
+
+class SchoolBase(BaseModel):
+    id: str # Mã trường (ví dụ: THPT-CT-01)
+    code: str # Mã trường
+    name: str
+    address: str
+    description: Optional[str] = None # Cột Giới thiệu về trường
+    lat: float
+    lng: float
+    tier: int = 1 # 1: Trọng điểm/Chuyên, 2: Công lập lớn, 3: Phổ thông thường
+    grade12_students_count: int = 0
+    school_board: Optional[SchoolBoard] = None
+    preferred_visit_hours: Optional[str] = None
+
+
+class SchoolCreate(BaseModel):
+    id: Optional[str] = None
+    code: str
+    name: str
+    address: str
+    description: Optional[str] = None
+    lat: float
+    lng: float
+    tier: int = 1
+    grade12_students_count: int = 0
+    school_board: Optional[SchoolBoard] = None
+    preferred_visit_hours: Optional[str] = None
+
+
+class SchoolResponse(SchoolBase):
+    created_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+# Waypoint Schemas (Điểm dừng lộ trình - không cần notes vì có trong waypoint_details)
 class WaypointBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
     lat: float = Field(..., ge=-90, le=90)
     lng: float = Field(..., ge=-180, le=180)
     google_place_id: Optional[str] = None
+    school_id: Optional[str] = None # Mã trường (ví dụ: THPT-CT-01)
     address: Optional[str] = None
     type: WaypointType = WaypointType.SCHOOL
-    notes: Optional[str] = None
     contact_name: Optional[str] = None
     contact_phone: Optional[str] = None
 
@@ -39,10 +113,10 @@ class WaypointUpdate(BaseModel):
     name: Optional[str] = None
     lat: Optional[float] = None
     lng: Optional[float] = None
-    notes: Optional[str] = None
     is_visited: Optional[bool] = None
     contact_name: Optional[str] = None
     contact_phone: Optional[str] = None
+    school_id: Optional[str] = None
 
 
 class WaypointResponse(WaypointBase):
@@ -65,9 +139,25 @@ class WaypointResponse(WaypointBase):
         from_attributes = True
 
 
-# Trip Schemas
+# Trip Schemas (Đợt/Chuyến xe Tuyển sinh)
+class TripTeamMember(BaseModel):
+    name: str
+    role: str
+    phone: Optional[str] = None
+
+
+class TripTeam(BaseModel):
+    leader_name: Optional[str] = None
+    leader_phone: Optional[str] = None
+    members_count: int = 1
+    members: List[TripTeamMember] = []
+    vehicle_plate: Optional[str] = None
+
+
 class TripBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
+    campaign_id: Optional[str] = None
+    trip_code: Optional[str] = None
 
 
 class TripCreate(TripBase):
@@ -76,6 +166,7 @@ class TripCreate(TripBase):
     hotel_lat: Optional[float] = None
     hotel_lng: Optional[float] = None
     hotel_name: Optional[str] = None
+    team: Optional[TripTeam] = None
     waypoints: List[WaypointCreate] = []
 
 
@@ -87,6 +178,7 @@ class TripUpdate(BaseModel):
     hotel_lat: Optional[float] = None
     hotel_lng: Optional[float] = None
     hotel_name: Optional[str] = None
+    team: Optional[TripTeam] = None
 
 
 class TripResponse(TripBase):
@@ -97,6 +189,7 @@ class TripResponse(TripBase):
     hotel_lat: Optional[float] = None
     hotel_lng: Optional[float] = None
     hotel_name: Optional[str] = None
+    team: Optional[TripTeam] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
     waypoints: List[WaypointResponse] = []
@@ -174,7 +267,7 @@ class DirectionResponse(BaseModel):
     steps: List[dict] = []
 
 
-# Report Schemas
+# Report Schemas (Đã bỏ KPI)
 class ReportCreate(BaseModel):
     created_at: Optional[datetime] = None
 
@@ -182,6 +275,7 @@ class ReportCreate(BaseModel):
 class ReportResponse(BaseModel):
     id: str
     trip_id: str
+    campaign_id: Optional[str] = None
     report_content: str
     total_schools: int = 0
     schools_visited: int = 0
@@ -203,6 +297,7 @@ class ReportResponse(BaseModel):
 class ReportListResponse(BaseModel):
     id: str
     trip_id: str
+    campaign_id: Optional[str] = None
     trip_name: str
     total_schools: int = 0
     schools_visited: int = 0
@@ -221,31 +316,3 @@ class ReportListResponse(BaseModel):
         from_attributes = True
 
 
-# Report Job Schemas
-class ReportJobStatus(str, Enum):
-    PENDING = "pending"
-    PROCESSING = "processing"
-    COMPLETED = "completed"
-    FAILED = "failed"
-
-
-class ReportJobResponse(BaseModel):
-    job_id: str
-    trip_id: str
-    status: ReportJobStatus
-    progress: int = 0
-    result_report_id: Optional[str] = None
-    error_message: Optional[str] = None
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
-
-    @field_serializer('created_at', 'updated_at', when_used='json')
-    def serialize_dt(self, dt: Optional[datetime]) -> Optional[str]:
-        if dt is None:
-            return None
-        if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=timezone.utc)
-        return dt.isoformat()
-
-    class Config:
-        from_attributes = True

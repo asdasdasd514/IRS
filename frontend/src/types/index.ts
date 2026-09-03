@@ -42,6 +42,7 @@ export interface Waypoint {
   id: string;
   trip_id: string;
   google_place_id: string | null;
+  school_id?: string | null;
   name: string;
   address: string | null;
   lat: number;
@@ -50,10 +51,24 @@ export interface Waypoint {
   visit_order: number | null;
   is_visited: boolean;
   visited_at: string | null;
-  notes: string | null;
+  notes?: string | null;
   contact_name: string | null;
   contact_phone: string | null;
   created_at: string;
+}
+
+export interface School {
+  id: string;
+  code: string;
+  name: string;
+  address: string;
+  description?: string;
+  lat: number;
+  lng: number;
+  tier: number;
+  grade12_students_count: number;
+  preferred_visit_hours?: string;
+  created_at?: string;
 }
 
 export interface CreateWaypointInput {
