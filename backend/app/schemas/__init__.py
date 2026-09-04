@@ -44,8 +44,10 @@ from .waypoint_schemas import (
 )
 
 from .auth_schemas import (
+    UserRole,
     UserBase,
     UserCreate,
+    UserUpdate,
     UserResponse,
     LoginRequest,
     Token,

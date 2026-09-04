@@ -76,34 +76,42 @@ async def init_mongo_database():
 
     now = datetime.now(timezone.utc)
 
-    # 1. TÀI KHOẢN NGƯỜI DÙNG (Users)
+    # 1. TÀI KHOẢN NGƯỜI DÙNG (Users: Admin & Staff)
     admin_id = str(uuid.uuid4())
-    officer_id = str(uuid.uuid4())
+    staff_id = str(uuid.uuid4())
     await db.users.insert_many([
         {
             "id": admin_id,
             "username": "admin",
-            "full_name": "TS. Nguyễn Văn Quản Trị",
+            "full_name": "Quản Trị Viên Hệ Thống",
             "email": "admin@admissions.edu.vn",
-            "role": "DIRECTOR",
+            "role": "admin",
+            "phone": "0901234567",
+            "avatar_url": None,
             "hashed_password": get_password_hash("admin123"),
             "is_admin": True,
             "is_active": True,
-            "created_at": now
+            "is_deleted": False,
+            "created_at": now,
+            "updated_at": now
         },
         {
-            "id": officer_id,
-            "username": "canbotuyensinh",
-            "full_name": "ThS. Trần Thị Lan Hương",
-            "email": "huong.ttl@admissions.edu.vn",
-            "role": "OFFICER",
-            "hashed_password": get_password_hash("123456"),
+            "id": staff_id,
+            "username": "staff",
+            "full_name": "Nhân Viên Tuyển Sinh",
+            "email": "staff@admissions.edu.vn",
+            "role": "staff",
+            "phone": "0912345678",
+            "avatar_url": None,
+            "hashed_password": get_password_hash("staff123"),
             "is_admin": False,
             "is_active": True,
-            "created_at": now
+            "is_deleted": False,
+            "created_at": now,
+            "updated_at": now
         }
     ])
-    print("  [1. Users]: Da tao tai khoan 'admin' va 'canbotuyensinh'.")
+    print("  [1. Users]: Da tao tai khoan 'admin' va 'staff'.")
 
     # 2. CHIẾN DỊCH TUYỂN SINH (Campaigns - Đã bỏ KPI)
     campaign_id = "camp-2026-mientay"

@@ -35,7 +35,7 @@ async def list_waypoints(
     Lấy danh sách điểm dừng (Waypoint), hỗ trợ lọc theo chuyến đi, mã trường, loại điểm dừng và tìm kiếm tên/địa chỉ.
     """
     db = get_database()
-    query: dict = {}
+    query: dict = {"is_deleted": {"$ne": True}}
     if trip_id:
         query["trip_id"] = trip_id
     if school_id:
@@ -149,7 +149,7 @@ async def get_waypoint(waypoint_id: str):
     Lấy thông tin chi tiết một điểm dừng theo ID (kèm thông tin trường học đầy đủ).
     """
     db = get_database()
-    wp = await db.waypoints.find_one({"id": waypoint_id})
+    wp = await db.waypoints.find_one({"id": waypoint_id, "is_deleted": {"$ne": True}})
     if not wp:
         raise HTTPException(status_code=404, detail="Không tìm thấy điểm dừng")
 
@@ -205,18 +205,34 @@ async def update_waypoint(waypoint_id: str, waypoint_data: WaypointUpdate):
 @router.delete("/{waypoint_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_waypoint(waypoint_id: str):
     """
-    Xóa điểm dừng và tự động dọn dẹp các bảng con liên quan (details, visit logs, tickets, images).
+    Xóa mềm điểm dừng và tự động xóa mềm các bảng con liên quan (details, visit logs, tickets, images).
     """
     db = get_database()
-    wp = await db.waypoints.find_one({"id": waypoint_id})
+    now = datetime.utcnow()
+    wp = await db.waypoints.find_one({"id": waypoint_id, "is_deleted": {"$ne": True}})
     if not wp:
         raise HTTPException(status_code=404, detail="Không tìm thấy điểm dừng")
 
-    await db.waypoints.delete_one({"id": waypoint_id})
-    await db.waypoint_details.delete_many({"waypoint_id": waypoint_id})
-    await db.waypoint_visit_logs.delete_many({"waypoint_id": waypoint_id})
-    await db.waypoint_tickets.delete_many({"waypoint_id": waypoint_id})
-    await db.waypoint_images.delete_many({"visit_log_id": waypoint_id})
+    await db.waypoints.update_one(
+        {"id": waypoint_id},
+        {"$set": {"is_deleted": True, "deleted_at": now, "updated_at": now}}
+    )
+    await db.waypoint_details.update_many(
+        {"waypoint_id": waypoint_id, "is_deleted": {"$ne": True}},
+        {"$set": {"is_deleted": True, "deleted_at": now, "updated_at": now}}
+    )
+    await db.waypoint_visit_logs.update_many(
+        {"waypoint_id": waypoint_id, "is_deleted": {"$ne": True}},
+        {"$set": {"is_deleted": True, "deleted_at": now, "updated_at": now}}
+    )
+    await db.waypoint_tickets.update_many(
+        {"waypoint_id": waypoint_id, "is_deleted": {"$ne": True}},
+        {"$set": {"is_deleted": True, "deleted_at": now, "updated_at": now}}
+    )
+    await db.waypoint_images.update_many(
+        {"visit_log_id": waypoint_id, "is_deleted": {"$ne": True}},
+        {"$set": {"is_deleted": True, "deleted_at": now}}
+    )
 
 
 # ==================== PHẦN 1: Thông tin chi tiết ====================
@@ -268,11 +284,11 @@ async def update_waypoint_detail(waypoint_id: str, detail_data: WaypointDetailUp
 @router.get("/{waypoint_id}/visit-logs", response_model=list[VisitLogResponse])
 async def get_visit_logs(waypoint_id: str):
     db = get_database()
-    cursor = db.waypoint_visit_logs.find({"waypoint_id": waypoint_id}).sort("visit_date", -1)
+    cursor = db.waypoint_visit_logs.find({"waypoint_id": waypoint_id, "is_deleted": {"$ne": True}}).sort("visit_date", -1)
     logs = await cursor.to_list(length=1000)
 
     for log in logs:
-        img_cursor = db.waypoint_images.find({"visit_log_id": log["id"]}).sort("created_at", 1)
+        img_cursor = db.waypoint_images.find({"visit_log_id": log["id"], "is_deleted": {"$ne": True}}).sort("created_at", 1)
         log["images"] = await img_cursor.to_list(length=100)
 
     return logs
@@ -317,20 +333,28 @@ async def update_visit_log(log_id: str, log_data: VisitLogUpdate):
 
 @router.delete("/visit-logs/{log_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_visit_log(log_id: str):
+    """Xóa mềm nhật ký ghé thăm"""
     db = get_database()
-    log = await db.waypoint_visit_logs.find_one({"id": log_id})
+    now = datetime.utcnow()
+    log = await db.waypoint_visit_logs.find_one({"id": log_id, "is_deleted": {"$ne": True}})
     if not log:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Visit log not found")
     
-    await db.waypoint_images.delete_many({"visit_log_id": log_id})
-    await db.waypoint_visit_logs.delete_one({"id": log_id})
+    await db.waypoint_visit_logs.update_one(
+        {"id": log_id},
+        {"$set": {"is_deleted": True, "deleted_at": now, "updated_at": now}}
+    )
+    await db.waypoint_images.update_many(
+        {"visit_log_id": log_id, "is_deleted": {"$ne": True}},
+        {"$set": {"is_deleted": True, "deleted_at": now}}
+    )
 
 
 # ==================== PHẦN 3: Phiếu thu ====================
 @router.get("/{waypoint_id}/tickets", response_model=list[TicketResponse])
 async def get_tickets(waypoint_id: str):
     db = get_database()
-    cursor = db.waypoint_tickets.find({"waypoint_id": waypoint_id}).sort("collection_date", -1)
+    cursor = db.waypoint_tickets.find({"waypoint_id": waypoint_id, "is_deleted": {"$ne": True}}).sort("collection_date", -1)
     return await cursor.to_list(length=1000)
 
 
@@ -369,8 +393,13 @@ async def update_ticket(ticket_id: str, ticket_data: TicketUpdate):
 
 @router.delete("/tickets/{ticket_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_ticket(ticket_id: str):
+    """Xóa mềm phiếu thu"""
     db = get_database()
-    ticket = await db.waypoint_tickets.find_one({"id": ticket_id})
+    now = datetime.utcnow()
+    ticket = await db.waypoint_tickets.find_one({"id": ticket_id, "is_deleted": {"$ne": True}})
     if not ticket:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Ticket not found")
-    await db.waypoint_tickets.delete_one({"id": ticket_id})
+    await db.waypoint_tickets.update_one(
+        {"id": ticket_id},
+        {"$set": {"is_deleted": True, "deleted_at": now}}
+    )

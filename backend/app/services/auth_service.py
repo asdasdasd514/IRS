@@ -43,7 +43,7 @@ async def authenticate_user(username: str, password: str) -> Optional[dict]:
     db = get_database()
     if db is None:
         return None
-    user = await db.users.find_one({"username": username})
+    user = await db.users.find_one({"username": username, "is_deleted": {"$ne": True}})
     if not user:
         return None
     if not verify_password(password, user.get("hashed_password", "")):
@@ -74,16 +74,25 @@ async def get_current_user(token: str = Depends(oauth2_scheme)) -> dict:
     user = await db.users.find_one({"username": token_data.username})
     if user is None:
         raise credentials_exception
+    if user.get("is_deleted", False):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Tài khoản đã bị xóa khỏi hệ thống"
+        )
     if not user.get("is_active", True):
-        raise HTTPException(status_code=400, detail="Inactive user")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Tài khoản đã bị vô hiệu hóa"
+        )
     return user
 
 
 async def get_current_admin_user(current_user: dict = Depends(get_current_user)) -> dict:
     """Kiểm tra user là admin"""
-    if not current_user.get("is_admin", False):
+    is_admin = current_user.get("is_admin", False) or current_user.get("role") == "admin"
+    if not is_admin:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions"
+            detail="Chỉ quản trị viên (Admin) mới có quyền truy cập chức năng này"
         )
     return current_user

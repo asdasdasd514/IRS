@@ -247,18 +247,18 @@ async def generate_trip_report(trip_id: str, created_at: Optional[datetime] = No
 
 async def get_trip_reports(trip_id: str) -> List[dict]:
     db = get_database()
-    cursor = db.trip_reports.find({"trip_id": trip_id}).sort("created_at", -1)
+    cursor = db.trip_reports.find({"trip_id": trip_id, "is_deleted": {"$ne": True}}).sort("created_at", -1)
     return await cursor.to_list(length=1000)
 
 
 async def get_all_reports() -> List[dict]:
     db = get_database()
-    cursor = db.trip_reports.find({}).sort("created_at", -1)
+    cursor = db.trip_reports.find({"is_deleted": {"$ne": True}}).sort("created_at", -1)
     reports = await cursor.to_list(length=1000)
 
     report_list = []
     for report in reports:
-        trip = await db.admission_trips.find_one({"id": report["trip_id"]})
+        trip = await db.admission_trips.find_one({"id": report["trip_id"], "is_deleted": {"$ne": True}})
         report["trip_name"] = trip.get("name") if trip else "Unknown"
         report_list.append(report)
 
@@ -267,7 +267,7 @@ async def get_all_reports() -> List[dict]:
 
 async def get_report_by_id(report_id: str) -> Optional[dict]:
     db = get_database()
-    return await db.trip_reports.find_one({"id": report_id})
+    return await db.trip_reports.find_one({"id": report_id, "is_deleted": {"$ne": True}})
 
 
 async def start_report_generation_job(trip_id: str, created_at: Optional[datetime] = None) -> dict:
@@ -284,6 +284,7 @@ async def start_report_generation_job(trip_id: str, created_at: Optional[datetim
         "created_at": now,
         "updated_at": now
     }
+
     return _memory_job_status[job_id]
 
 
@@ -318,7 +319,7 @@ async def get_report_job_status(job_id: str) -> Optional[dict]:
     
     # Or check if report exists directly in trip_reports
     db = get_database()
-    report = await db.trip_reports.find_one({"id": job_id})
+    report = await db.trip_reports.find_one({"id": job_id, "is_deleted": {"$ne": True}})
     if report:
         return {
             "id": job_id,
@@ -332,6 +333,11 @@ async def get_report_job_status(job_id: str) -> Optional[dict]:
 
 
 async def delete_report(report_id: str) -> bool:
+    """Xóa mềm báo cáo chuyến đi"""
     db = get_database()
-    res = await db.trip_reports.delete_one({"id": report_id})
-    return res.deleted_count > 0
+    now = datetime.now(timezone.utc)
+    res = await db.trip_reports.update_one(
+        {"id": report_id, "is_deleted": {"$ne": True}},
+        {"$set": {"is_deleted": True, "deleted_at": now}}
+    )
+    return res.modified_count > 0

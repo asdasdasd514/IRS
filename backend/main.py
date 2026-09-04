@@ -13,7 +13,7 @@ import uvicorn
 from app.core.config import settings
 from app.core.database import connect_to_mongo, close_mongo_connection
 from app.api.router import api_router
-from app.api import auth, waypoint_info, upload, trips, campaigns, schools
+from app.api import auth, waypoint_info, upload, trips, campaigns, schools, users
 
 
 @asynccontextmanager
@@ -44,6 +44,7 @@ app.add_middleware(
 # Thêm routes với prefix /api và không prefix
 app.include_router(api_router)
 app.include_router(auth.router)
+app.include_router(users.router)
 app.include_router(trips.router)
 app.include_router(waypoint_info.router)
 app.include_router(upload.router)

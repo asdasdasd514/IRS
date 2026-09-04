@@ -74,11 +74,11 @@ class TripService:
 
     async def get_trip(self, trip_id: str) -> Optional[dict]:
         db = get_database()
-        trip = await db.admission_trips.find_one({"id": trip_id})
+        trip = await db.admission_trips.find_one({"id": trip_id, "is_deleted": {"$ne": True}})
         if not trip:
             return None
 
-        cursor = db.waypoints.find({"trip_id": trip_id}).sort("visit_order", 1)
+        cursor = db.waypoints.find({"trip_id": trip_id, "is_deleted": {"$ne": True}}).sort("visit_order", 1)
         waypoints = await cursor.to_list(length=1000)
         
         trip["waypoints"] = waypoints
@@ -88,7 +88,7 @@ class TripService:
 
     async def get_trips(self, status: Optional[str] = None) -> List[dict]:
         db = get_database()
-        query = {}
+        query = {"is_deleted": {"$ne": True}}
         if status:
             query["status"] = status.value if hasattr(status, 'value') else status
 
@@ -96,7 +96,7 @@ class TripService:
         trips = await cursor.to_list(length=1000)
 
         for trip in trips:
-            wps_cursor = db.waypoints.find({"trip_id": trip["id"]})
+            wps_cursor = db.waypoints.find({"trip_id": trip["id"], "is_deleted": {"$ne": True}})
             wps = await wps_cursor.to_list(length=1000)
             
             trip["total_waypoints"] = len(wps)
@@ -107,7 +107,7 @@ class TripService:
             # Count total tickets collected
             wp_ids = [w["id"] for w in wps]
             if wp_ids:
-                tickets_cursor = db.waypoint_tickets.find({"waypoint_id": {"$in": wp_ids}})
+                tickets_cursor = db.waypoint_tickets.find({"waypoint_id": {"$in": wp_ids}, "is_deleted": {"$ne": True}})
                 tickets = await tickets_cursor.to_list(length=1000)
                 trip["total_tickets"] = sum(t.get("tickets_collected", 0) for t in tickets)
             else:
@@ -125,24 +125,32 @@ class TripService:
             update_dict["status"] = update_dict["status"].value
 
         update_dict["updated_at"] = datetime.utcnow()
-        await db.admission_trips.update_one({"id": trip_id}, {"$set": update_dict})
+        await db.admission_trips.update_one({"id": trip_id, "is_deleted": {"$ne": True}}, {"$set": update_dict})
         return await self.get_trip(trip_id)
 
     async def delete_trip(self, trip_id: str) -> bool:
+        """Xóa mềm chuyến đi và các điểm dừng liên quan"""
         db = get_database()
-        res = await db.admission_trips.delete_one({"id": trip_id})
-        if res.deleted_count > 0:
-            await db.waypoints.delete_many({"trip_id": trip_id})
+        now = datetime.utcnow()
+        res = await db.admission_trips.update_one(
+            {"id": trip_id, "is_deleted": {"$ne": True}},
+            {"$set": {"is_deleted": True, "deleted_at": now, "updated_at": now}}
+        )
+        if res.modified_count > 0:
+            await db.waypoints.update_many(
+                {"trip_id": trip_id, "is_deleted": {"$ne": True}},
+                {"$set": {"is_deleted": True, "deleted_at": now, "updated_at": now}}
+            )
             return True
         return False
 
     async def add_waypoint(self, trip_id: str, waypoint_data: WaypointCreate) -> Optional[dict]:
         db = get_database()
-        trip = await db.admission_trips.find_one({"id": trip_id})
+        trip = await db.admission_trips.find_one({"id": trip_id, "is_deleted": {"$ne": True}})
         if not trip:
             return None
 
-        cursor = db.waypoints.find({"trip_id": trip_id})
+        cursor = db.waypoints.find({"trip_id": trip_id, "is_deleted": {"$ne": True}})
         existing_wps = await cursor.to_list(length=1000)
         max_order = max([w.get("visit_order", 0) for w in existing_wps], default=0)
 
@@ -238,20 +246,41 @@ class TripService:
         return await db.waypoints.find_one({"id": waypoint_id})
 
     async def delete_waypoint(self, waypoint_id: str) -> bool:
+        """Xóa mềm điểm dừng và các bản ghi chi tiết, nhật ký liên quan"""
         db = get_database()
-        res = await db.waypoints.delete_one({"id": waypoint_id})
-        if res.deleted_count > 0:
-            await db.waypoint_details.delete_many({"waypoint_id": waypoint_id})
-            await db.waypoint_visit_logs.delete_many({"waypoint_id": waypoint_id})
-            await db.waypoint_tickets.delete_many({"waypoint_id": waypoint_id})
-            await db.waypoint_images.delete_many({"visit_log_id": waypoint_id})
+        now = datetime.utcnow()
+        res = await db.waypoints.update_one(
+            {"id": waypoint_id, "is_deleted": {"$ne": True}},
+            {"$set": {"is_deleted": True, "deleted_at": now, "updated_at": now}}
+        )
+        if res.modified_count > 0:
+            await db.waypoint_details.update_many(
+                {"waypoint_id": waypoint_id, "is_deleted": {"$ne": True}},
+                {"$set": {"is_deleted": True, "deleted_at": now, "updated_at": now}}
+            )
+            await db.waypoint_visit_logs.update_many(
+                {"waypoint_id": waypoint_id, "is_deleted": {"$ne": True}},
+                {"$set": {"is_deleted": True, "deleted_at": now, "updated_at": now}}
+            )
+            await db.waypoint_tickets.update_many(
+                {"waypoint_id": waypoint_id, "is_deleted": {"$ne": True}},
+                {"$set": {"is_deleted": True, "deleted_at": now, "updated_at": now}}
+            )
+            await db.waypoint_images.update_many(
+                {"visit_log_id": waypoint_id, "is_deleted": {"$ne": True}},
+                {"$set": {"is_deleted": True, "deleted_at": now}}
+            )
             return True
         return False
 
 
     async def check_in(self, trip_id: str, checkin_data: CheckInRequest, max_distance: float = 500.0) -> CheckInResponse:
         db = get_database()
-        waypoint = await db.waypoints.find_one({"id": checkin_data.waypoint_id, "trip_id": trip_id})
+        waypoint = await db.waypoints.find_one({
+            "id": checkin_data.waypoint_id,
+            "trip_id": trip_id,
+            "is_deleted": {"$ne": True}
+        })
 
         if not waypoint:
             return CheckInResponse(success=False, waypoint=None, message="Không tìm thấy điểm dừng")

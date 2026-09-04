@@ -17,7 +17,7 @@ router = APIRouter(prefix="/campaigns", tags=["Campaigns"])
 @router.get("", response_model=List[CampaignResponse])
 async def list_campaigns(current_user: dict = Depends(get_current_user)):
     db = get_database()
-    cursor = db.campaigns.find({}).sort("created_at", -1)
+    cursor = db.campaigns.find({"is_deleted": {"$ne": True}}).sort("created_at", -1)
     campaigns = await cursor.to_list(length=100)
     return campaigns
 
@@ -25,7 +25,7 @@ async def list_campaigns(current_user: dict = Depends(get_current_user)):
 @router.get("/{campaign_id}", response_model=CampaignResponse)
 async def get_campaign(campaign_id: str, current_user: dict = Depends(get_current_user)):
     db = get_database()
-    campaign = await db.campaigns.find_one({"id": campaign_id})
+    campaign = await db.campaigns.find_one({"id": campaign_id, "is_deleted": {"$ne": True}})
     if not campaign:
         raise HTTPException(status_code=404, detail="Chiến dịch tuyển sinh không tồn tại")
     return campaign
@@ -48,3 +48,28 @@ async def create_campaign(
     }
     await db.campaigns.insert_one(camp_doc)
     return camp_doc
+
+
+@router.delete("/{campaign_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_campaign(
+    campaign_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Xóa mềm chiến dịch và các chuyến đi trực thuộc.
+    """
+    db = get_database()
+    now = datetime.now(timezone.utc)
+    camp = await db.campaigns.find_one({"id": campaign_id, "is_deleted": {"$ne": True}})
+    if not camp:
+        raise HTTPException(status_code=404, detail="Chiến dịch tuyển sinh không tồn tại")
+
+    await db.campaigns.update_one(
+        {"id": campaign_id},
+        {"$set": {"is_deleted": True, "deleted_at": now, "updated_at": now}}
+    )
+    # Xóa mềm các chuyến đi thuộc chiến dịch
+    await db.admission_trips.update_many(
+        {"campaign_id": campaign_id, "is_deleted": {"$ne": True}},
+        {"$set": {"is_deleted": True, "deleted_at": now, "updated_at": now}}
+    )

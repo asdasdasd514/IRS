@@ -139,25 +139,17 @@ async def get_image(image_id: str):
 @router.delete("/images/{image_id}")
 async def delete_image(image_id: str):
     db = get_database()
-    image = await db.waypoint_images.find_one({"id": image_id})
+    image = await db.waypoint_images.find_one({"id": image_id, "is_deleted": {"$ne": True}})
     if not image:
         raise HTTPException(status_code=404, detail="Image not found")
     
     try:
-        # Xóa trên Cloudinary nếu có public_id
-        if image.get("cloudinary_public_id") and CloudinaryService.is_available():
-            try:
-                import cloudinary.uploader
-                cloudinary.uploader.destroy(image["cloudinary_public_id"])
-            except Exception:
-                pass
-
-        file_path = Path(settings.UPLOAD_DIR) / image["file_path"]
-        if file_path.exists():
-            file_path.unlink()
-        
-        await db.waypoint_images.delete_one({"id": image_id})
-        return {"success": True, "message": "Image deleted"}
+        now = datetime.utcnow()
+        await db.waypoint_images.update_one(
+            {"id": image_id},
+            {"$set": {"is_deleted": True, "deleted_at": now}}
+        )
+        return {"success": True, "message": "Image soft-deleted"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
