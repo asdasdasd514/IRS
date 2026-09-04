@@ -9,6 +9,7 @@ class ImageResponse(BaseModel):
     id: str
     filename: Optional[str] = None
     content_type: Optional[str] = None
+    cloudinary_url: Optional[str] = None
     created_at: Optional[datetime] = None
     
     class Config:

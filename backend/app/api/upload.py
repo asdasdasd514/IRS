@@ -13,6 +13,7 @@ from fastapi.responses import JSONResponse, FileResponse
 
 from app.core.database import get_database
 from app.core.config import settings
+from app.services.cloudinary_service import CloudinaryService
 
 router = APIRouter(prefix="/upload", tags=["Upload"])
 
@@ -77,12 +78,26 @@ async def upload_images(
         relative_path = f"waypoint_images/{saved_filename}"
         content_type = CONTENT_TYPE_MAP.get(file_ext, 'image/jpeg')
         
+        # Upload lên Cloudinary nếu có cấu hình
+        cloudinary_res = None
+        if CloudinaryService.is_available():
+            try:
+                cloudinary_res = await CloudinaryService.upload_image(
+                    content,
+                    filename=file.filename or saved_filename,
+                    folder="irs_waypoint_images"
+                )
+            except Exception:
+                pass
+
         image_doc = {
             "id": img_id,
             "visit_log_id": visit_log_id,
             "file_path": relative_path,
             "filename": file.filename,
             "content_type": content_type,
+            "cloudinary_url": cloudinary_res.get("url") if cloudinary_res else None,
+            "cloudinary_public_id": cloudinary_res.get("public_id") if cloudinary_res else None,
             "created_at": datetime.utcnow()
         }
         await db.waypoint_images.insert_one(image_doc)
@@ -102,8 +117,16 @@ async def get_image(image_id: str):
     if not image:
         raise HTTPException(status_code=404, detail="Image not found")
     
+    # Ưu tiên chuyển hướng tới link Cloudinary CDN nếu có
+    if image.get("cloudinary_url") and not image["cloudinary_url"].endswith("sample.jpg"):
+        from fastapi.responses import RedirectResponse
+        return RedirectResponse(url=image["cloudinary_url"])
+
     file_path = Path(settings.UPLOAD_DIR) / image["file_path"]
     if not file_path.exists():
+        if image.get("cloudinary_url"):
+            from fastapi.responses import RedirectResponse
+            return RedirectResponse(url=image["cloudinary_url"])
         raise HTTPException(status_code=404, detail="Image file not found on disk")
     
     return FileResponse(
@@ -121,6 +144,14 @@ async def delete_image(image_id: str):
         raise HTTPException(status_code=404, detail="Image not found")
     
     try:
+        # Xóa trên Cloudinary nếu có public_id
+        if image.get("cloudinary_public_id") and CloudinaryService.is_available():
+            try:
+                import cloudinary.uploader
+                cloudinary.uploader.destroy(image["cloudinary_public_id"])
+            except Exception:
+                pass
+
         file_path = Path(settings.UPLOAD_DIR) / image["file_path"]
         if file_path.exists():
             file_path.unlink()
@@ -129,3 +160,4 @@ async def delete_image(image_id: str):
         return {"success": True, "message": "Image deleted"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+

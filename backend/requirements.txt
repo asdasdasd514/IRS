@@ -23,3 +23,6 @@ bcrypt>=4.1.2
 
 # SerpAPI for Google Maps
 google-search-results>=2.4.2
+
+# Cloud Storage
+cloudinary>=1.38.0
