@@ -15,13 +15,17 @@ router = APIRouter(prefix="/schools", tags=["Schools"])
 
 @router.get("", response_model=List[SchoolResponse])
 async def list_schools(
-    tier: Optional[int] = None,
+    search: Optional[str] = None,
     current_user: dict = Depends(get_current_user)
 ):
     db = get_database()
     query = {}
-    if tier:
-        query["tier"] = tier
+    if search:
+        query["$or"] = [
+            {"name": {"$regex": search, "$options": "i"}},
+            {"code": {"$regex": search, "$options": "i"}},
+            {"address": {"$regex": search, "$options": "i"}}
+        ]
 
     cursor = db.schools.find(query).sort("code", 1)
     schools = await cursor.to_list(length=200)

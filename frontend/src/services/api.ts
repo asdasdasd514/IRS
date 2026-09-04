@@ -339,6 +339,34 @@ export const ticketApi = {
   },
 };
 
+// ==================== QUẢN LÝ ĐIỂM DỪNG (WAYPOINT CRUD API) ====================
+export const waypointApi = {
+  getAll: async (params?: { trip_id?: string; school_id?: string; type?: string; search?: string }): Promise<Waypoint[]> => {
+    const { data } = await api.get('/waypoints', { params });
+    return data;
+  },
+
+  getById: async (id: string): Promise<Waypoint> => {
+    const { data } = await api.get(`/waypoints/${id}`);
+    return data;
+  },
+
+  create: async (waypointData: CreateWaypointInput): Promise<Waypoint> => {
+    const { data } = await api.post('/waypoints', waypointData);
+    return data;
+  },
+
+  update: async (id: string, waypointData: Partial<CreateWaypointInput>): Promise<Waypoint> => {
+    const { data } = await api.patch(`/waypoints/${id}`, waypointData);
+    return data;
+  },
+
+  delete: async (id: string): Promise<void> => {
+    await api.delete(`/waypoints/${id}`);
+  },
+};
+
+
 // Maps Parser API
 export const mapsApi = {
   parseLink: async (link: string): Promise<{ latitude: number; longitude: number }> => {

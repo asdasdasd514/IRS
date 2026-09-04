@@ -18,10 +18,16 @@ class ImageResponse(BaseModel):
 
 # ==================== PHẦN 1: Thông tin chi tiết ====================
 class WaypointDetailBase(BaseModel):
-    principal_name: Optional[str] = None
+    description: Optional[str] = None # Giới thiệu về trường
+    image_url: Optional[str] = None # Ảnh trường
+    website: Optional[str] = None # Website trường
+    representative_name: Optional[str] = None # Người đại diện
+    representative_phone: Optional[str] = None # SĐT người đại diện
+    principal_name: Optional[str] = None # Hiệu trưởng
     principal_phone: Optional[str] = None
-    vice_principal_name: Optional[str] = None
+    vice_principal_name: Optional[str] = None # Phó hiệu trưởng
     vice_principal_phone: Optional[str] = None
+    admissions_info: Optional[str] = None # Thông tin tuyển sinh
     our_contact_person: Optional[str] = None
     our_contact_role: Optional[str] = None
     contact_process: Optional[str] = None
@@ -34,15 +40,22 @@ class WaypointDetailCreate(WaypointDetailBase):
 
 
 class WaypointDetailUpdate(BaseModel):
+    description: Optional[str] = None
+    image_url: Optional[str] = None
+    website: Optional[str] = None
+    representative_name: Optional[str] = None
+    representative_phone: Optional[str] = None
     principal_name: Optional[str] = None
     principal_phone: Optional[str] = None
     vice_principal_name: Optional[str] = None
     vice_principal_phone: Optional[str] = None
+    admissions_info: Optional[str] = None
     our_contact_person: Optional[str] = None
     our_contact_role: Optional[str] = None
     contact_process: Optional[str] = None
     total_contact_attempts: Optional[int] = None
     notes: Optional[str] = None
+
 
 
 class WaypointDetailResponse(WaypointDetailBase):

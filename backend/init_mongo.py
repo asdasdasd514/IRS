@@ -131,8 +131,6 @@ async def init_mongo_database():
             "description": "Trường THPT Chuyên trọng điểm của TP Cần Thơ với bề dày thành tích học sinh giỏi quốc gia. Học sinh có định hướng rõ ràng về các ngành Công nghệ thông tin, Trí tuệ nhân tạo và Kinh doanh quốc tế.",
             "lat": 10.0076,
             "lng": 105.7725,
-            "tier": 1,
-            "grade12_students_count": 450,
             "school_board": {
                 "principal_name": "Thầy Phạm Văn Cường",
                 "principal_phone": "0909999888",
@@ -150,8 +148,6 @@ async def init_mongo_database():
             "description": "Trường công lập có quy mô học sinh khối 12 đông hàng đầu quận Bình Thủy. Học sinh rất năng động, tích cực tham gia các ngày hội tư vấn hướng nghiệp mở.",
             "lat": 10.0612,
             "lng": 105.7611,
-            "tier": 2,
-            "grade12_students_count": 620,
             "school_board": {
                 "principal_name": "Cô Trần Thị Mai",
                 "principal_phone": "0918765432",
@@ -169,8 +165,6 @@ async def init_mongo_database():
             "description": "Một trong những ngôi trường trung học phổ thông lâu đời và giàu truyền thống nhất miền Tây Nam Bộ, chất lượng đầu vào cao và tỷ lệ đỗ đại học trên 98%.",
             "lat": 10.0382,
             "lng": 105.7831,
-            "tier": 1,
-            "grade12_students_count": 580,
             "school_board": {
                 "principal_name": "Thầy Hoàng Quốc Dũng",
                 "principal_phone": "0903333444",
@@ -232,9 +226,19 @@ async def init_mongo_database():
         {
             "id": wp1_id,
             "trip_id": trip_id,
-            "school_id": "THPT-CT-01", # Mã trường đồng bộ với bảng schools
+            "school_id": "THPT-CT-01",
             "name": "THPT Chuyên Lý Tự Trọng",
             "address": "Phường Hưng Thạnh, Quận Cái Răng, Thành phố Cần Thơ",
+            "description": "Trường THPT Chuyên hàng đầu tại TP Cần Thơ, đào tạo học sinh giỏi quốc gia và quốc tế, tỷ lệ đậu đại học đạt 100%.",
+            "image_url": "https://images.unsplash.com/photo-1541339907198-e08756dedf3f?w=800&auto=format&fit=crop&q=80",
+            "website": "http://thptchuyenlytutrong.cantho.edu.vn",
+            "representative_name": "Thầy Phạm Văn Cường",
+            "representative_phone": "0909999888",
+            "principal_name": "Thầy Phạm Văn Cường",
+            "principal_phone": "0909999888",
+            "vice_principal_name": "Thầy Nguyễn Văn An",
+            "vice_principal_phone": "0901234567",
+            "admissions_info": "Chỉ tiêu tuyển sinh dự kiến 450 học sinh khối 12; định hướng chuyên ngành: CNTT, Khoa học Kỹ thuật, Kinh tế.",
             "lat": 10.0076,
             "lng": 105.7725,
             "type": "SCHOOL",
@@ -243,14 +247,26 @@ async def init_mongo_database():
             "visited_at": now,
             "contact_name": "Thầy Nguyễn Văn An (Phó Hiệu Trưởng)",
             "contact_phone": "0901234567",
-            "created_at": now
+            "notes": "BGH rất cởi mở, bố trí hội trường và âm thanh đầy đủ. Học sinh đặt nhiều câu hỏi về ngành CNTT.",
+            "created_at": now,
+            "updated_at": now
         },
         {
             "id": wp2_id,
             "trip_id": trip_id,
-            "school_id": "THPT-CT-03", # Mã trường đồng bộ với bảng schools
+            "school_id": "THPT-CT-03",
             "name": "THPT Châu Văn Liêm",
             "address": "Số 58 Xô Viết Nghệ Tĩnh, Phường An Cư, Quận Ninh Kiều, Thành phố Cần Thơ",
+            "description": "Một trong những ngôi trường trung học phổ thông lâu đời và giàu truyền thống nhất miền Tây Nam Bộ, chất lượng đầu vào cao và tỷ lệ đỗ đại học trên 98%.",
+            "image_url": "https://images.unsplash.com/photo-1523050854058-8df90110c9f1?w=800&auto=format&fit=crop&q=80",
+            "website": "http://thptchauvanliem.cantho.edu.vn",
+            "representative_name": "Thầy Hoàng Quốc Dũng",
+            "representative_phone": "0903333444",
+            "principal_name": "Thầy Hoàng Quốc Dũng",
+            "principal_phone": "0903333444",
+            "vice_principal_name": "Cô Nguyễn Thị Thu",
+            "vice_principal_phone": "0908888777",
+            "admissions_info": "Quy mô 580 học sinh lớp 12; định hướng ngành: Quản trị Kinh doanh, Ngôn ngữ, Sư phạm, Luật.",
             "lat": 10.0382,
             "lng": 105.7831,
             "type": "SCHOOL",
@@ -259,14 +275,26 @@ async def init_mongo_database():
             "visited_at": now,
             "contact_name": "Cô Nguyễn Thị Thu (Phó Hiệu Trưởng)",
             "contact_phone": "0908888777",
-            "created_at": now
+            "notes": "Đã thống nhất khung giờ tư vấn 08:00 - 10:00 sáng. BGH đề xuất phối hợp tặng 5 suất học bổng khuyến học.",
+            "created_at": now,
+            "updated_at": now
         },
         {
             "id": wp3_id,
             "trip_id": trip_id,
-            "school_id": "THPT-CT-02", # Mã trường đồng bộ với bảng schools
+            "school_id": "THPT-CT-02",
             "name": "THPT Bùi Hữu Nghĩa",
             "address": "Đường Cách Mạng Tháng Tám, Phường An Thới, Quận Bình Thủy, Thành phố Cần Thơ",
+            "description": "Trường công lập có quy mô học sinh khối 12 đông hàng đầu quận Bình Thủy. Học sinh rất năng động, tích cực tham gia các ngày hội tư vấn hướng nghiệp mở.",
+            "image_url": "https://images.unsplash.com/photo-1509062522246-3755977927d7?w=800&auto=format&fit=crop&q=80",
+            "website": "http://thptbuihuunghia.cantho.edu.vn",
+            "representative_name": "Cô Trần Thị Mai",
+            "representative_phone": "0918765432",
+            "principal_name": "Cô Trần Thị Mai",
+            "principal_phone": "0918765432",
+            "vice_principal_name": "Thầy Lê Minh Tuấn",
+            "vice_principal_phone": "0912456789",
+            "admissions_info": "Quy mô 620 học sinh khối 12; nhu cầu cao về nhóm ngành Kỹ thuật số, Thương mại Điện tử và Du lịch.",
             "lat": 10.0612,
             "lng": 105.7611,
             "type": "SCHOOL",
@@ -275,7 +303,9 @@ async def init_mongo_database():
             "visited_at": None,
             "contact_name": "Thầy Lê Minh Tuấn (Phó Hiệu Trưởng)",
             "contact_phone": "0912456789",
-            "created_at": now
+            "notes": "Dự kiến tổ chức ngày hội định hướng nghề nghiệp ngoài sân trường cho toàn bộ khối 12.",
+            "created_at": now,
+            "updated_at": now
         },
         {
             "id": wp4_id,
@@ -283,6 +313,11 @@ async def init_mongo_database():
             "school_id": None, # Điểm nghỉ lưu trú khách sạn
             "name": "Khách sạn Mường Thanh Luxury Cần Thơ",
             "address": "Khu vực Cồn Cái Khế, Lê Lợi, Ninh Kiều, Cần Thơ",
+            "description": "Địa điểm lưu trú và nghỉ ngơi của đoàn tuyển sinh lưu động tại trung tâm thành phố Cần Thơ.",
+            "image_url": "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=800&auto=format&fit=crop&q=80",
+            "website": "https://luxurycantho.muongthanh.com",
+            "representative_name": "Lễ tân khách sạn",
+            "representative_phone": "02923688888",
             "lat": 10.0350,
             "lng": 105.7750,
             "type": "HOTEL",
@@ -291,9 +326,12 @@ async def init_mongo_database():
             "visited_at": None,
             "contact_name": "Lễ tân khách sạn",
             "contact_phone": "02923688888",
-            "created_at": now
+            "notes": "Đã đặt trước 3 phòng đôi cho đoàn công tác.",
+            "created_at": now,
+            "updated_at": now
         }
     ]
+
     await db.waypoints.insert_many(waypoints_data)
     print("  [5. Waypoints]: Da tao 4 diem dung (school_id la Ma truong, da bo notes).")
 

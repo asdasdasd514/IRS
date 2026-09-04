@@ -146,25 +146,66 @@ class TripService:
         existing_wps = await cursor.to_list(length=1000)
         max_order = max([w.get("visit_order", 0) for w in existing_wps], default=0)
 
+        wp_id = str(uuid.uuid4())
+        now = datetime.utcnow()
+        wp_data_dict = waypoint_data.model_dump(exclude_unset=True)
+        if "type" in wp_data_dict and hasattr(wp_data_dict["type"], "value"):
+            wp_data_dict["type"] = wp_data_dict["type"].value
+
+        # Tự động đồng bộ từ danh mục trường nếu có school_id
+        if waypoint_data.school_id:
+            school = await db.schools.find_one({"$or": [{"id": waypoint_data.school_id}, {"code": waypoint_data.school_id}]})
+            if school:
+                if not wp_data_dict.get("description"):
+                    wp_data_dict["description"] = school.get("description")
+                if school.get("school_board"):
+                    sb = school["school_board"]
+                    if not wp_data_dict.get("principal_name"):
+                        wp_data_dict["principal_name"] = sb.get("principal_name")
+                    if not wp_data_dict.get("principal_phone"):
+                        wp_data_dict["principal_phone"] = sb.get("principal_phone")
+                    if not wp_data_dict.get("vice_principal_name"):
+                        wp_data_dict["vice_principal_name"] = sb.get("vice_principal_name")
+                    if not wp_data_dict.get("vice_principal_phone"):
+                        wp_data_dict["vice_principal_phone"] = sb.get("vice_principal_phone")
+
         wp_doc = {
-            "id": str(uuid.uuid4()),
+            **wp_data_dict,
+            "id": wp_id,
             "trip_id": trip_id,
-            "name": waypoint_data.name,
-            "lat": waypoint_data.lat,
-            "lng": waypoint_data.lng,
-            "google_place_id": waypoint_data.google_place_id,
-            "address": waypoint_data.address,
-            "type": waypoint_data.type.value if hasattr(waypoint_data.type, 'value') else str(waypoint_data.type),
-            "notes": waypoint_data.notes,
-            "contact_name": waypoint_data.contact_name,
-            "contact_phone": waypoint_data.contact_phone,
             "visit_order": max_order + 1,
             "is_visited": False,
             "visited_at": None,
-            "created_at": datetime.utcnow()
+            "created_at": now,
+            "updated_at": now
         }
 
         await db.waypoints.insert_one(wp_doc)
+
+        # Tự động đồng bộ tạo chi tiết vào waypoint_details
+        detail_doc = {
+            "id": str(uuid.uuid4()),
+            "waypoint_id": wp_id,
+            "description": wp_doc.get("description"),
+            "image_url": wp_doc.get("image_url"),
+            "website": wp_doc.get("website"),
+            "representative_name": wp_doc.get("representative_name") or wp_doc.get("principal_name"),
+            "representative_phone": wp_doc.get("representative_phone") or wp_doc.get("principal_phone"),
+            "principal_name": wp_doc.get("principal_name"),
+            "principal_phone": wp_doc.get("principal_phone"),
+            "vice_principal_name": wp_doc.get("vice_principal_name"),
+            "vice_principal_phone": wp_doc.get("vice_principal_phone"),
+            "admissions_info": wp_doc.get("admissions_info"),
+            "our_contact_person": None,
+            "our_contact_role": None,
+            "contact_process": None,
+            "total_contact_attempts": 0,
+            "notes": wp_doc.get("notes"),
+            "created_at": now,
+            "updated_at": now
+        }
+        await db.waypoint_details.insert_one(detail_doc)
+
         return wp_doc
 
     async def update_waypoint(self, waypoint_id: str, waypoint_data: WaypointUpdate) -> Optional[dict]:
@@ -173,13 +214,40 @@ class TripService:
         if not update_dict:
             return await db.waypoints.find_one({"id": waypoint_id})
 
+        if "type" in update_dict and hasattr(update_dict["type"], "value"):
+            update_dict["type"] = update_dict["type"].value
+
+        update_dict["updated_at"] = datetime.utcnow()
         await db.waypoints.update_one({"id": waypoint_id}, {"$set": update_dict})
+
+        # Đồng bộ sang waypoint_details nếu có các trường tương ứng
+        detail_fields = [
+            "description", "image_url", "website", "representative_name", "representative_phone",
+            "principal_name", "principal_phone", "vice_principal_name", "vice_principal_phone",
+            "admissions_info", "notes"
+        ]
+        detail_updates = {k: v for k, v in update_dict.items() if k in detail_fields}
+        if detail_updates:
+            detail_updates["updated_at"] = update_dict["updated_at"]
+            await db.waypoint_details.update_one(
+                {"waypoint_id": waypoint_id},
+                {"$set": detail_updates},
+                upsert=True
+            )
+
         return await db.waypoints.find_one({"id": waypoint_id})
 
     async def delete_waypoint(self, waypoint_id: str) -> bool:
         db = get_database()
         res = await db.waypoints.delete_one({"id": waypoint_id})
-        return res.deleted_count > 0
+        if res.deleted_count > 0:
+            await db.waypoint_details.delete_many({"waypoint_id": waypoint_id})
+            await db.waypoint_visit_logs.delete_many({"waypoint_id": waypoint_id})
+            await db.waypoint_tickets.delete_many({"waypoint_id": waypoint_id})
+            await db.waypoint_images.delete_many({"visit_log_id": waypoint_id})
+            return True
+        return False
+
 
     async def check_in(self, trip_id: str, checkin_data: CheckInRequest, max_distance: float = 500.0) -> CheckInResponse:
         db = get_database()

@@ -11,6 +11,7 @@ from app.schemas import NextHopCandidate, WaypointResponse
 import logging
 import math
 import time
+import polyline
 
 logger = logging.getLogger(__name__)
 
@@ -292,26 +293,55 @@ class RoutingService:
                 return None
             
             direction = results["directions"][0]
+            
+            # Format thời gian và khoảng cách
+            duration_text = (
+                direction.get("formatted_duration")
+                or direction.get("duration_text")
+                or (f"{direction.get('duration')} giây" if isinstance(direction.get("duration"), (int, float)) else str(direction.get("duration", "")))
+            )
+            distance_text = (
+                direction.get("formatted_distance")
+                or direction.get("distance_text")
+                or (f"{direction.get('distance')} m" if isinstance(direction.get("distance"), (int, float)) else str(direction.get("distance", "")))
+            )
+            
+            # Thu thập các bước chỉ đường (steps) & tọa độ GPS để vẽ đường cong
             steps = []
-            if "legs" in results and len(results["legs"]) > 0:
-                leg = results["legs"][0]
-                for step in leg.get("steps", []):
+            coords = [(origin_lat, origin_lng)]
+            
+            for trip in direction.get("trips", []):
+                for step in trip.get("details", []):
                     steps.append({
-                        "instruction": step.get("instructions", ""),
-                        "distance": step.get("distance", ""),
-                        "duration": step.get("duration", "")
+                        "instruction": step.get("title") or step.get("action") or "",
+                        "distance": step.get("formatted_distance") or str(step.get("distance", "")),
+                        "duration": step.get("formatted_duration") or str(step.get("duration", ""))
                     })
+                    gps = step.get("gps_coordinates")
+                    if gps and isinstance(gps, dict) and "latitude" in gps and "longitude" in gps:
+                        coords.append((float(gps["latitude"]), float(gps["longitude"])))
+            
+            coords.append((dest_lat, dest_lng))
+            
+            # Overview polyline
+            encoded_polyline = results.get("overview_polyline", "")
+            if not encoded_polyline and len(coords) >= 2:
+                try:
+                    encoded_polyline = polyline.encode(coords)
+                except Exception as enc_err:
+                    logger.warning(f"Error encoding polyline: {enc_err}")
             
             return {
-                "polyline": results.get("overview_polyline", ""),
-                "duration_text": direction.get("duration", ""),
-                "distance_text": direction.get("distance", ""),
+                "polyline": encoded_polyline,
+                "duration_text": duration_text,
+                "distance_text": distance_text,
                 "steps": steps
             }
             
         except Exception as e:
             logger.error(f"Error getting directions from SerpAPI: {e}")
             return None
+
 
 
 routing_service = RoutingService()

@@ -1,4 +1,6 @@
+import secrets
 from pathlib import Path
+from pydantic import Field
 from pydantic_settings import BaseSettings
 from functools import lru_cache
 from typing import Optional
@@ -9,9 +11,10 @@ class Settings(BaseSettings):
     APP_NAME: str = "IRS Mobile Admissions System"
     DEBUG: bool = True
     PORT: int = 8000
-    SECRET_KEY: str = "irs_super_secret_jwt_key_2026_admissions_platform"
-    JWT_SECRET_KEY: str = "irs_super_secret_jwt_key_2026_admissions_platform"
+    SECRET_KEY: str = Field(default_factory=lambda: secrets.token_hex(32))
+    JWT_SECRET_KEY: str = Field(default_factory=lambda: secrets.token_hex(32))
     ALGORITHM: str = "HS256"
+    JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 43200
     
     # Database MongoDB

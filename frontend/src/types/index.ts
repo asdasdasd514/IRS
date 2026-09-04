@@ -40,7 +40,7 @@ export interface CreateTripInput {
 // Waypoint Types
 export interface Waypoint {
   id: string;
-  trip_id: string;
+  trip_id?: string | null;
   google_place_id: string | null;
   school_id?: string | null;
   name: string;
@@ -51,10 +51,22 @@ export interface Waypoint {
   visit_order: number | null;
   is_visited: boolean;
   visited_at: string | null;
+  description?: string | null;
+  image_url?: string | null;
+  images?: string[];
+  website?: string | null;
+  representative_name?: string | null;
+  representative_phone?: string | null;
+  principal_name?: string | null;
+  principal_phone?: string | null;
+  vice_principal_name?: string | null;
+  vice_principal_phone?: string | null;
+  admissions_info?: string | null;
   notes?: string | null;
   contact_name: string | null;
   contact_phone: string | null;
   created_at: string;
+  updated_at?: string | null;
 }
 
 export interface School {
@@ -65,8 +77,6 @@ export interface School {
   description?: string;
   lat: number;
   lng: number;
-  tier: number;
-  grade12_students_count: number;
   preferred_visit_hours?: string;
   created_at?: string;
 }
@@ -75,9 +85,21 @@ export interface CreateWaypointInput {
   name: string;
   lat: number;
   lng: number;
+  trip_id?: string;
+  school_id?: string;
   google_place_id?: string;
   address?: string;
   type?: 'SCHOOL' | 'HOTEL' | 'HQ' | 'REST_STOP';
+  description?: string;
+  image_url?: string;
+  website?: string;
+  representative_name?: string;
+  representative_phone?: string;
+  principal_name?: string;
+  principal_phone?: string;
+  vice_principal_name?: string;
+  vice_principal_phone?: string;
+  admissions_info?: string;
   notes?: string;
   contact_name?: string;
   contact_phone?: string;
@@ -92,10 +114,16 @@ export interface CreateWaypointInput {
 export interface WaypointDetail {
   id: string;
   waypoint_id: string;
+  description?: string;
+  image_url?: string;
+  website?: string;
+  representative_name?: string;
+  representative_phone?: string;
   principal_name?: string;
   principal_phone?: string;
   vice_principal_name?: string;
   vice_principal_phone?: string;
+  admissions_info?: string;
   our_contact_person?: string;
   our_contact_role?: string;
   contact_process?: string;
@@ -106,16 +134,23 @@ export interface WaypointDetail {
 }
 
 export interface WaypointDetailFormData {
+  description?: string;
+  image_url?: string;
+  website?: string;
+  representative_name?: string;
+  representative_phone?: string;
   principal_name?: string;
   principal_phone?: string;
   vice_principal_name?: string;
   vice_principal_phone?: string;
+  admissions_info?: string;
   our_contact_person?: string;
   our_contact_role?: string;
   contact_process?: string;
   total_contact_attempts?: number;
   notes?: string;
 }
+
 
 // Image Type
 export interface WaypointImage {

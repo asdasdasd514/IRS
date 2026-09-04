@@ -58,15 +58,13 @@ class SchoolBoard(BaseModel):
 
 
 class SchoolBase(BaseModel):
-    id: str # Mã trường (ví dụ: THPT-CT-01)
+    id: str # Mã trường (ví dụ: ĐH-BKHN, THPT-CT-01)
     code: str # Mã trường
     name: str
     address: str
-    description: Optional[str] = None # Cột Giới thiệu về trường
+    description: Optional[str] = None # Giới thiệu về trường
     lat: float
     lng: float
-    tier: int = 1 # 1: Trọng điểm/Chuyên, 2: Công lập lớn, 3: Phổ thông thường
-    grade12_students_count: int = 0
     school_board: Optional[SchoolBoard] = None
     preferred_visit_hours: Optional[str] = None
 
@@ -79,8 +77,6 @@ class SchoolCreate(BaseModel):
     description: Optional[str] = None
     lat: float
     lng: float
-    tier: int = 1
-    grade12_students_count: int = 0
     school_board: Optional[SchoolBoard] = None
     preferred_visit_hours: Optional[str] = None
 
@@ -92,17 +88,32 @@ class SchoolResponse(SchoolBase):
         from_attributes = True
 
 
-# Waypoint Schemas (Điểm dừng lộ trình - không cần notes vì có trong waypoint_details)
+# Waypoint Schemas (Điểm dừng lộ trình & Thông tin trường học)
 class WaypointBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
     lat: float = Field(..., ge=-90, le=90)
     lng: float = Field(..., ge=-180, le=180)
     google_place_id: Optional[str] = None
-    school_id: Optional[str] = None # Mã trường (ví dụ: THPT-CT-01)
+    school_id: Optional[str] = None # Mã trường
     address: Optional[str] = None
     type: WaypointType = WaypointType.SCHOOL
+    trip_id: Optional[str] = None
     contact_name: Optional[str] = None
     contact_phone: Optional[str] = None
+    
+    # Thông tin chi tiết trường học & tuyển sinh
+    description: Optional[str] = None # Phần giới thiệu về trường
+    image_url: Optional[str] = None # Ảnh đại diện / ảnh trường
+    images: List[str] = [] # Danh sách ảnh
+    website: Optional[str] = None # Website của trường
+    representative_name: Optional[str] = None # Người đại diện
+    representative_phone: Optional[str] = None # Số điện thoại người đại diện
+    principal_name: Optional[str] = None # Hiệu trưởng / Giám đốc
+    principal_phone: Optional[str] = None # Số điện thoại Hiệu trưởng
+    vice_principal_name: Optional[str] = None # Phó hiệu trưởng / Phó giám đốc
+    vice_principal_phone: Optional[str] = None # Số điện thoại Phó hiệu trưởng
+    admissions_info: Optional[str] = None # Thông tin tuyển sinh (chỉ tiêu, khối thi, ghi chú tuyển sinh)
+    notes: Optional[str] = None # Ghi chú thêm
 
 
 class WaypointCreate(WaypointBase):
@@ -113,21 +124,41 @@ class WaypointUpdate(BaseModel):
     name: Optional[str] = None
     lat: Optional[float] = None
     lng: Optional[float] = None
+    google_place_id: Optional[str] = None
+    school_id: Optional[str] = None
+    address: Optional[str] = None
+    type: Optional[WaypointType] = None
+    trip_id: Optional[str] = None
+    visit_order: Optional[int] = None
     is_visited: Optional[bool] = None
+    visited_at: Optional[datetime] = None
     contact_name: Optional[str] = None
     contact_phone: Optional[str] = None
-    school_id: Optional[str] = None
+    
+    description: Optional[str] = None
+    image_url: Optional[str] = None
+    images: Optional[List[str]] = None
+    website: Optional[str] = None
+    representative_name: Optional[str] = None
+    representative_phone: Optional[str] = None
+    principal_name: Optional[str] = None
+    principal_phone: Optional[str] = None
+    vice_principal_name: Optional[str] = None
+    vice_principal_phone: Optional[str] = None
+    admissions_info: Optional[str] = None
+    notes: Optional[str] = None
 
 
 class WaypointResponse(WaypointBase):
     id: str
-    trip_id: str
+    trip_id: Optional[str] = None
     visit_order: Optional[int] = None
     is_visited: bool = False
     visited_at: Optional[datetime] = None
     created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
 
-    @field_serializer('visited_at', 'created_at', when_used='json')
+    @field_serializer('visited_at', 'created_at', 'updated_at', when_used='json')
     def serialize_dt(self, dt: Optional[datetime]) -> Optional[str]:
         if dt is None:
             return None
@@ -137,6 +168,7 @@ class WaypointResponse(WaypointBase):
 
     class Config:
         from_attributes = True
+
 
 
 # Trip Schemas (Đợt/Chuyến xe Tuyển sinh)
