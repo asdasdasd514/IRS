@@ -100,8 +100,12 @@ async def upload_images(
             "cloudinary_public_id": cloudinary_res.get("public_id") if cloudinary_res else None,
             "created_at": datetime.utcnow()
         }
-        await db.waypoint_images.insert_one(image_doc)
         image_ids.append(img_id)
+        # Nhúng trực tiếp vào visit_log trong waypoint
+        await db.waypoints.update_one(
+            {"visit_logs.id": visit_log_id},
+            {"$push": {"visit_logs.$.images": image_doc}}
+        )
     
     return JSONResponse({
         "success": True,
@@ -113,7 +117,23 @@ async def upload_images(
 @router.get("/images/{image_id}")
 async def get_image(image_id: str):
     db = get_database()
-    image = await db.waypoint_images.find_one({"id": image_id})
+    image = None
+    
+    # 1. Tìm trong collection waypoints (nhúng trong visit_logs.images)
+    wp = await db.waypoints.find_one({"visit_logs.images.id": image_id})
+    if wp:
+        for log in wp.get("visit_logs", []):
+            for img in log.get("images", []):
+                if img.get("id") == image_id and not img.get("is_deleted"):
+                    image = img
+                    break
+            if image:
+                break
+    
+    # 2. Dự phòng tìm trong collection cũ nếu có
+    if not image and hasattr(db, "waypoint_images"):
+        image = await db.waypoint_images.find_one({"id": image_id, "is_deleted": {"$ne": True}})
+        
     if not image:
         raise HTTPException(status_code=404, detail="Image not found")
     
@@ -139,17 +159,28 @@ async def get_image(image_id: str):
 @router.delete("/images/{image_id}")
 async def delete_image(image_id: str):
     db = get_database()
-    image = await db.waypoint_images.find_one({"id": image_id, "is_deleted": {"$ne": True}})
-    if not image:
-        raise HTTPException(status_code=404, detail="Image not found")
+    now = datetime.utcnow()
     
-    try:
-        now = datetime.utcnow()
-        await db.waypoint_images.update_one(
-            {"id": image_id},
-            {"$set": {"is_deleted": True, "deleted_at": now}}
-        )
-        return {"success": True, "message": "Image soft-deleted"}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    # 1. Xóa mềm trong waypoints.visit_logs.images
+    res = await db.waypoints.update_one(
+        {"visit_logs.images.id": image_id},
+        {"$set": {
+            "visit_logs.$[].images.$[img].is_deleted": True,
+            "visit_logs.$[].images.$[img].deleted_at": now
+        }},
+        array_filters=[{"img.id": image_id}]
+    )
+    
+    # 2. Xóa mềm trong collection cũ nếu có
+    if res.modified_count == 0 and hasattr(db, "waypoint_images"):
+        legacy = await db.waypoint_images.find_one({"id": image_id, "is_deleted": {"$ne": True}})
+        if legacy:
+            await db.waypoint_images.update_one(
+                {"id": image_id},
+                {"$set": {"is_deleted": True, "deleted_at": now}}
+            )
+            return {"success": True, "message": "Image soft-deleted"}
+        raise HTTPException(status_code=404, detail="Image not found")
+        
+    return {"success": True, "message": "Image soft-deleted"}
 

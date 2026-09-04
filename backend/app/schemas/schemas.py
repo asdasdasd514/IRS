@@ -114,6 +114,10 @@ class WaypointBase(BaseModel):
     vice_principal_phone: Optional[str] = None # Số điện thoại Phó hiệu trưởng
     admissions_info: Optional[str] = None # Thông tin tuyển sinh (chỉ tiêu, khối thi, ghi chú tuyển sinh)
     notes: Optional[str] = None # Ghi chú thêm
+    our_contact_person: Optional[str] = None
+    our_contact_role: Optional[str] = None
+    contact_process: Optional[str] = None
+    total_contact_attempts: int = 0
 
 
 class WaypointCreate(WaypointBase):
@@ -147,6 +151,10 @@ class WaypointUpdate(BaseModel):
     vice_principal_phone: Optional[str] = None
     admissions_info: Optional[str] = None
     notes: Optional[str] = None
+    our_contact_person: Optional[str] = None
+    our_contact_role: Optional[str] = None
+    contact_process: Optional[str] = None
+    total_contact_attempts: Optional[int] = None
 
 
 class WaypointResponse(WaypointBase):
@@ -157,6 +165,9 @@ class WaypointResponse(WaypointBase):
     visited_at: Optional[datetime] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
+    visit_logs: List[dict] = []
+    tickets: List[dict] = []
+    total_tickets: int = 0
 
     @field_serializer('visited_at', 'created_at', 'updated_at', when_used='json')
     def serialize_dt(self, dt: Optional[datetime]) -> Optional[str]:
@@ -228,6 +239,7 @@ class TripResponse(TripBase):
     
     total_waypoints: int = 0
     visited_count: int = 0
+    total_tickets: int = 0
 
     class Config:
         from_attributes = True

@@ -44,19 +44,14 @@ async def init_mongo_database():
     client = AsyncIOMotorClient(MONGODB_URL)
     db = client[DATABASE_NAME]
 
-    # Danh sách collections nghiệp vụ chuẩn hóa
+    # Danh sách 6 Collections nghiệp vụ cốt lõi đã được tối ưu hóa
     collections = [
-        "users",
-        "campaigns",
-        "admission_trips",
-        "schools",
-        "waypoints",
-        "waypoint_details",
-        "waypoint_visit_logs",
-        "waypoint_tickets",
-        "waypoint_images",
-        "trip_reports",
-        "admissions_activities"
+        "users",            # Tài khoản người dùng (admin, staff) và phân quyền
+        "campaigns",        # Chiến dịch tuyển sinh
+        "admission_trips",  # Chuyến đi tuyển sinh thuộc chiến dịch
+        "schools",          # Danh mục trường học chuẩn hóa
+        "waypoints",        # Điểm dừng hợp nhất (chứa thông tin trường, visit_logs và tickets nhúng)
+        "trip_reports"      # Báo cáo tổng kết chuyến đi
     ]
 
     print("\n[Bước 1/3]: Đang làm sạch và tái tạo các Collections (Bảng)...")
@@ -67,7 +62,7 @@ async def init_mongo_database():
 
     for col in collections:
         await db.create_collection(col)
-        print(f"  + Khởi tạo collection mới: '{col}'")
+        print(f"  + Khởi tạo collection cốt lõi: '{col}'")
 
     print("\n[Bước 2/3]: Đang thiết lập các Indexes & Ràng buộc toàn vẹn...")
     # 1. users
@@ -78,6 +73,7 @@ async def init_mongo_database():
 
     # 2. campaigns
     await db.campaigns.create_index("id", unique=True)
+    await db.campaigns.create_index("academic_year")
     await db.campaigns.create_index("status")
     await db.campaigns.create_index("is_deleted")
     await db.campaigns.create_index("created_at")
@@ -91,48 +87,28 @@ async def init_mongo_database():
 
     # 4. schools
     await db.schools.create_index("id", unique=True)
-    await db.schools.create_index("code", unique=True)
+    await db.schools.create_index("code", unique=True, sparse=True)
     await db.schools.create_index("name")
+    await db.schools.create_index("province")
     await db.schools.create_index("is_deleted")
 
-    # 5. waypoints
+    # 5. waypoints (Hợp nhất: Điểm dừng + Thông tin trường + Mảng nhúng visit_logs + Mảng nhúng tickets)
     await db.waypoints.create_index("id", unique=True)
     await db.waypoints.create_index("trip_id")
     await db.waypoints.create_index("school_id")
     await db.waypoints.create_index("visit_order")
     await db.waypoints.create_index("is_deleted")
+    await db.waypoints.create_index("visit_logs.id")
+    await db.waypoints.create_index("tickets.id")
 
-    # 6. waypoint_details
-    await db.waypoint_details.create_index("waypoint_id", unique=True)
-    await db.waypoint_details.create_index("is_deleted")
-
-    # 7. waypoint_visit_logs
-    await db.waypoint_visit_logs.create_index("id", unique=True)
-    await db.waypoint_visit_logs.create_index("waypoint_id")
-    await db.waypoint_visit_logs.create_index("is_deleted")
-
-    # 8. waypoint_tickets
-    await db.waypoint_tickets.create_index("id", unique=True)
-    await db.waypoint_tickets.create_index("waypoint_id")
-    await db.waypoint_tickets.create_index("is_deleted")
-
-    # 9. waypoint_images
-    await db.waypoint_images.create_index("id", unique=True)
-    await db.waypoint_images.create_index("visit_log_id")
-    await db.waypoint_images.create_index("is_deleted")
-
-    # 10. trip_reports
+    # 6. trip_reports
     await db.trip_reports.create_index("id", unique=True)
     await db.trip_reports.create_index("trip_id")
+    await db.trip_reports.create_index("campaign_id")
     await db.trip_reports.create_index("is_deleted")
+    await db.trip_reports.create_index("created_at")
 
-    # 11. admissions_activities
-    await db.admissions_activities.create_index("id", unique=True)
-    await db.admissions_activities.create_index("trip_id")
-    await db.admissions_activities.create_index("waypoint_id")
-    await db.admissions_activities.create_index("is_deleted")
-
-    print("  + Đã tạo đầy đủ Unique Constraints và Query Indexes cho 11 collections.")
+    print("  + Đã tạo đầy đủ Unique Constraints và Query Indexes cho 6 collections tối ưu.")
 
     print("\n[Bước 3/3]: Khởi tạo tài khoản Quản trị viên (Root Admin)...")
     now = datetime.now(timezone.utc)
@@ -158,7 +134,7 @@ async def init_mongo_database():
     print("\n" + "=" * 70)
     print("✅ [HOÀN TẤT MIGRATION MONGODB]:")
     print(f"   - Database: {DATABASE_NAME}")
-    print(f"   - Số lượng Collections: {len(collections)} (đã cấu trúc sạch)")
+    print(f"   - Số lượng Collections: {len(collections)} (Tối ưu hóa: users, campaigns, admission_trips, schools, waypoints, trip_reports)")
     print(f"   - Dữ liệu mẫu: Không chèn bất kỳ chiến dịch, trường học hay điểm dừng mẫu nào.")
     print(f"   - Tài khoản đăng nhập ban đầu: admin / admin123")
     print("=" * 70)

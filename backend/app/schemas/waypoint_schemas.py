@@ -1,6 +1,6 @@
 """Schemas cho 3 phần thông tin waypoint"""
 from pydantic import BaseModel
-from typing import Optional, List
+from typing import Optional, List, Any
 from datetime import datetime
 
 
@@ -88,7 +88,7 @@ class VisitLogResponse(VisitLogBase):
     waypoint_id: str
     visit_date: Optional[datetime] = None
     created_at: Optional[datetime] = None
-    images: List[ImageResponse] = []
+    images: List[Any] = []
     
     class Config:
         from_attributes = True

@@ -57,13 +57,11 @@ async def build_report_prompt(trip: dict, created_at: Optional[datetime] = None)
     schools_visited = [w for w in schools if w.get("is_visited")]
     schools_unvisited = [w for w in schools if not w.get("is_visited")]
 
-    total_tickets = 0
-    db = get_database()
-    school_ids = [w["id"] for w in schools]
-    if school_ids and db is not None:
-        tickets_cursor = db.waypoint_tickets.find({"waypoint_id": {"$in": school_ids}})
-        tickets = await tickets_cursor.to_list(length=1000)
-        total_tickets = sum(t.get("tickets_collected", 0) for t in tickets)
+    # Tính tổng số phiếu từ danh sách tickets nhúng trong từng trường
+    total_tickets = sum(
+        sum(t.get("tickets_collected", 0) for t in (w.get("tickets") or []))
+        for w in schools
+    )
 
     report_time = created_at or datetime.now(timezone.utc)
 
@@ -92,50 +90,43 @@ Vui lòng tạo một báo cáo chi tiết và chuyên nghiệp cho chuyến đi
             prompt += f"- **Địa chỉ**: {school.get('address') or 'Chưa có thông tin'}\n"
             prompt += f"- **Ngày đến**: {to_vietnam_time(school.get('visited_at'))}\n"
             
-            if db is not None:
-                tk_cursor = db.waypoint_tickets.find({"waypoint_id": school["id"]})
-                s_tickets = await tk_cursor.to_list(length=100)
-                st_count = sum(t.get("tickets_collected", 0) for t in s_tickets)
-                prompt += f"- **Số phiếu thu được**: {st_count} phiếu\n"
-                if s_tickets:
-                    prompt += f"  - Chi tiết:\n"
-                    for ticket in s_tickets:
-                        prompt += f"    - Lần {ticket.get('visit_number')}: {ticket.get('tickets_collected')} phiếu ({to_vietnam_date(ticket.get('collection_date'))})\n"
-                        if ticket.get('notes'):
-                            prompt += f"      - Ghi chú: {ticket.get('notes')}\n"
-            else:
-                prompt += f"- **Số phiếu thu được**: 0 phiếu\n"
+            s_tickets = school.get("tickets") or []
+            st_count = sum(t.get("tickets_collected", 0) for t in s_tickets)
+            prompt += f"- **Số phiếu thu được**: {st_count} phiếu\n"
+            if s_tickets:
+                prompt += f"  - Chi tiết:\n"
+                for ticket in s_tickets:
+                    prompt += f"    - Lần {ticket.get('visit_number', 1)}: {ticket.get('tickets_collected', 0)} phiếu ({to_vietnam_date(ticket.get('collection_date'))})\n"
+                    if ticket.get('notes'):
+                        prompt += f"      - Ghi chú: {ticket.get('notes')}\n"
 
-            if db is not None:
-                detail = await db.waypoint_details.find_one({"waypoint_id": school["id"]})
-                if detail:
-                    if detail.get("principal_name") or detail.get("vice_principal_name"):
-                        prompt += f"- **Ban giám hiệu**:\n"
-                        if detail.get("principal_name"):
-                            prompt += f"  - Hiệu trưởng: {detail.get('principal_name')}"
-                            if detail.get("principal_phone"):
-                                prompt += f" (SĐT: {detail.get('principal_phone')})"
-                            prompt += "\n"
-                        if detail.get("vice_principal_name"):
-                            prompt += f"  - Phó hiệu trưởng: {detail.get('vice_principal_name')}"
-                            if detail.get("vice_principal_phone"):
-                                prompt += f" (SĐT: {detail.get('vice_principal_phone')})"
-                            prompt += "\n"
-                    if detail.get("our_contact_person"):
-                        prompt += f"- **Người liên hệ (bên mình)**: {detail.get('our_contact_person')}"
-                        if detail.get("our_contact_role"):
-                            prompt += f" ({detail.get('our_contact_role')})"
-                        prompt += "\n"
-                    if detail.get("contact_process"):
-                        prompt += f"- **Quá trình liên lạc**: {detail.get('contact_process')}\n"
+            if school.get("principal_name") or school.get("vice_principal_name"):
+                prompt += f"- **Ban giám hiệu**:\n"
+                if school.get("principal_name"):
+                    prompt += f"  - Hiệu trưởng: {school.get('principal_name')}"
+                    if school.get("principal_phone"):
+                        prompt += f" (SĐT: {school.get('principal_phone')})"
+                    prompt += "\n"
+                if school.get("vice_principal_name"):
+                    prompt += f"  - Phó hiệu trưởng: {school.get('vice_principal_name')}"
+                    if school.get("vice_principal_phone"):
+                        prompt += f" (SĐT: {school.get('vice_principal_phone')})"
+                    prompt += "\n"
+            if school.get("our_contact_person"):
+                prompt += f"- **Người liên hệ (bên mình)**: {school.get('our_contact_person')}"
+                if school.get("our_contact_role"):
+                    prompt += f" ({school.get('our_contact_role')})"
+                prompt += "\n"
+            if school.get("contact_process"):
+                prompt += f"- **Quá trình liên lạc**: {school.get('contact_process')}\n"
 
-            if db is not None:
-                vl_cursor = db.waypoint_visit_logs.find({"waypoint_id": school["id"]}).sort("visit_date", -1)
-                logs = await vl_cursor.to_list(length=3)
-                if logs:
-                    prompt += f"- **Lịch sử ghé thăm** ({len(logs)} lần):\n"
-                    for log in logs:
-                        prompt += f"  - {to_vietnam_date(log.get('visit_date'))}: {log.get('visit_content')[:100]}\n"
+            logs = school.get("visit_logs") or []
+            if logs:
+                sorted_logs = sorted(logs, key=lambda x: str(x.get("visit_date") or ""), reverse=True)[:3]
+                prompt += f"- **Lịch sử ghé thăm** ({len(sorted_logs)} lần):\n"
+                for log in sorted_logs:
+                    content = log.get('visit_content') or ''
+                    prompt += f"  - {to_vietnam_date(log.get('visit_date'))}: {content[:100]}\n"
 
             if school.get("notes"):
                 prompt += f"- **Ghi chú**: {school.get('notes')}\n"
