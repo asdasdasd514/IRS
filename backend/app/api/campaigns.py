@@ -1,11 +1,12 @@
 """
 Campaign API Endpoints - Quản lý Chiến dịch Tuyển sinh & Tối ưu hóa Lộ trình Lập kế hoạch
+Sử dụng thuật toán Dynamic Next-Hop Routing và lưu trữ kết quả trong route_plans & campaign_waypoints
 """
 
 from typing import List, Optional
 from datetime import datetime, timezone
 import uuid
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from app.core.database import get_database
 from app.schemas import (
@@ -56,15 +57,15 @@ async def create_campaign(
 ):
     """
     Tạo mới một chiến dịch tuyển sinh:
-    - Thêm các địa điểm / trường học dự kiến tham quan (destinations).
-    - Thiết lập điểm xuất phát (start_lat, start_lng).
+    - Lưu thông tin chung của chiến dịch (tên, mô tả, thời gian dự kiến).
+    - Thêm danh sách các trường / địa điểm dự kiến tham quan (destinations).
     """
     db = get_database()
     now = datetime.now(timezone.utc)
     camp_id = str(uuid.uuid4())
     camp_dict = campaign_data.model_dump()
 
-    # Tự động snapshot thông tin trường nếu destination có school_id mà thiếu name/address
+    # Tự động snapshot tọa độ & địa chỉ trường nếu destination có school_id
     if camp_dict.get("destinations"):
         for dest in camp_dict["destinations"]:
             if dest.get("school_id"):
@@ -125,13 +126,18 @@ async def update_campaign(
 @router.post("/{campaign_id}/optimize-route")
 async def preview_optimized_route(
     campaign_id: str,
+    start_lat: Optional[float] = Query(None, description="Vĩ độ điểm xuất phát"),
+    start_lng: Optional[float] = Query(None, description="Kinh độ điểm xuất phát"),
+    start_name: Optional[str] = Query(None, description="Tên điểm xuất phát"),
     current_user: dict = Depends(get_current_user)
 ):
     """
     Tính toán và xem trước (Preview) lộ trình tối ưu đường đi:
-    Sử dụng thuật toán Dynamic Next-Hop Routing để tối ưu hóa thứ tự ghé thăm các trường thích ứng theo khoảng cách và thời gian.
+    1. Sử dụng thuật toán Dynamic Next-Hop Routing để tối ưu hóa thứ tự ghé thăm các trường.
+    2. Tự động lưu trữ kết quả tính toán vào collection `route_plans`.
     """
     db = get_database()
+    now = datetime.now(timezone.utc)
     camp = await db.campaigns.find_one({"id": campaign_id, "is_deleted": {"$ne": True}})
     if not camp:
         raise HTTPException(status_code=404, detail="Chiến dịch tuyển sinh không tồn tại")
@@ -140,18 +146,59 @@ async def preview_optimized_route(
     if not destinations:
         raise HTTPException(status_code=400, detail="Chiến dịch chưa có địa điểm nào để tối ưu đường đi.")
 
-    start_lat = camp.get("start_lat") or destinations[0]["lat"]
-    start_lng = camp.get("start_lng") or destinations[0]["lng"]
-    start_point = {"lat": start_lat, "lng": start_lng}
+    origin_lat = start_lat if start_lat is not None else destinations[0]["lat"]
+    origin_lng = start_lng if start_lng is not None else destinations[0]["lng"]
+    origin_name = start_name or "Điểm xuất phát"
+    start_point = {"lat": origin_lat, "lng": origin_lng}
 
     ordered_dests, total_dist_meters, total_dur_seconds = routing_service.plan_dynamic_next_hop_route(
         start_point, destinations
     )
 
+    # Lưu kết quả tính toán vào collection route_plans
+    plan_id = str(uuid.uuid4())
+    route_plan_doc = {
+        "id": plan_id,
+        "campaign_id": campaign_id,
+        "trip_id": None,
+        "name": f"Kế hoạch định tuyến - {camp.get('name')}",
+        "algorithm": "Dynamic Next-Hop Routing",
+        "start_lat": origin_lat,
+        "start_lng": origin_lng,
+        "start_name": origin_name,
+        "total_destinations": len(ordered_dests),
+        "total_distance_meters": int(total_dist_meters),
+        "estimated_distance_km": round(total_dist_meters / 1000, 2),
+        "total_duration_seconds": int(total_dur_seconds),
+        "estimated_duration_minutes": int(total_dur_seconds / 60),
+        "destinations": [
+            {
+                "order": idx + 1,
+                "school_id": d.get("school_id"),
+                "waypoint_id": d.get("waypoint_id") or d.get("id"),
+                "name": d.get("name"),
+                "lat": d.get("lat"),
+                "lng": d.get("lng"),
+                "address": d.get("address"),
+                "distance_meters": d.get("distance_meters"),
+                "duration_seconds": d.get("duration_seconds")
+            }
+            for idx, d in enumerate(ordered_dests)
+        ],
+        "polyline": None,
+        "status": "draft",
+        "is_deleted": False,
+        "created_at": now,
+        "updated_at": now
+    }
+    await db.route_plans.insert_one(route_plan_doc)
+
     return {
+        "plan_id": plan_id,
         "campaign_id": campaign_id,
         "campaign_name": camp.get("name"),
         "routing_algorithm": "Dynamic Next-Hop Routing",
+        "start_point": {"lat": origin_lat, "lng": origin_lng, "name": origin_name},
         "total_destinations": len(ordered_dests),
         "estimated_distance_km": round(total_dist_meters / 1000, 2),
         "estimated_duration_minutes": int(total_dur_seconds / 60),
@@ -163,13 +210,16 @@ async def preview_optimized_route(
 @router.post("/{campaign_id}/deploy", response_model=CampaignDeployResponse)
 async def deploy_campaign_route(
     campaign_id: str,
+    start_lat: Optional[float] = Query(None, description="Vĩ độ điểm xuất phát"),
+    start_lng: Optional[float] = Query(None, description="Kinh độ điểm xuất phát"),
     current_user: dict = Depends(get_current_user)
 ):
     """
     Triển khai chiến dịch:
     1. Tự động tính toán đường đi bằng thuật toán Dynamic Next-Hop Routing qua các trường mục tiêu.
-    2. Tự động khởi tạo Chuyến đi thực tế (admission_trips) với các waypoints đã được sắp xếp theo lộ trình tối ưu.
-    3. Cập nhật trạng thái chiến dịch thành 'deployed'.
+    2. Lưu kết quả định tuyến vào collection `route_plans`.
+    3. Khởi tạo Chuyến đi thực tế (admission_trips) và các điểm dừng trong `campaign_waypoints`.
+    4. Cập nhật trạng thái chiến dịch thành 'deployed'.
     """
     db = get_database()
     now = datetime.now(timezone.utc)
@@ -182,14 +232,16 @@ async def deploy_campaign_route(
         raise HTTPException(status_code=400, detail="Chiến dịch chưa có địa điểm nào để triển khai lộ trình.")
 
     # Điểm xuất phát
-    start_lat = camp.get("start_lat") or destinations[0]["lat"]
-    start_lng = camp.get("start_lng") or destinations[0]["lng"]
-    start_point = {"lat": start_lat, "lng": start_lng}
+    origin_lat = start_lat if start_lat is not None else destinations[0]["lat"]
+    origin_lng = start_lng if start_lng is not None else destinations[0]["lng"]
+    start_point = {"lat": origin_lat, "lng": origin_lng}
 
     # 1. Thuật toán Dynamic Next-Hop Routing
     ordered_dests, total_dist_meters, total_dur_seconds = routing_service.plan_dynamic_next_hop_route(
         start_point, destinations
     )
+    dist_km = round(total_dist_meters / 1000, 2)
+    dur_min = int(total_dur_seconds / 60)
 
     # 2. Tạo chuyến đi thực tế (admission_trips)
     trip_id = str(uuid.uuid4())
@@ -198,22 +250,24 @@ async def deploy_campaign_route(
         "campaign_id": campaign_id,
         "name": f"Lộ trình: {camp.get('name')}",
         "status": "active",
-        "current_lat": start_lat,
-        "current_lng": start_lng,
+        "current_lat": origin_lat,
+        "current_lng": origin_lng,
         "is_deleted": False,
         "created_at": now,
         "updated_at": now
     }
     await db.admission_trips.insert_one(trip_doc)
 
-    # 3. Tạo các Waypoints theo thứ tự đã tối ưu hóa
-    waypoints_docs = []
+    # 3. Tạo các điểm dừng trong collection `campaign_waypoints` theo thứ tự tối ưu
+    campaign_waypoints_docs = []
     for i, dest in enumerate(ordered_dests, 1):
-        wp_id = str(uuid.uuid4())
-        wp_doc = {
-            "id": wp_id,
+        cw_id = str(uuid.uuid4())
+        cw_doc = {
+            "id": cw_id,
+            "campaign_id": campaign_id,
             "trip_id": trip_id,
             "school_id": dest.get("school_id"),
+            "waypoint_id": dest.get("waypoint_id") or dest.get("id"),
             "name": dest.get("name"),
             "address": dest.get("address"),
             "lat": dest.get("lat"),
@@ -229,33 +283,48 @@ async def deploy_campaign_route(
             "created_at": now,
             "updated_at": now
         }
+        campaign_waypoints_docs.append(cw_doc)
 
-        # Snapshot thông tin chi tiết từ trường gốc nếu có school_id
-        if dest.get("school_id"):
-            school = await db.schools.find_one({
-                "$or": [{"id": dest["school_id"]}, {"code": dest["school_id"]}],
-                "is_deleted": {"$ne": True}
-            })
-            if school:
-                wp_doc["description"] = school.get("description")
-                wp_doc["website"] = school.get("website")
-                wp_doc["image_url"] = school.get("image_url")
-                wp_doc["admissions_info"] = school.get("admissions_info")
-                if school.get("school_board"):
-                    sb = school["school_board"]
-                    wp_doc["principal_name"] = sb.get("principal_name")
-                    wp_doc["principal_phone"] = sb.get("principal_phone")
-                    wp_doc["vice_principal_name"] = sb.get("vice_principal_name")
-                    wp_doc["vice_principal_phone"] = sb.get("vice_principal_phone")
+    if campaign_waypoints_docs:
+        await db.campaign_waypoints.insert_many(campaign_waypoints_docs)
 
-        waypoints_docs.append(wp_doc)
+    # 4. Lưu kết quả định tuyến chính thức vào collection `route_plans`
+    plan_id = str(uuid.uuid4())
+    route_plan_doc = {
+        "id": plan_id,
+        "campaign_id": campaign_id,
+        "trip_id": trip_id,
+        "name": f"Lộ trình triển khai - {camp.get('name')}",
+        "algorithm": "Dynamic Next-Hop Routing",
+        "start_lat": origin_lat,
+        "start_lng": origin_lng,
+        "start_name": "Điểm xuất phát",
+        "total_destinations": len(ordered_dests),
+        "total_distance_meters": int(total_dist_meters),
+        "estimated_distance_km": dist_km,
+        "total_duration_seconds": int(total_dur_seconds),
+        "estimated_duration_minutes": dur_min,
+        "destinations": [
+            {
+                "order": idx + 1,
+                "school_id": d.get("school_id"),
+                "waypoint_id": d.get("waypoint_id") or d.get("id"),
+                "name": d.get("name"),
+                "lat": d.get("lat"),
+                "lng": d.get("lng"),
+                "address": d.get("address")
+            }
+            for idx, d in enumerate(ordered_dests)
+        ],
+        "polyline": None,
+        "status": "applied",
+        "is_deleted": False,
+        "created_at": now,
+        "updated_at": now
+    }
+    await db.route_plans.insert_one(route_plan_doc)
 
-    if waypoints_docs:
-        await db.waypoints.insert_many(waypoints_docs)
-
-    # 4. Cập nhật Campaign
-    dist_km = round(total_dist_meters / 1000, 2)
-    dur_min = int(total_dur_seconds / 60)
+    # 5. Cập nhật Campaign
     await db.campaigns.update_one(
         {"id": campaign_id},
         {"$set": {
@@ -269,10 +338,10 @@ async def deploy_campaign_route(
 
     updated_camp = await db.campaigns.find_one({"id": campaign_id})
     trip_doc.pop("_id", None)
-    for w in waypoints_docs:
+    for w in campaign_waypoints_docs:
         w.pop("_id", None)
-    trip_doc["waypoints"] = waypoints_docs
-    trip_doc["total_waypoints"] = len(waypoints_docs)
+    trip_doc["waypoints"] = campaign_waypoints_docs
+    trip_doc["total_waypoints"] = len(campaign_waypoints_docs)
 
     return CampaignDeployResponse(
         campaign=format_campaign_response(updated_camp),
@@ -290,7 +359,7 @@ async def delete_campaign(
     current_user: dict = Depends(get_current_user)
 ):
     """
-    Xóa mềm chiến dịch và các chuyến đi trực thuộc.
+    Xóa mềm chiến dịch và các chuyến đi, điểm dừng, kế hoạch lộ trình trực thuộc.
     """
     db = get_database()
     now = datetime.now(timezone.utc)
@@ -304,6 +373,16 @@ async def delete_campaign(
     )
     # Xóa mềm các chuyến đi thuộc chiến dịch
     await db.admission_trips.update_many(
+        {"campaign_id": campaign_id, "is_deleted": {"$ne": True}},
+        {"$set": {"is_deleted": True, "deleted_at": now, "updated_at": now}}
+    )
+    # Xóa mềm các campaign_waypoints thuộc chiến dịch
+    await db.campaign_waypoints.update_many(
+        {"campaign_id": campaign_id, "is_deleted": {"$ne": True}},
+        {"$set": {"is_deleted": True, "deleted_at": now, "updated_at": now}}
+    )
+    # Xóa mềm các route_plans thuộc chiến dịch
+    await db.route_plans.update_many(
         {"campaign_id": campaign_id, "is_deleted": {"$ne": True}},
         {"$set": {"is_deleted": True, "deleted_at": now, "updated_at": now}}
     )

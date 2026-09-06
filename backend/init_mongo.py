@@ -3,9 +3,18 @@ Kịch bản khởi tạo và Migration cơ sở dữ liệu MongoDB (Database N
 Thiết kế chuẩn hóa cho đề tài: "Phát triển Nền tảng Hỗ trợ Ra quyết định Lộ trình và Quản lý Chiến dịch Tuyển sinh Lưu động"
 
 Chức năng:
-- Khởi tạo đầy đủ cấu trúc các bảng (Collections) và Indexes tối ưu truy vấn.
-- Không chèn dữ liệu mẫu (chiến dịch, trường học, chuyến đi, điểm dừng, báo cáo, nhật ký).
-- Chỉ khởi tạo duy nhất 01 tài khoản Quản trị viên (Admin) mặc định để phục vụ xác thực hệ thống.
+- Khởi tạo 8 Collections nghiệp vụ tách bạch:
+  1. users: Tài khoản người dùng và phân quyền
+  2. campaigns: Thông tin chiến dịch tuyển sinh
+  3. admission_trips: Chuyến đi thực tế thuộc chiến dịch
+  4. schools: Danh mục hồ sơ trường học (thông tin liên hệ, ban giám hiệu, tuyển sinh)
+  5. waypoints: Điểm dừng / địa điểm cố định trên bản đồ
+  6. campaign_waypoints: Danh sách các trường/điểm sẽ đi trong chiến dịch, gắn với campaign_id & trip_id
+  7. route_plans: Kết quả của thuật toán định tuyến Dynamic Next-Hop Routing
+  8. trip_reports: Báo cáo tổng kết chuyến đi
+- Thiết lập đầy đủ Indexes tối ưu truy vấn.
+- Không chèn dữ liệu mẫu.
+- Khởi tạo tài khoản Quản trị viên (Root Admin) mặc định.
 """
 
 import os
@@ -44,14 +53,16 @@ async def init_mongo_database():
     client = AsyncIOMotorClient(MONGODB_URL)
     db = client[DATABASE_NAME]
 
-    # Danh sách 6 Collections nghiệp vụ cốt lõi đã được tối ưu hóa
+    # Danh sách 8 Collections nghiệp vụ tách bạch rõ ràng
     collections = [
-        "users",            # Tài khoản người dùng (admin, staff) và phân quyền
-        "campaigns",        # Chiến dịch tuyển sinh
-        "admission_trips",  # Chuyến đi tuyển sinh thuộc chiến dịch
-        "schools",          # Danh mục trường học chuẩn hóa
-        "waypoints",        # Điểm dừng hợp nhất (chứa thông tin trường, visit_logs và tickets nhúng)
-        "trip_reports"      # Báo cáo tổng kết chuyến đi
+        "users",               # 1. Tài khoản người dùng (admin, staff) và phân quyền
+        "campaigns",           # 2. Thông tin chiến dịch tuyển sinh (name, description, status)
+        "admission_trips",     # 3. Chuyến đi thực tế thuộc chiến dịch
+        "schools",             # 4. Hồ sơ trường học (mô tả, ban giám hiệu, tuyển sinh, website, ảnh)
+        "waypoints",           # 5. Điểm dừng / địa điểm trên bản đồ (tọa độ GPS, loại điểm)
+        "campaign_waypoints",  # 6. Các trường/điểm đi trong chiến dịch (campaign_id, trip_id, visit_order, check-in)
+        "route_plans",         # 7. Kết quả thuật toán định tuyến Dynamic Next-Hop Routing
+        "trip_reports"         # 8. Báo cáo tổng kết chuyến đi
     ]
 
     print("\n[Bước 1/3]: Đang làm sạch và tái tạo các Collections (Bảng)...")
@@ -66,6 +77,7 @@ async def init_mongo_database():
 
     print("\n[Bước 2/3]: Đang thiết lập các Indexes & Ràng buộc toàn vẹn...")
     # 1. users
+    await db.users.create_index("id", unique=True)
     await db.users.create_index("username", unique=True)
     await db.users.create_index("email", sparse=True)
     await db.users.create_index("role")
@@ -85,30 +97,44 @@ async def init_mongo_database():
     await db.admission_trips.create_index("is_deleted")
     await db.admission_trips.create_index("created_at")
 
-    # 4. schools
+    # 4. schools (Hồ sơ trường học - bỏ province và preferred_visit_hours)
     await db.schools.create_index("id", unique=True)
     await db.schools.create_index("code", unique=True, sparse=True)
     await db.schools.create_index("name")
-    await db.schools.create_index("province")
     await db.schools.create_index("is_deleted")
 
-    # 5. waypoints (Hợp nhất: Điểm dừng + Thông tin trường + Mảng nhúng visit_logs + Mảng nhúng tickets)
+    # 5. waypoints (Điểm dừng địa điểm cố định trên bản đồ - bỏ trip_id)
     await db.waypoints.create_index("id", unique=True)
-    await db.waypoints.create_index("trip_id")
     await db.waypoints.create_index("school_id")
-    await db.waypoints.create_index("visit_order")
     await db.waypoints.create_index("is_deleted")
-    await db.waypoints.create_index("visit_logs.id")
-    await db.waypoints.create_index("tickets.id")
 
-    # 6. trip_reports
+    # 6. campaign_waypoints (Danh sách các điểm đi trong chiến dịch / chuyến đi)
+    await db.campaign_waypoints.create_index("id", unique=True)
+    await db.campaign_waypoints.create_index("campaign_id")
+    await db.campaign_waypoints.create_index("trip_id")
+    await db.campaign_waypoints.create_index("school_id")
+    await db.campaign_waypoints.create_index("visit_order")
+    await db.campaign_waypoints.create_index("is_visited")
+    await db.campaign_waypoints.create_index("is_deleted")
+    await db.campaign_waypoints.create_index("visit_logs.id")
+    await db.campaign_waypoints.create_index("tickets.id")
+
+    # 7. route_plans (Kết quả thuật toán định tuyến Dynamic Next-Hop Routing)
+    await db.route_plans.create_index("id", unique=True)
+    await db.route_plans.create_index("campaign_id")
+    await db.route_plans.create_index("trip_id")
+    await db.route_plans.create_index("status")
+    await db.route_plans.create_index("is_deleted")
+    await db.route_plans.create_index("created_at")
+
+    # 8. trip_reports
     await db.trip_reports.create_index("id", unique=True)
     await db.trip_reports.create_index("trip_id")
     await db.trip_reports.create_index("campaign_id")
     await db.trip_reports.create_index("is_deleted")
     await db.trip_reports.create_index("created_at")
 
-    print("  + Đã tạo đầy đủ Unique Constraints và Query Indexes cho 6 collections tối ưu.")
+    print(f"  + Đã tạo đầy đủ Unique Constraints và Query Indexes cho {len(collections)} collections tối ưu.")
 
     print("\n[Bước 3/3]: Khởi tạo tài khoản Quản trị viên (Root Admin)...")
     now = datetime.now(timezone.utc)
@@ -134,7 +160,7 @@ async def init_mongo_database():
     print("\n" + "=" * 70)
     print("✅ [HOÀN TẤT MIGRATION MONGODB]:")
     print(f"   - Database: {DATABASE_NAME}")
-    print(f"   - Số lượng Collections: {len(collections)} (Tối ưu hóa: users, campaigns, admission_trips, schools, waypoints, trip_reports)")
+    print(f"   - Số lượng Collections: {len(collections)} (users, campaigns, admission_trips, schools, waypoints, campaign_waypoints, route_plans, trip_reports)")
     print(f"   - Dữ liệu mẫu: Không chèn bất kỳ chiến dịch, trường học hay điểm dừng mẫu nào.")
     print(f"   - Tài khoản đăng nhập ban đầu: admin / admin123")
     print("=" * 70)

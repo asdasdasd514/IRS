@@ -68,7 +68,7 @@ export const authApi = {
   createUser: async (username: string, password: string): Promise<any> => {
     const token = localStorage.getItem('token');
     const { data } = await axios.post(
-      `${API_BASE_URL}/auth/admin/users`,
+      `${API_BASE_URL}/users`,
       { username, password },
       {
         headers: { Authorization: `Bearer ${token}` },
@@ -79,7 +79,7 @@ export const authApi = {
 
   listUsers: async (): Promise<any[]> => {
     const token = localStorage.getItem('token');
-    const { data } = await axios.get(`${API_BASE_URL}/auth/admin/users`, {
+    const { data } = await axios.get(`${API_BASE_URL}/users`, {
       headers: { Authorization: `Bearer ${token}` },
     });
     return data;

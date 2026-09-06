@@ -36,16 +36,15 @@ class CampaignDestination(BaseModel):
     preferred_time: Optional[str] = None
 
 
-# Campaign Schemas (Chiến dịch Tuyển sinh - Lên kế hoạch & Tối ưu lộ trình Dynamic Next-Hop)
+# Campaign Schemas (Chiến dịch Tuyển sinh)
 class CampaignBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
     description: Optional[str] = None
-    start_name: Optional[str] = None # Điểm xuất phát (ví dụ: Trụ sở trường mình)
-    start_address: Optional[str] = None
-    start_lat: Optional[float] = None
-    start_lng: Optional[float] = None
-    destinations: List[CampaignDestination] = [] # Danh sách các trường / địa điểm cần tham quan
     status: CampaignStatus = CampaignStatus.PLANNING
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    notes: Optional[str] = None
+    destinations: List[CampaignDestination] = [] # Danh sách các trường / địa điểm dự kiến
 
 
 class CampaignCreate(CampaignBase):
@@ -55,21 +54,20 @@ class CampaignCreate(CampaignBase):
 class CampaignUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
-    start_name: Optional[str] = None
-    start_address: Optional[str] = None
-    start_lat: Optional[float] = None
-    start_lng: Optional[float] = None
-    destinations: Optional[List[CampaignDestination]] = None
     status: Optional[CampaignStatus] = None
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    notes: Optional[str] = None
+    destinations: Optional[List[CampaignDestination]] = None
 
 
 class CampaignResponse(CampaignBase):
     id: str
     manager_id: Optional[str] = None
-    deployed_trip_id: Optional[str] = None # ID chuyến đi được tạo ra sau khi tối ưu và triển khai
-    total_destinations: int = 0 # Tổng số địa điểm cần đi
-    estimated_distance_km: Optional[float] = None # Quãng đường ước tính
-    estimated_duration_minutes: Optional[int] = None # Thời gian di chuyển ước tính
+    deployed_trip_id: Optional[str] = None # ID chuyến đi được tạo sau khi triển khai
+    total_destinations: int = 0
+    estimated_distance_km: Optional[float] = None
+    estimated_duration_minutes: Optional[int] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
@@ -86,7 +84,7 @@ class CampaignDeployResponse(BaseModel):
     message: str
 
 
-# School Schemas (Danh mục Trường THPT mục tiêu)
+# School Schemas (Hồ sơ Trường THPT mục tiêu - Nguồn dữ liệu gốc)
 class SchoolBoard(BaseModel):
     principal_name: Optional[str] = None
     principal_phone: Optional[str] = None
@@ -95,78 +93,63 @@ class SchoolBoard(BaseModel):
 
 
 class SchoolBase(BaseModel):
-    id: str # Mã trường (ví dụ: BK-HN, THPT-CT-01)
-    code: str # Mã trường
+    id: Optional[str] = None
+    code: str # Mã trường (ví dụ: BK-HN, THPT-CT-01)
     name: str
     address: str
-    province: Optional[str] = None # Tỉnh / Thành phố
-    description: Optional[str] = None # Giới thiệu về trường
-    website: Optional[str] = None # Website chính thức của trường
-    image_url: Optional[str] = None # Ảnh trường
-    admissions_info: Optional[str] = None # Thông tin tuyển sinh
-    representative_name: Optional[str] = None # Người đại diện
-    representative_phone: Optional[str] = None # SĐT người đại diện
     lat: float
     lng: float
+    description: Optional[str] = None # Giới thiệu trường
+    website: Optional[str] = None # Website trường
+    image_url: Optional[str] = None # Ảnh đại diện
+    images: List[str] = [] # Bộ sưu tập ảnh
+    admissions_info: Optional[str] = None # Thông tin tuyển sinh
+    representative_name: Optional[str] = None # Người đại diện
+    representative_phone: Optional[str] = None # SĐT đại diện
     school_board: Optional[SchoolBoard] = None
-    preferred_visit_hours: Optional[str] = None
+    notes: Optional[str] = None
 
 
-class SchoolCreate(BaseModel):
-    id: Optional[str] = None
-    code: str
-    name: str
-    address: str
-    province: Optional[str] = None
+class SchoolCreate(SchoolBase):
+    pass
+
+
+class SchoolUpdate(BaseModel):
+    code: Optional[str] = None
+    name: Optional[str] = None
+    address: Optional[str] = None
+    lat: Optional[float] = None
+    lng: Optional[float] = None
     description: Optional[str] = None
     website: Optional[str] = None
     image_url: Optional[str] = None
+    images: Optional[List[str]] = None
     admissions_info: Optional[str] = None
     representative_name: Optional[str] = None
     representative_phone: Optional[str] = None
-    lat: float
-    lng: float
     school_board: Optional[SchoolBoard] = None
-    preferred_visit_hours: Optional[str] = None
+    notes: Optional[str] = None
 
 
 class SchoolResponse(SchoolBase):
+    id: str
     created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True
 
 
-# Waypoint Schemas (Điểm dừng lộ trình & Thông tin trường học)
+# Waypoint Schemas (Điểm dừng / Địa điểm cố định trên Bản đồ - Tinh giản)
 class WaypointBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
     lat: float = Field(..., ge=-90, le=90)
     lng: float = Field(..., ge=-180, le=180)
     google_place_id: Optional[str] = None
-    school_id: Optional[str] = None # Mã trường
+    school_id: Optional[str] = None # Mã trường tham chiếu (nếu là trường học)
     address: Optional[str] = None
     type: WaypointType = WaypointType.SCHOOL
-    trip_id: Optional[str] = None
-    contact_name: Optional[str] = None
-    contact_phone: Optional[str] = None
-    
-    # Thông tin chi tiết trường học & tuyển sinh
-    description: Optional[str] = None # Phần giới thiệu về trường
-    image_url: Optional[str] = None # Ảnh đại diện / ảnh trường
-    images: List[str] = [] # Danh sách ảnh
-    website: Optional[str] = None # Website của trường
-    representative_name: Optional[str] = None # Người đại diện
-    representative_phone: Optional[str] = None # Số điện thoại người đại diện
-    principal_name: Optional[str] = None # Hiệu trưởng / Giám đốc
-    principal_phone: Optional[str] = None # Số điện thoại Hiệu trưởng
-    vice_principal_name: Optional[str] = None # Phó hiệu trưởng / Phó giám đốc
-    vice_principal_phone: Optional[str] = None # Số điện thoại Phó hiệu trưởng
-    admissions_info: Optional[str] = None # Thông tin tuyển sinh (chỉ tiêu, khối thi, ghi chú tuyển sinh)
-    notes: Optional[str] = None # Ghi chú thêm
-    our_contact_person: Optional[str] = None
-    our_contact_role: Optional[str] = None
-    contact_process: Optional[str] = None
-    total_contact_attempts: int = 0
+    notes: Optional[str] = None
 
 
 class WaypointCreate(WaypointBase):
@@ -181,42 +164,56 @@ class WaypointUpdate(BaseModel):
     school_id: Optional[str] = None
     address: Optional[str] = None
     type: Optional[WaypointType] = None
-    trip_id: Optional[str] = None
-    visit_order: Optional[int] = None
-    is_visited: Optional[bool] = None
-    visited_at: Optional[datetime] = None
-    contact_name: Optional[str] = None
-    contact_phone: Optional[str] = None
-    
-    description: Optional[str] = None
-    image_url: Optional[str] = None
-    images: Optional[List[str]] = None
-    website: Optional[str] = None
-    representative_name: Optional[str] = None
-    representative_phone: Optional[str] = None
-    principal_name: Optional[str] = None
-    principal_phone: Optional[str] = None
-    vice_principal_name: Optional[str] = None
-    vice_principal_phone: Optional[str] = None
-    admissions_info: Optional[str] = None
     notes: Optional[str] = None
-    our_contact_person: Optional[str] = None
-    our_contact_role: Optional[str] = None
-    contact_process: Optional[str] = None
-    total_contact_attempts: Optional[int] = None
 
 
 class WaypointResponse(WaypointBase):
     id: str
-    trip_id: Optional[str] = None
-    visit_order: Optional[int] = None
-    is_visited: bool = False
-    visited_at: Optional[datetime] = None
+    school: Optional[SchoolResponse] = None # Thông tin chi tiết trường tham chiếu từ schools
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+# Campaign Waypoint Schemas (Các trường/điểm sẽ đi trong Chiến dịch / Chuyến đi)
+class CampaignWaypointBase(BaseModel):
+    campaign_id: str
+    trip_id: Optional[str] = None
+    school_id: Optional[str] = None
+    waypoint_id: Optional[str] = None
+    name: str = Field(..., min_length=1, max_length=255)
+    lat: float = Field(..., ge=-90, le=90)
+    lng: float = Field(..., ge=-180, le=180)
+    address: Optional[str] = None
+    type: WaypointType = WaypointType.SCHOOL
+    visit_order: int = 1
+    is_visited: bool = False
+    visited_at: Optional[datetime] = None
+    notes: Optional[str] = None
+
+
+class CampaignWaypointCreate(CampaignWaypointBase):
+    pass
+
+
+class CampaignWaypointUpdate(BaseModel):
+    visit_order: Optional[int] = None
+    is_visited: Optional[bool] = None
+    visited_at: Optional[datetime] = None
+    notes: Optional[str] = None
+    trip_id: Optional[str] = None
+
+
+class CampaignWaypointResponse(CampaignWaypointBase):
+    id: str
     visit_logs: List[dict] = []
     tickets: List[dict] = []
     total_tickets: int = 0
+    school: Optional[SchoolResponse] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
 
     @field_serializer('visited_at', 'created_at', 'updated_at', when_used='json')
     def serialize_dt(self, dt: Optional[datetime]) -> Optional[str]:
@@ -225,6 +222,50 @@ class WaypointResponse(WaypointBase):
         if dt.tzinfo is None:
             dt = dt.replace(tzinfo=timezone.utc)
         return dt.isoformat()
+
+    class Config:
+        from_attributes = True
+
+
+# Route Plan Schemas (Kết quả Định tuyến Dynamic Next-Hop Routing)
+class RoutePlanDestination(BaseModel):
+    order: int
+    school_id: Optional[str] = None
+    waypoint_id: Optional[str] = None
+    name: str
+    lat: float
+    lng: float
+    address: Optional[str] = None
+    distance_meters: Optional[int] = None
+    duration_seconds: Optional[int] = None
+
+
+class RoutePlanBase(BaseModel):
+    campaign_id: Optional[str] = None
+    trip_id: Optional[str] = None
+    name: str
+    algorithm: str = "Dynamic Next-Hop Routing"
+    start_lat: float
+    start_lng: float
+    start_name: Optional[str] = None
+    total_destinations: int = 0
+    total_distance_meters: int = 0
+    estimated_distance_km: float = 0.0
+    total_duration_seconds: int = 0
+    estimated_duration_minutes: int = 0
+    destinations: List[RoutePlanDestination] = []
+    polyline: Optional[str] = None
+    status: str = "applied" # applied, draft, archived
+
+
+class RoutePlanCreate(RoutePlanBase):
+    pass
+
+
+class RoutePlanResponse(RoutePlanBase):
+    id: str
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True
@@ -275,7 +316,7 @@ class TripResponse(TripBase):
     team: Optional[TripTeam] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
-    waypoints: List[WaypointResponse] = []
+    waypoints: List[Any] = []
     
     total_waypoints: int = 0
     visited_count: int = 0
@@ -306,7 +347,7 @@ class NextHopRequest(BaseModel):
 
 
 class NextHopCandidate(BaseModel):
-    waypoint: WaypointResponse
+    waypoint: Any
     duration_seconds: int
     duration_text: str
     distance_meters: int
@@ -332,7 +373,7 @@ class CheckInRequest(BaseModel):
 
 class CheckInResponse(BaseModel):
     success: bool
-    waypoint: WaypointResponse
+    waypoint: Optional[Any] = None
     message: str
 
 

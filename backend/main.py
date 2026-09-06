@@ -6,6 +6,7 @@ Hệ thống Hỗ trợ Ra quyết định Lộ trình và Quản lý Chiến d�
 from pathlib import Path
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
+from fastapi.responses import RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 import uvicorn
@@ -13,7 +14,6 @@ import uvicorn
 from app.core.config import settings
 from app.core.database import connect_to_mongo, close_mongo_connection
 from app.api.router import api_router
-from app.api import auth, waypoint_info, upload, trips, campaigns, schools, users
 
 
 @asynccontextmanager
@@ -41,15 +41,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Thêm routes với prefix /api và không prefix
+# Chỉ đăng ký qua api_router (prefix /api chuẩn RESTful)
 app.include_router(api_router)
-app.include_router(auth.router)
-app.include_router(users.router)
-app.include_router(trips.router)
-app.include_router(waypoint_info.router)
-app.include_router(upload.router)
-app.include_router(campaigns.router)
-app.include_router(schools.router)
 
 UPLOAD_DIR = Path(settings.UPLOAD_DIR)
 UPLOAD_DIR.mkdir(exist_ok=True)
@@ -69,6 +62,12 @@ async def root():
 @app.get("/health")
 async def health():
     return {"status": "healthy", "database": "IRS"}
+
+
+@app.get("/swagger", include_in_schema=False)
+@app.get("/api/docs", include_in_schema=False)
+async def swagger_redirect():
+    return RedirectResponse(url="/docs")
 
 
 if __name__ == "__main__":
