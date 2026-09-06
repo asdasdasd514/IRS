@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Plus, Trash2, Save, X, MapPin, Coffee, School, Hotel, Building2, Edit2, Loader } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Save, X, MapPin, Coffee, School, Building2, Edit2, Loader } from 'lucide-react';
 import { tripApi, mapsApi } from '../../services/api';
 import { useGeolocation } from '../../hooks';
 import type { Waypoint, CreateWaypointInput } from '../../types';
@@ -43,8 +43,6 @@ export const EditTripPage: React.FC = () => {
     switch (type) {
       case 'SCHOOL':
         return { icon: School, label: 'Trường học', color: 'bg-blue-100 text-blue-700' };
-      case 'HOTEL':
-        return { icon: Hotel, label: 'Khách sạn', color: 'bg-purple-100 text-purple-700' };
       case 'HQ':
         return { icon: Building2, label: 'Trụ sở', color: 'bg-gray-100 text-gray-700' };
       case 'REST_STOP':
@@ -239,7 +237,7 @@ export const EditTripPage: React.FC = () => {
       lat: lat,
       lng: lng,
       address: newWaypoint.address?.trim() || undefined,
-      type: (newWaypoint.type as 'SCHOOL' | 'HOTEL' | 'HQ' | 'REST_STOP') || 'SCHOOL',
+      type: (newWaypoint.type as 'SCHOOL' | 'HQ' | 'REST_STOP') || 'SCHOOL',
     };
     
     console.log('Calling mutation with:', waypointData);
@@ -620,11 +618,10 @@ export const EditTripPage: React.FC = () => {
                 </label>
                 <select
                   value={newWaypoint.type}
-                  onChange={(e) => setNewWaypoint({ ...newWaypoint, type: e.target.value as 'SCHOOL' | 'HOTEL' | 'HQ' | 'REST_STOP' })}
+                  onChange={(e) => setNewWaypoint({ ...newWaypoint, type: e.target.value as 'SCHOOL' | 'HQ' | 'REST_STOP' })}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                 >
                   <option value="SCHOOL">Trường học</option>
-                  <option value="HOTEL">Khách sạn</option>
                   <option value="HQ">Trụ sở</option>
                   <option value="REST_STOP">Điểm dừng chân</option>
                 </select>

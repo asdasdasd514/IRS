@@ -248,12 +248,11 @@ export const CreateTripPage: React.FC = () => {
             <select
               value={newWaypoint.type}
               onChange={(e) =>
-                setNewWaypoint({ ...newWaypoint, type: e.target.value as 'SCHOOL' | 'HOTEL' | 'HQ' | 'REST_STOP' })
+                setNewWaypoint({ ...newWaypoint, type: e.target.value as 'SCHOOL' | 'HQ' | 'REST_STOP' })
               }
               className="w-full px-4 py-2 border border-gray-300 rounded-lg"
             >
               <option value="SCHOOL">Trường học</option>
-              <option value="HOTEL">Khách sạn</option>
               <option value="HQ">Trụ sở</option>
               <option value="REST_STOP">Điểm dừng chân</option>
             </select>

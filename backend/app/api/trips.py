@@ -219,48 +219,17 @@ async def undo_check_in(
 @router.post("/{trip_id}/reset-day", response_model=TripResponse)
 async def reset_day(
     trip_id: str,
-    hotel_lat: Optional[float] = None,
-    hotel_lng: Optional[float] = None
+    current_lat: Optional[float] = None,
+    current_lng: Optional[float] = None
 ):
-    trip = await trip_service.reset_day(trip_id, hotel_lat, hotel_lng)
+    """Đặt lại vị trí của đoàn khi bắt đầu ngày công tác mới"""
+    trip = await trip_service.reset_day(trip_id, current_lat, current_lng)
     if not trip:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Không tìm thấy chuyến đi"
         )
     return trip
-
-
-@router.post("/{trip_id}/go-hotel")
-async def go_to_hotel(
-    trip_id: str,
-    current_lat: float,
-    current_lng: float
-):
-    trip = await trip_service.get_trip(trip_id)
-    if not trip:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Không tìm thấy chuyến đi"
-        )
-    
-    if not trip.get("hotel_lat") or not trip.get("hotel_lng"):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Chưa cài đặt vị trí khách sạn"
-        )
-    
-    directions = await routing_service.get_directions(
-        current_lat, current_lng,
-        trip["hotel_lat"], trip["hotel_lng"]
-    )
-    
-    return {
-        "hotel_name": trip.get("hotel_name"),
-        "hotel_lat": trip.get("hotel_lat"),
-        "hotel_lng": trip.get("hotel_lng"),
-        "directions": directions
-    }
 
 
 @router.get("/{trip_id}/directions")

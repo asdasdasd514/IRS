@@ -73,7 +73,7 @@ async def init_mongo_database():
 
     # 2. campaigns
     await db.campaigns.create_index("id", unique=True)
-    await db.campaigns.create_index("academic_year")
+    await db.campaigns.create_index("name")
     await db.campaigns.create_index("status")
     await db.campaigns.create_index("is_deleted")
     await db.campaigns.create_index("created_at")

@@ -342,6 +342,73 @@ class RoutingService:
             logger.error(f"Error getting directions from SerpAPI: {e}")
             return None
 
+    def plan_dynamic_next_hop_route(
+        self,
+        start_point: Dict[str, float],
+        destinations: List[Dict[str, Any]]
+    ) -> Tuple[List[Dict[str, Any]], float, int]:
+        """
+        Thuật toán Định tuyến Bước Kế tiếp Động (Dynamic Next-Hop Routing) cho Chiến dịch Tuyển sinh:
+        Không sử dụng TSP tĩnh và không có lưu trú khách sạn qua đêm.
+        
+        Từ vị trí xuất phát, hệ thống liên tục tính toán và lựa chọn điểm đến kế tiếp (Next-Hop) tối ưu nhất
+        từ danh sách các trường chưa ghé thăm, dựa trên hàm mục tiêu đa tiêu chí (thời gian di chuyển và
+        khoảng cách với ngưỡng TIME_THRESHOLD_SECONDS = 300s).
+        
+        Input:
+            - start_point: {"lat": float, "lng": float} (Vị trí xuất phát của đoàn)
+            - destinations: Danh sách các trường/địa điểm mục tiêu cần tham quan
+            
+        Output:
+            - Tuple[ordered_destinations, total_distance_meters, total_duration_seconds]
+        """
+        if not destinations:
+            return [], 0.0, 0
+
+        unvisited = list(destinations)
+        ordered = []
+        curr_lat, curr_lng = start_point["lat"], start_point["lng"]
+        total_distance = 0.0
+        total_duration = 0
+
+        # Tuần tự áp dụng nguyên lý Dynamic Next-Hop Routing từng bước
+        while unvisited:
+            # 1. Tính toán ứng viên Next-Hop từ vị trí hiện tại
+            candidates = []
+            for dest in unvisited:
+                d_lat = dest.get("lat", 0.0)
+                d_lng = dest.get("lng", 0.0)
+                dist_m = self._haversine(curr_lat, curr_lng, d_lat, d_lng)
+                dur_s = int(dist_m / (35 * 1000 / 3600)) # vận tốc trung bình 35 km/h
+                candidates.append({
+                    "dest": dest,
+                    "distance_meters": dist_m,
+                    "duration_seconds": dur_s
+                })
+
+            # 2. Sắp xếp theo thời gian di chuyển
+            candidates.sort(key=lambda x: x["duration_seconds"])
+
+            # 3. Áp dụng quy tắc ra quyết định Next-Hop (Dynamic Next-Hop Selection Logic):
+            # Nếu chênh lệch thời gian <= TIME_THRESHOLD_SECONDS (300s) mà quãng đường ngắn hơn thì ưu tiên
+            best = candidates[0]
+            for cand in candidates[1:]:
+                time_diff = cand["duration_seconds"] - best["duration_seconds"]
+                if time_diff <= TIME_THRESHOLD_SECONDS and cand["distance_meters"] < best["distance_meters"]:
+                    best = cand
+
+            chosen_dest = best["dest"]
+            unvisited.remove(chosen_dest)
+            ordered.append(chosen_dest)
+
+            # Cộng dồn khoảng cách và thời gian
+            total_distance += best["distance_meters"]
+            total_duration += best["duration_seconds"] + (45 * 60) # + 45 phút tư vấn tại trường
+
+            # Cập nhật vị trí hiện tại đến điểm Next-Hop vừa chọn
+            curr_lat, curr_lng = chosen_dest["lat"], chosen_dest["lng"]
+
+        return ordered, total_distance, total_duration
 
 
 routing_service = RoutingService()

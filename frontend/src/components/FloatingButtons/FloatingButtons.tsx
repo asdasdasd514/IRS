@@ -1,9 +1,8 @@
 import React from 'react';
-import { RefreshCw, Hotel, MapPin, Menu, Utensils } from 'lucide-react';
+import { RefreshCw, MapPin, Menu, Utensils } from 'lucide-react';
 
 interface FloatingButtonsProps {
   onRecalculate: () => void;
-  onGoHotel: () => void;
   onCenterLocation: () => void;
   onOpenMenu: () => void;
   onFindRestaurants: () => void;
@@ -13,7 +12,6 @@ interface FloatingButtonsProps {
 
 export const FloatingButtons: React.FC<FloatingButtonsProps> = ({
   onRecalculate,
-  onGoHotel,
   onCenterLocation,
   onOpenMenu,
   onFindRestaurants,
@@ -42,7 +40,7 @@ export const FloatingButtons: React.FC<FloatingButtonsProps> = ({
           }`}
           title="Tính lại lộ trình"
         >
-          <RefreshCw className={`w-6 h-6 text-primary-500 ${isRecalculating ? '' : ''}`} />
+          <RefreshCw className="w-6 h-6 text-primary-500" />
         </button>
 
         {/* Center on location */}
@@ -54,13 +52,6 @@ export const FloatingButtons: React.FC<FloatingButtonsProps> = ({
           <MapPin className="w-6 h-6 text-gray-700" />
         </button>
 
-        {/* Go to hotel */}
-        <button
-          onClick={onGoHotel}
-          className="bg-amber-500 p-3 rounded-full shadow-lg hover:bg-amber-600 active:bg-amber-700"
-          title="Về khách sạn"
-        >
-
         {/* Find nearby restaurants */}
         <button
           onClick={onFindRestaurants}
@@ -71,8 +62,6 @@ export const FloatingButtons: React.FC<FloatingButtonsProps> = ({
           title="Tìm quán ăn gần đây"
         >
           <Utensils className="w-6 h-6 text-white" />
-        </button>
-          <Hotel className="w-6 h-6 text-white" />
         </button>
       </div>
     </>

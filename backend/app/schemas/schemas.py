@@ -13,40 +13,77 @@ class TripStatus(str, Enum):
 
 class WaypointType(str, Enum):
     SCHOOL = "SCHOOL"
-    HOTEL = "HOTEL"
     HQ = "HQ"
     REST_STOP = "REST_STOP"
 
 
 class CampaignStatus(str, Enum):
     PLANNING = "planning"
+    DEPLOYED = "deployed"
     IN_PROGRESS = "in_progress"
     COMPLETED = "completed"
     PAUSED = "paused"
 
 
-# Campaign Schemas (Chiến dịch Tuyển sinh)
+class CampaignDestination(BaseModel):
+    id: Optional[str] = None
+    school_id: Optional[str] = None
+    name: str
+    address: Optional[str] = None
+    lat: float
+    lng: float
+    notes: Optional[str] = None
+    preferred_time: Optional[str] = None
+
+
+# Campaign Schemas (Chiến dịch Tuyển sinh - Lên kế hoạch & Tối ưu lộ trình Dynamic Next-Hop)
 class CampaignBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
-    academic_year: str = "2026-2027"
     description: Optional[str] = None
-    start_date: Optional[datetime] = None
-    end_date: Optional[datetime] = None
-    status: CampaignStatus = CampaignStatus.IN_PROGRESS
+    start_name: Optional[str] = None # Điểm xuất phát (ví dụ: Trụ sở trường mình)
+    start_address: Optional[str] = None
+    start_lat: Optional[float] = None
+    start_lng: Optional[float] = None
+    destinations: List[CampaignDestination] = [] # Danh sách các trường / địa điểm cần tham quan
+    status: CampaignStatus = CampaignStatus.PLANNING
 
 
 class CampaignCreate(CampaignBase):
     pass
 
 
+class CampaignUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    start_name: Optional[str] = None
+    start_address: Optional[str] = None
+    start_lat: Optional[float] = None
+    start_lng: Optional[float] = None
+    destinations: Optional[List[CampaignDestination]] = None
+    status: Optional[CampaignStatus] = None
+
+
 class CampaignResponse(CampaignBase):
     id: str
     manager_id: Optional[str] = None
+    deployed_trip_id: Optional[str] = None # ID chuyến đi được tạo ra sau khi tối ưu và triển khai
+    total_destinations: int = 0 # Tổng số địa điểm cần đi
+    estimated_distance_km: Optional[float] = None # Quãng đường ước tính
+    estimated_duration_minutes: Optional[int] = None # Thời gian di chuyển ước tính
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True
+
+
+class CampaignDeployResponse(BaseModel):
+    campaign: CampaignResponse
+    trip: dict
+    total_destinations: int
+    optimized_order: List[str]
+    estimated_distance_km: float
+    message: str
 
 
 # School Schemas (Danh mục Trường THPT mục tiêu)
@@ -58,11 +95,17 @@ class SchoolBoard(BaseModel):
 
 
 class SchoolBase(BaseModel):
-    id: str # Mã trường (ví dụ: ĐH-BKHN, THPT-CT-01)
+    id: str # Mã trường (ví dụ: BK-HN, THPT-CT-01)
     code: str # Mã trường
     name: str
     address: str
+    province: Optional[str] = None # Tỉnh / Thành phố
     description: Optional[str] = None # Giới thiệu về trường
+    website: Optional[str] = None # Website chính thức của trường
+    image_url: Optional[str] = None # Ảnh trường
+    admissions_info: Optional[str] = None # Thông tin tuyển sinh
+    representative_name: Optional[str] = None # Người đại diện
+    representative_phone: Optional[str] = None # SĐT người đại diện
     lat: float
     lng: float
     school_board: Optional[SchoolBoard] = None
@@ -74,7 +117,13 @@ class SchoolCreate(BaseModel):
     code: str
     name: str
     address: str
+    province: Optional[str] = None
     description: Optional[str] = None
+    website: Optional[str] = None
+    image_url: Optional[str] = None
+    admissions_info: Optional[str] = None
+    representative_name: Optional[str] = None
+    representative_phone: Optional[str] = None
     lat: float
     lng: float
     school_board: Optional[SchoolBoard] = None
@@ -206,9 +255,6 @@ class TripBase(BaseModel):
 class TripCreate(TripBase):
     current_lat: Optional[float] = None
     current_lng: Optional[float] = None
-    hotel_lat: Optional[float] = None
-    hotel_lng: Optional[float] = None
-    hotel_name: Optional[str] = None
     team: Optional[TripTeam] = None
     waypoints: List[WaypointCreate] = []
 
@@ -218,9 +264,6 @@ class TripUpdate(BaseModel):
     status: Optional[TripStatus] = None
     current_lat: Optional[float] = None
     current_lng: Optional[float] = None
-    hotel_lat: Optional[float] = None
-    hotel_lng: Optional[float] = None
-    hotel_name: Optional[str] = None
     team: Optional[TripTeam] = None
 
 
@@ -229,9 +272,6 @@ class TripResponse(TripBase):
     status: TripStatus = TripStatus.ACTIVE
     current_lat: Optional[float] = None
     current_lng: Optional[float] = None
-    hotel_lat: Optional[float] = None
-    hotel_lng: Optional[float] = None
-    hotel_name: Optional[str] = None
     team: Optional[TripTeam] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None

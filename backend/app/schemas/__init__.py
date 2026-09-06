@@ -21,8 +21,11 @@ from .schemas import (
     ReportResponse,
     ReportListResponse,
     CampaignStatus,
+    CampaignDestination,
     CampaignCreate,
+    CampaignUpdate,
     CampaignResponse,
+    CampaignDeployResponse,
     SchoolCreate,
     SchoolResponse,
 )

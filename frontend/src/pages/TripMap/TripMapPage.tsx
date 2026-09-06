@@ -1,7 +1,7 @@
 import React, { useEffect, useCallback, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, RefreshCw, Hotel, MapPin, Menu, Utensils } from 'lucide-react';
+import { ArrowLeft, RefreshCw, MapPin, Menu, Utensils } from 'lucide-react';
 import polyline from '@mapbox/polyline';
 
 import { MapView, BottomSheet, VisitedBottomSheet, WaypointInfoModal } from '../../components';
@@ -286,16 +286,6 @@ export const TripMapPage: React.FC = () => {
     [checkInMutation, currentLocation]
   );
 
-  // Go to hotel
-  const handleGoHotel = useCallback(() => {
-    if (!trip?.hotel_lat || !trip?.hotel_lng) {
-      alert('Chưa cài đặt vị trí khách sạn');
-      return;
-    }
-    const url = `https://www.google.com/maps/dir/?api=1&destination=${trip.hotel_lat},${trip.hotel_lng}&travelmode=driving`;
-    window.open(url, '_blank');
-  }, [trip]);
-
   // Center on current location
   const handleCenterLocation = useCallback(() => {
     refreshLocation();
@@ -427,15 +417,6 @@ export const TripMapPage: React.FC = () => {
             title="Về vị trí của tôi"
           >
             <MapPin className="w-6 h-6 text-gray-700" />
-          </button>
-
-          {/* Go to hotel */}
-          <button
-            onClick={handleGoHotel}
-            className="bg-amber-500 p-3 rounded-full shadow-lg hover:bg-amber-600 active:bg-amber-700"
-            title="Về khách sạn"
-          >
-            <Hotel className="w-6 h-6 text-white" />
           </button>
 
           {/* Find nearby places */}

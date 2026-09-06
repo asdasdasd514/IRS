@@ -21,6 +21,7 @@ from app.schemas.waypoint_schemas import (
     VisitLogCreate, VisitLogUpdate, VisitLogResponse,
     TicketCreate, TicketUpdate, TicketResponse
 )
+from app.services.trip_service import sync_waypoint_to_school
 
 router = APIRouter(prefix="/waypoints", tags=["Waypoints"])
 
@@ -182,6 +183,8 @@ async def update_waypoint(waypoint_id: str, waypoint_data: WaypointUpdate):
     await db.waypoints.update_one({"id": waypoint_id}, {"$set": update_dict})
 
     updated_wp = await db.waypoints.find_one({"id": waypoint_id})
+    if updated_wp and updated_wp.get("school_id"):
+        await sync_waypoint_to_school(db, updated_wp["school_id"], update_dict)
     return format_waypoint_response(updated_wp)
 
 
@@ -253,6 +256,8 @@ async def update_waypoint_detail(waypoint_id: str, detail_data: WaypointDetailUp
     await db.waypoints.update_one({"id": waypoint_id}, {"$set": update_dict})
 
     updated_wp = await db.waypoints.find_one({"id": waypoint_id})
+    if updated_wp and updated_wp.get("school_id"):
+        await sync_waypoint_to_school(db, updated_wp["school_id"], update_dict)
     return WaypointDetailResponse(
         id=updated_wp.get("id"),
         waypoint_id=updated_wp.get("id"),

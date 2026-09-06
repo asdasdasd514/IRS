@@ -45,7 +45,6 @@ const createCustomIcon = (color: string, emoji: string) =>
 const icons = {
   current: createCustomIcon('#3B82F6', '📍'),
   school: createCustomIcon('#10B981', '🏫'),
-  hotel: createCustomIcon('#F59E0B', '🏨'),
   hq: createCustomIcon('#6B7280', '🏢'),
   restStop: createCustomIcon('#F59E0B', '☕'),
   recommended: createCustomIcon('#EF4444', '⭐'),
@@ -167,8 +166,7 @@ export function MapView({
         
         // Chọn icon dựa trên type
         let baseIcon = icons.school;
-        if (waypoint.type === 'HOTEL') baseIcon = icons.hotel;
-        else if (waypoint.type === 'HQ') baseIcon = icons.hq;
+        if (waypoint.type === 'HQ') baseIcon = icons.hq;
         else if (waypoint.type === 'REST_STOP') baseIcon = icons.restStop;
         
         const markerIcon = waypoint.is_visited

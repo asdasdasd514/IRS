@@ -188,33 +188,12 @@ export const tripApi = {
     return data;
   },
 
-  // Reset day (start from hotel)
-  resetDay: async (tripId: string, hotelLat?: number, hotelLng?: number): Promise<Trip> => {
+  // Reset day (start from current location)
+  resetDay: async (tripId: string, currentLat?: number, currentLng?: number): Promise<Trip> => {
     const params: Record<string, number> = {};
-    if (hotelLat) params.hotel_lat = hotelLat;
-    if (hotelLng) params.hotel_lng = hotelLng;
+    if (currentLat) params.current_lat = currentLat;
+    if (currentLng) params.current_lng = currentLng;
     const { data } = await api.post(`/trips/${tripId}/reset-day`, null, { params });
-    return data;
-  },
-
-  // Go to hotel
-  goToHotel: async (
-    tripId: string,
-    currentLat: number,
-    currentLng: number
-  ): Promise<{
-    hotel_name: string;
-    hotel_lat: number;
-    hotel_lng: number;
-    directions: {
-      polyline: string;
-      duration_text: string;
-      distance_text: string;
-    } | null;
-  }> => {
-    const { data } = await api.post(`/trips/${tripId}/go-hotel`, null, {
-      params: { current_lat: currentLat, current_lng: currentLng },
-    });
     return data;
   },
 

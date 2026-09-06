@@ -26,45 +26,131 @@ def calculate_distance(lat1: float, lng1: float, lat2: float, lng2: float) -> fl
     return R * c
 
 
+from app.services.routing_service import routing_service
+
+
+async def sync_waypoint_to_school(db, school_id: str, updated_fields: dict):
+    """Đồng bộ ngược các thông tin Ban giám hiệu, đại diện, thông tin tuyển sinh từ waypoint về danh mục schools"""
+    if not school_id:
+        return
+    
+    school_set = {}
+    board_updates = {}
+    
+    if "principal_name" in updated_fields and updated_fields["principal_name"]:
+        board_updates["school_board.principal_name"] = updated_fields["principal_name"]
+    if "principal_phone" in updated_fields and updated_fields["principal_phone"]:
+        board_updates["school_board.principal_phone"] = updated_fields["principal_phone"]
+    if "vice_principal_name" in updated_fields and updated_fields["vice_principal_name"]:
+        board_updates["school_board.vice_principal_name"] = updated_fields["vice_principal_name"]
+    if "vice_principal_phone" in updated_fields and updated_fields["vice_principal_phone"]:
+        board_updates["school_board.vice_principal_phone"] = updated_fields["vice_principal_phone"]
+        
+    if "representative_name" in updated_fields and updated_fields["representative_name"]:
+        school_set["representative_name"] = updated_fields["representative_name"]
+    if "representative_phone" in updated_fields and updated_fields["representative_phone"]:
+        school_set["representative_phone"] = updated_fields["representative_phone"]
+    if "website" in updated_fields and updated_fields["website"]:
+        school_set["website"] = updated_fields["website"]
+    if "image_url" in updated_fields and updated_fields["image_url"]:
+        school_set["image_url"] = updated_fields["image_url"]
+    if "description" in updated_fields and updated_fields["description"]:
+        school_set["description"] = updated_fields["description"]
+    if "admissions_info" in updated_fields and updated_fields["admissions_info"]:
+        school_set["admissions_info"] = updated_fields["admissions_info"]
+
+    school_set.update(board_updates)
+    if school_set:
+        school_set["updated_at"] = datetime.now(timezone.utc)
+        await db.schools.update_one(
+            {"$or": [{"id": school_id}, {"code": school_id}], "is_deleted": {"$ne": True}},
+            {"$set": school_set}
+        )
+
+
 class TripService:
     async def create_trip(self, trip_data: TripCreate) -> dict:
         db = get_database()
         trip_id = str(uuid.uuid4())
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
 
         trip_doc = {
             "id": trip_id,
             "name": trip_data.name,
+            "campaign_id": trip_data.campaign_id,
+            "trip_code": trip_data.trip_code,
             "status": TripStatus.ACTIVE.value,
             "current_lat": trip_data.current_lat,
             "current_lng": trip_data.current_lng,
-            "hotel_lat": trip_data.hotel_lat,
-            "hotel_lng": trip_data.hotel_lng,
-            "hotel_name": trip_data.hotel_name,
+            "team": trip_data.team.model_dump() if trip_data.team else None,
             "created_at": now,
             "updated_at": now
         }
         await db.admission_trips.insert_one(trip_doc)
 
+        waypoints_list = trip_data.waypoints or []
+        
+        # Tối ưu hóa thứ tự các trường bằng Dynamic Next-Hop Routing ngay lúc tạo
+        if len(waypoints_list) >= 2:
+            start_lat = trip_data.current_lat if trip_data.current_lat is not None else waypoints_list[0].lat
+            start_lng = trip_data.current_lng if trip_data.current_lng is not None else waypoints_list[0].lng
+            start_pt = {"lat": start_lat, "lng": start_lng}
+            
+            raw_wps = [wp.model_dump() for wp in waypoints_list]
+            ordered_wps, _, _ = routing_service.plan_dynamic_next_hop_route(start_pt, raw_wps)
+        else:
+            ordered_wps = [wp.model_dump() for wp in waypoints_list]
+
         waypoints_docs = []
-        for i, wp_data in enumerate(trip_data.waypoints):
+        for i, wp_dict in enumerate(ordered_wps):
+            wp_id = str(uuid.uuid4())
+            
+            # Tự động snapshot từ danh mục trường học nếu có school_id
+            if wp_dict.get("school_id"):
+                school = await db.schools.find_one({
+                    "$or": [{"id": wp_dict["school_id"]}, {"code": wp_dict["school_id"]}],
+                    "is_deleted": {"$ne": True}
+                })
+                if school:
+                    if not wp_dict.get("description"):
+                        wp_dict["description"] = school.get("description")
+                    if not wp_dict.get("image_url"):
+                        wp_dict["image_url"] = school.get("image_url")
+                    if not wp_dict.get("website"):
+                        wp_dict["website"] = school.get("website")
+                    if not wp_dict.get("admissions_info"):
+                        wp_dict["admissions_info"] = school.get("admissions_info")
+                    if not wp_dict.get("representative_name"):
+                        wp_dict["representative_name"] = school.get("representative_name")
+                    if not wp_dict.get("representative_phone"):
+                        wp_dict["representative_phone"] = school.get("representative_phone")
+                    if school.get("school_board"):
+                        sb = school["school_board"]
+                        if not wp_dict.get("principal_name"):
+                            wp_dict["principal_name"] = sb.get("principal_name")
+                        if not wp_dict.get("principal_phone"):
+                            wp_dict["principal_phone"] = sb.get("principal_phone")
+                        if not wp_dict.get("vice_principal_name"):
+                            wp_dict["vice_principal_name"] = sb.get("vice_principal_name")
+                        if not wp_dict.get("vice_principal_phone"):
+                            wp_dict["vice_principal_phone"] = sb.get("vice_principal_phone")
+
             wp_doc = {
-                "id": str(uuid.uuid4()),
+                **wp_dict,
+                "id": wp_id,
                 "trip_id": trip_id,
-                "name": wp_data.name,
-                "lat": wp_data.lat,
-                "lng": wp_data.lng,
-                "google_place_id": wp_data.google_place_id,
-                "address": wp_data.address,
-                "type": wp_data.type.value if hasattr(wp_data.type, 'value') else str(wp_data.type),
-                "notes": wp_data.notes,
-                "contact_name": wp_data.contact_name,
-                "contact_phone": wp_data.contact_phone,
+                "type": wp_dict.get("type", "SCHOOL"),
                 "visit_order": i + 1,
                 "is_visited": False,
                 "visited_at": None,
-                "created_at": now
+                "visit_logs": [],
+                "tickets": [],
+                "is_deleted": False,
+                "created_at": now,
+                "updated_at": now
             }
+            if hasattr(wp_doc["type"], "value"):
+                wp_doc["type"] = wp_doc["type"].value
             waypoints_docs.append(wp_doc)
 
         if waypoints_docs:
@@ -208,9 +294,15 @@ class TripService:
         if "type" in update_dict and hasattr(update_dict["type"], "value"):
             update_dict["type"] = update_dict["type"].value
 
-        update_dict["updated_at"] = datetime.utcnow()
+        now = datetime.now(timezone.utc)
+        update_dict["updated_at"] = now
         await db.waypoints.update_one({"id": waypoint_id, "is_deleted": {"$ne": True}}, {"$set": update_dict})
-        return await db.waypoints.find_one({"id": waypoint_id})
+        
+        updated_wp = await db.waypoints.find_one({"id": waypoint_id})
+        if updated_wp and updated_wp.get("school_id"):
+            await sync_waypoint_to_school(db, updated_wp["school_id"], update_dict)
+            
+        return updated_wp
 
     async def delete_waypoint(self, waypoint_id: str) -> bool:
         """Xóa mềm điểm dừng nguyên tử trên document duy nhất"""
@@ -301,25 +393,20 @@ class TripService:
         cursor = db.waypoints.find({
             "trip_id": trip_id,
             "is_visited": False,
-            "type": WaypointType.SCHOOL.value
+            "is_deleted": {"$ne": True}
         }).sort("visit_order", 1)
         return await cursor.to_list(length=1000)
 
-    async def reset_day(self, trip_id: str, hotel_lat: Optional[float] = None, hotel_lng: Optional[float] = None) -> Optional[dict]:
+    async def reset_day(self, trip_id: str, current_lat: Optional[float] = None, current_lng: Optional[float] = None) -> Optional[dict]:
         db = get_database()
         trip = await db.admission_trips.find_one({"id": trip_id})
         if not trip:
             return None
 
         update_dict = {"updated_at": datetime.utcnow()}
-        if hotel_lat and hotel_lng:
-            update_dict["current_lat"] = hotel_lat
-            update_dict["current_lng"] = hotel_lng
-            update_dict["hotel_lat"] = hotel_lat
-            update_dict["hotel_lng"] = hotel_lng
-        elif trip.get("hotel_lat") and trip.get("hotel_lng"):
-            update_dict["current_lat"] = trip.get("hotel_lat")
-            update_dict["current_lng"] = trip.get("hotel_lng")
+        if current_lat and current_lng:
+            update_dict["current_lat"] = current_lat
+            update_dict["current_lng"] = current_lng
 
         await db.admission_trips.update_one({"id": trip_id}, {"$set": update_dict})
         return await self.get_trip(trip_id)

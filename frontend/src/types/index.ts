@@ -5,9 +5,6 @@ export interface Trip {
   status: 'active' | 'paused' | 'completed';
   current_lat: number | null;
   current_lng: number | null;
-  hotel_lat: number | null;
-  hotel_lng: number | null;
-  hotel_name: string | null;
   created_at: string;
   updated_at: string;
   waypoints: Waypoint[];
@@ -31,9 +28,6 @@ export interface CreateTripInput {
   name: string;
   current_lat?: number;
   current_lng?: number;
-  hotel_lat?: number;
-  hotel_lng?: number;
-  hotel_name?: string;
   waypoints: CreateWaypointInput[];
 }
 
@@ -47,7 +41,7 @@ export interface Waypoint {
   address: string | null;
   lat: number;
   lng: number;
-  type: 'SCHOOL' | 'HOTEL' | 'HQ' | 'REST_STOP';
+  type: 'SCHOOL' | 'HQ' | 'REST_STOP';
   visit_order: number | null;
   is_visited: boolean;
   visited_at: string | null;
@@ -89,7 +83,7 @@ export interface CreateWaypointInput {
   school_id?: string;
   google_place_id?: string;
   address?: string;
-  type?: 'SCHOOL' | 'HOTEL' | 'HQ' | 'REST_STOP';
+  type?: 'SCHOOL' | 'HQ' | 'REST_STOP';
   description?: string;
   image_url?: string;
   website?: string;
