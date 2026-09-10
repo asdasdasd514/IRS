@@ -64,6 +64,47 @@ async def health():
     return {"status": "healthy", "database": "IRS"}
 
 
+@app.get("/api/cache/stats", tags=["Cache"])
+async def get_cache_stats():
+    """Xem thống kê tỷ lệ trúng cache (hit ratio), số lượng key và dung lượng bộ nhớ đệm"""
+    from app.core.cache import (
+        distance_matrix_cache,
+        directions_cache,
+        places_cache,
+        maps_link_cache,
+        api_response_cache
+    )
+    return {
+        "status": "ok",
+        "default_ttl_seconds": 300,
+        "caches": {
+            "distance_matrix": distance_matrix_cache.stats(),
+            "directions": directions_cache.stats(),
+            "places": places_cache.stats(),
+            "maps_link": maps_link_cache.stats(),
+            "api_response": api_response_cache.stats(),
+        }
+    }
+
+
+@app.post("/api/cache/clear", tags=["Cache"])
+async def clear_all_caches():
+    """Làm sạch toàn bộ cache hệ thống"""
+    from app.core.cache import (
+        distance_matrix_cache,
+        directions_cache,
+        places_cache,
+        maps_link_cache,
+        api_response_cache
+    )
+    distance_matrix_cache.clear()
+    directions_cache.clear()
+    places_cache.clear()
+    maps_link_cache.clear()
+    api_response_cache.clear()
+    return {"status": "ok", "message": "Đã làm sạch toàn bộ cache hệ thống"}
+
+
 @app.get("/swagger", include_in_schema=False)
 @app.get("/api/docs", include_in_schema=False)
 async def swagger_redirect():

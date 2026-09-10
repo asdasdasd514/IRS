@@ -4,9 +4,13 @@ Xử lý việc parse link Google Maps và lấy tọa độ
 """
 
 import re
+import logging
 import requests
 from typing import Optional, Tuple
 from urllib.parse import urlparse, parse_qs, unquote
+from app.core.cache import maps_link_cache
+
+logger = logging.getLogger(__name__)
 
 class GoogleMapsParseError(Exception):
     """Custom exception for Google Maps parsing errors"""
@@ -15,16 +19,26 @@ class GoogleMapsParseError(Exception):
 
 def parse_google_maps_link(link: str) -> Tuple[float, float]:
     link = link.strip()
+    if not link:
+        raise GoogleMapsParseError("Link không được để trống")
+
+    # Kiểm tra Cache 5 phút
+    cached_coords = maps_link_cache.get(link)
+    if cached_coords is not None:
+        logger.info(f"⚡ [Cache Hit Maps Link]: {link[:60]}... -> {cached_coords}")
+        return cached_coords
     
     # 1. Thử extract nhanh từ chuỗi link đầu vào
     coords = _extract_coords_from_string(link)
     if coords:
+        maps_link_cache.set(link, coords, ttl=300)
         return coords
     
     # 2. Thực hiện request để lấy URL đích và HTML
     try:
         resolved_coords = _fetch_and_extract_deep(link)
         if resolved_coords:
+            maps_link_cache.set(link, resolved_coords, ttl=300)
             return resolved_coords
             
     except Exception as e:

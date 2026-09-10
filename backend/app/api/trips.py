@@ -21,6 +21,7 @@ from app.services.maps_service import parse_google_maps_link, GoogleMapsParseErr
 from app.services.auth_service import get_current_user
 from app.services.places_service import places_service
 from app.services import report_service
+from app.core.cache import api_response_cache
 
 router = APIRouter(prefix="/trips", tags=["Trips"])
 
@@ -121,6 +122,7 @@ async def add_waypoint(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Không tìm thấy chuyến đi"
         )
+    api_response_cache.clear_prefix(f"nexthop:{trip_id}")
     return WaypointResponse.model_validate(waypoint)
 
 
@@ -136,6 +138,7 @@ async def update_waypoint(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Không tìm thấy điểm dừng"
         )
+    api_response_cache.clear_prefix(f"nexthop:{trip_id}")
     return WaypointResponse.model_validate(waypoint)
 
 
@@ -150,6 +153,7 @@ async def delete_waypoint(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Không tìm thấy điểm dừng"
         )
+    api_response_cache.clear_prefix(f"nexthop:{trip_id}")
 
 
 # === Routing Endpoints ===
@@ -168,6 +172,14 @@ async def get_next_hop(
             message="Đã hoàn thành tất cả các điểm dừng!"
         )
     
+    # Kiểm tra Cache 5 phút cho yêu cầu cùng chuyến đi, cùng vị trí GPS và cùng danh sách điểm chưa đi
+    unvisited_ids = ",".join(sorted(w.get("id") if isinstance(w, dict) else w.id for w in unvisited))
+    cache_key = f"nexthop:{trip_id}:{round(request.current_lat, 4)},{round(request.current_lng, 4)}:{unvisited_ids}"
+    cached_response = api_response_cache.get(cache_key)
+    if cached_response is not None:
+        logger.info(f"⚡ [Cache Hit Next-Hop]: {cache_key}")
+        return cached_response
+    
     recommended, alternatives = await routing_service.find_next_hop(
         request.current_lat,
         request.current_lng,
@@ -179,12 +191,15 @@ async def get_next_hop(
         TripUpdate(current_lat=request.current_lat, current_lng=request.current_lng)
     )
     
-    return NextHopResponse(
+    response = NextHopResponse(
         recommended=recommended,
         alternatives=alternatives,
         total_unvisited=len(unvisited),
         message=f"Gợi ý: {recommended.waypoint.name}" if recommended else ""
     )
+    # Lưu vào cache 5 phút
+    api_response_cache.set(cache_key, response, ttl=300)
+    return response
 
 
 @router.post("/{trip_id}/check-in", response_model=CheckInResponse)
@@ -198,6 +213,8 @@ async def check_in(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Không tìm thấy chuyến đi"
         )
+    # Invalidate cache của trip khi check-in thành công
+    api_response_cache.clear_prefix(f"nexthop:{trip_id}")
     return result
 
 
@@ -213,6 +230,8 @@ async def undo_check_in(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Không tìm thấy chuyến đi"
         )
+    # Invalidate cache của trip khi undo check-in
+    api_response_cache.clear_prefix(f"nexthop:{trip_id}")
     return result
 
 
@@ -229,6 +248,7 @@ async def reset_day(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Không tìm thấy chuyến đi"
         )
+    api_response_cache.clear_prefix(f"nexthop:{trip_id}")
     return trip
 
 

@@ -6,6 +6,7 @@ import logging
 from typing import List, Dict, Optional
 from serpapi import GoogleSearch
 from app.core.config import settings
+from app.core.cache import places_cache
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +22,13 @@ class PlacesService:
         query: str = "quán ăn nhà hàng khách sạn",
         radius_meters: int = 5000
     ) -> List[Dict]:
+        # Kiểm tra Cache 5 phút (làm tròn tọa độ 3 số thập phân ~110m phù hợp với tìm kiếm tiện ích theo vùng)
+        cache_key = f"{round(lat, 3)},{round(lng, 3)}:{query.strip().lower()}:{radius_meters}"
+        cached_places = places_cache.get(cache_key)
+        if cached_places is not None:
+            logger.info(f"⚡ [Cache Hit Places]: {cache_key} ({len(cached_places)} địa điểm)")
+            return cached_places
+
         if not self.serpapi_key:
             logger.warning("SerpAPI key not configured - cannot search places")
             return []
@@ -62,6 +70,7 @@ class PlacesService:
                     places.append(place_data)
 
             logger.info(f"Found {len(places)} places near location")
+            places_cache.set(cache_key, places, ttl=300)
             return places
 
         except Exception as e:

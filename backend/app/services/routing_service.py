@@ -7,6 +7,7 @@ Uses SerpAPI for Google Maps data
 from serpapi import GoogleSearch
 from typing import List, Optional, Tuple, Dict, Any
 from app.core.config import settings
+from app.core.cache import distance_matrix_cache, directions_cache
 from app.schemas import NextHopCandidate, WaypointResponse
 import logging
 import math
@@ -17,8 +18,6 @@ logger = logging.getLogger(__name__)
 
 TIME_THRESHOLD_SECONDS = 300
 AUTO_CHECKIN_RADIUS_METERS = 50
-_distance_cache: Dict[Tuple[float, float, float, float], Tuple[dict, float]] = {}
-CACHE_TTL_SECONDS = 300
 
 
 class RoutingService:
@@ -76,23 +75,9 @@ class RoutingService:
                 lng = wp.get("lng") if isinstance(wp, dict) else wp.lng
                 wp_name = wp.get("name") if isinstance(wp, dict) else wp.name
                 
-                cache_key = (
-                    round(origin_lat, 5),
-                    round(origin_lng, 5),
-                    round(lat, 5),
-                    round(lng, 5)
-                )
-                
-                current_time = time.time()
-                if cache_key in _distance_cache:
-                    cached_result, cached_time = _distance_cache[cache_key]
-                    if current_time - cached_time < CACHE_TTL_SECONDS:
-                        results = cached_result
-                    else:
-                        del _distance_cache[cache_key]
-                        results = None
-                else:
-                    results = None
+                # Cache key làm tròn 4 chữ số thập phân (~11m sai số) để hạn chế trượt cache do rung lắc GPS
+                cache_key = f"{round(origin_lat, 4)},{round(origin_lng, 4)}->{round(lat, 4)},{round(lng, 4)}"
+                results = distance_matrix_cache.get(cache_key)
                 
                 if results is None:
                     params = {
@@ -106,7 +91,9 @@ class RoutingService:
                     
                     search = GoogleSearch(params)
                     results = search.get_dict()
-                    _distance_cache[cache_key] = (results, current_time)
+                    distance_matrix_cache.set(cache_key, results, ttl=300)
+                else:
+                    logger.info(f"⚡ [Cache Hit Distance Matrix]: {cache_key}")
                 
                 if "directions" in results and len(results["directions"]) > 0:
                     direction = results["directions"][0]
@@ -276,6 +263,13 @@ class RoutingService:
         if not self.serpapi_key:
             return None
         
+        # Kiểm tra Cache 5 phút cho yêu cầu chỉ đường cùng cặp tọa độ
+        cache_key = f"{round(origin_lat, 4)},{round(origin_lng, 4)}->{round(dest_lat, 4)},{round(dest_lng, 4)}"
+        cached_result = directions_cache.get(cache_key)
+        if cached_result is not None:
+            logger.info(f"⚡ [Cache Hit Directions]: {cache_key}")
+            return cached_result
+        
         try:
             params = {
                 "engine": "google_maps_directions",
@@ -331,12 +325,16 @@ class RoutingService:
                 except Exception as enc_err:
                     logger.warning(f"Error encoding polyline: {enc_err}")
             
-            return {
+            direction_result = {
                 "polyline": encoded_polyline,
                 "duration_text": duration_text,
                 "distance_text": distance_text,
                 "steps": steps
             }
+            
+            # Lưu cache với TTL 5 phút (300 giây)
+            directions_cache.set(cache_key, direction_result, ttl=300)
+            return direction_result
             
         except Exception as e:
             logger.error(f"Error getting directions from SerpAPI: {e}")
