@@ -51,8 +51,17 @@ class UserResponse(BaseModel):
 
 
 class LoginRequest(BaseModel):
-    username: str
-    password: str
+    username: str = Field(..., description="Username hoặc Email")
+    password: str = Field(..., min_length=6)
+
+
+class RegisterRequest(BaseModel):
+    username: str = Field(..., min_length=3, max_length=50)
+    password: str = Field(..., min_length=6)
+    email: Optional[str] = None
+    full_name: Optional[str] = None
+    phone: Optional[str] = None
+    role: UserRole = UserRole.STAFF
 
 
 class Token(BaseModel):
@@ -64,3 +73,4 @@ class Token(BaseModel):
 class TokenData(BaseModel):
     username: Optional[str] = None
     user_id: Optional[str] = None
+

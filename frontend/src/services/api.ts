@@ -11,6 +11,9 @@ import type {
   CheckInResponse,
   Report,
   ReportListItem,
+  User,
+  LoginResponse,
+  RegisterInput,
 } from '../types';
 
 // Auto-detect API URL based on browser location
@@ -46,18 +49,20 @@ api.interceptors.request.use((config) => {
 
 // Auth API
 export const authApi = {
-  login: async (username: string, password: string): Promise<{ access_token: string; token_type: string }> => {
-    const formData = new FormData();
-    formData.append('username', username);
-    formData.append('password', password);
-
-    const { data } = await axios.post(`${API_BASE_URL}/auth/login`, formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
+  login: async (usernameOrEmail: string, password: string): Promise<LoginResponse> => {
+    const { data } = await axios.post(`${API_BASE_URL}/auth/login`, {
+      username: usernameOrEmail,
+      password: password,
     });
     return data;
   },
 
-  getMe: async (): Promise<any> => {
+  register: async (input: RegisterInput): Promise<LoginResponse> => {
+    const { data } = await axios.post(`${API_BASE_URL}/auth/register`, input);
+    return data;
+  },
+
+  getMe: async (): Promise<User> => {
     const token = localStorage.getItem('token');
     const { data } = await axios.get(`${API_BASE_URL}/auth/me`, {
       headers: { Authorization: `Bearer ${token}` },
@@ -65,11 +70,18 @@ export const authApi = {
     return data;
   },
 
-  createUser: async (username: string, password: string): Promise<any> => {
+  createUser: async (userData: {
+    username: string;
+    password: string;
+    email?: string;
+    full_name?: string;
+    phone?: string;
+    role?: 'admin' | 'staff';
+  }): Promise<User> => {
     const token = localStorage.getItem('token');
     const { data } = await axios.post(
       `${API_BASE_URL}/users`,
-      { username, password },
+      userData,
       {
         headers: { Authorization: `Bearer ${token}` },
       }
@@ -77,14 +89,32 @@ export const authApi = {
     return data;
   },
 
-  listUsers: async (): Promise<any[]> => {
+  listUsers: async (params?: { role?: string; search?: string }): Promise<User[]> => {
     const token = localStorage.getItem('token');
     const { data } = await axios.get(`${API_BASE_URL}/users`, {
+      headers: { Authorization: `Bearer ${token}` },
+      params,
+    });
+    return data;
+  },
+
+  updateUser: async (userId: string, updateData: Partial<User> & { password?: string }): Promise<User> => {
+    const token = localStorage.getItem('token');
+    const { data } = await axios.patch(`${API_BASE_URL}/users/${userId}`, updateData, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    return data;
+  },
+
+  deleteUser: async (userId: string): Promise<any> => {
+    const token = localStorage.getItem('token');
+    const { data } = await axios.delete(`${API_BASE_URL}/users/${userId}`, {
       headers: { Authorization: `Bearer ${token}` },
     });
     return data;
   },
 };
+
 
 // Upload API
 export const uploadApi = {
@@ -399,4 +429,65 @@ export const reportApi = {
   },
 };
 
+// School API
+export const schoolApi = {
+  getAll: async (params?: { search?: string; district?: string }): Promise<any[]> => {
+    try {
+      const { data } = await api.get('/schools', { params });
+      return Array.isArray(data) ? data : [];
+    } catch {
+      return [];
+    }
+  },
+  getById: async (id: string): Promise<any> => {
+    const { data } = await api.get(`/schools/${id}`);
+    return data;
+  },
+  create: async (schoolData: any): Promise<any> => {
+    const { data } = await api.post('/schools', schoolData);
+    return data;
+  },
+  update: async (id: string, schoolData: any): Promise<any> => {
+    const { data } = await api.patch(`/schools/${id}`, schoolData);
+    return data;
+  },
+  delete: async (id: string): Promise<void> => {
+    await api.delete(`/schools/${id}`);
+  },
+};
+
+// Campaign API
+export const campaignApi = {
+  getAll: async (params?: { status?: string }): Promise<any[]> => {
+    try {
+      const { data } = await api.get('/campaigns', { params });
+      return Array.isArray(data) ? data : [];
+    } catch {
+      return [];
+    }
+  },
+  getById: async (id: string): Promise<any> => {
+    const { data } = await api.get(`/campaigns/${id}`);
+    return data;
+  },
+  create: async (campaignData: any): Promise<any> => {
+    const { data } = await api.post('/campaigns', campaignData);
+    return data;
+  },
+  optimizeRoute: async (campaignId: string, startPoint?: { lat: number; lng: number }): Promise<any> => {
+    const params = startPoint ? { start_lat: startPoint.lat, start_lng: startPoint.lng } : {};
+    const { data } = await api.post(`/campaigns/${campaignId}/optimize-route`, null, { params });
+    return data;
+  },
+  deploy: async (campaignId: string, startPoint?: { lat: number; lng: number }): Promise<any> => {
+    const params = startPoint ? { start_lat: startPoint.lat, start_lng: startPoint.lng } : {};
+    const { data } = await api.post(`/campaigns/${campaignId}/deploy`, null, { params });
+    return data;
+  },
+  delete: async (id: string): Promise<void> => {
+    await api.delete(`/campaigns/${id}`);
+  },
+};
+
 export default api;
+

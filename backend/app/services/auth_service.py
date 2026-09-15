@@ -38,12 +38,18 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     return encoded_jwt
 
 
-async def authenticate_user(username: str, password: str) -> Optional[dict]:
-    """Xác thực người dùng với MongoDB Database IRS"""
+async def authenticate_user(username_or_email: str, password: str) -> Optional[dict]:
+    """Xác thực người dùng với MongoDB Database IRS bằng username hoặc email"""
     db = get_database()
     if db is None:
         return None
-    user = await db.users.find_one({"username": username, "is_deleted": {"$ne": True}})
+    user = await db.users.find_one({
+        "$or": [
+            {"username": username_or_email},
+            {"email": username_or_email}
+        ],
+        "is_deleted": {"$ne": True}
+    })
     if not user:
         return None
     if not verify_password(password, user.get("hashed_password", "")):

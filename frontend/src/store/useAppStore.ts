@@ -1,14 +1,8 @@
 import { create } from 'zustand';
-import type { Trip, Waypoint, NextHopCandidate, Location } from '../types';
-
-interface User {
-  id: string;
-  username: string;
-  is_admin: boolean;
-  is_active: boolean;
-}
+import type { Trip, Waypoint, NextHopCandidate, Location, User } from '../types';
 
 interface AppState {
+
   // Auth state
   user: User | null;
   token: string | null;
