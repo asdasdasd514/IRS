@@ -62,6 +62,27 @@ export const TripMapPage: React.FC = () => {
     enabled: !!tripId,
   });
 
+  const displayWaypoints = (trip?.waypoints ?? [])
+    .map((waypoint, index) => {
+      const rawWaypoint = waypoint as Waypoint & {
+        latitude?: number | string;
+        longitude?: number | string;
+      };
+      const lat = Number(rawWaypoint.lat ?? rawWaypoint.latitude);
+      const lng = Number(rawWaypoint.lng ?? rawWaypoint.longitude);
+
+      return {
+        ...rawWaypoint,
+        id: rawWaypoint.id || `waypoint-${index}`,
+        name: rawWaypoint.name || `Điểm dừng ${index + 1}`,
+        lat,
+        lng,
+      };
+    })
+    .filter((waypoint) => Number.isFinite(waypoint.lat) && Number.isFinite(waypoint.lng));
+
+  const mapName = trip?.name || (trip as (typeof trip & { title?: string }) | undefined)?.title || 'Bản đồ chuyến đi';
+
   // Reset state when trip changes
   useEffect(() => {
     setRoute(null);
@@ -352,8 +373,8 @@ export const TripMapPage: React.FC = () => {
     );
   }
 
-  const unvisitedWaypoints = trip.waypoints.filter((w) => !w.is_visited);
-  const visitedWaypoints = trip.waypoints
+  const unvisitedWaypoints = displayWaypoints.filter((w) => !w.is_visited);
+  const visitedWaypoints = displayWaypoints
     .filter((w) => w.is_visited)
     .sort((a, b) => new Date(b.visited_at!).getTime() - new Date(a.visited_at!).getTime());
   // Chỉ đếm trường chưa đi (SCHOOL), không tính các loại khác
@@ -371,7 +392,7 @@ export const TripMapPage: React.FC = () => {
             <ArrowLeft className="w-5 h-5 text-gray-700" />
           </button>
           <div className="text-center flex-1 mx-4">
-            <h1 className="font-bold text-gray-800 truncate">{trip.name}</h1>
+            <h1 className="font-bold text-gray-800 truncate" title={mapName}>{mapName}</h1>
             <p className="text-sm text-gray-500">
               {trip.visited_count}/{trip.total_waypoints} đã hoàn thành
             </p>
@@ -390,7 +411,7 @@ export const TripMapPage: React.FC = () => {
         <MapView
           key={tripId}
           currentLocation={currentLocation}
-          waypoints={trip.waypoints}
+          waypoints={displayWaypoints}
           recommended={nextHop}
           route={route || undefined}
           onWaypointClick={handleWaypointClick}
@@ -507,7 +528,7 @@ export const TripMapPage: React.FC = () => {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="p-4 border-b">
-              <h2 className="font-bold text-lg">{trip.name}</h2>
+              <h2 className="font-bold text-lg">{mapName}</h2>
               <p className="text-sm text-gray-500">
                 {trip.visited_count}/{trip.total_waypoints} điểm
               </p>

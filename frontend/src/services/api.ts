@@ -474,6 +474,13 @@ export const campaignApi = {
     const { data } = await api.post('/campaigns', campaignData);
     return data;
   },
+  previewRoute: async (payload: {
+    destinations: Array<{ school_id?: string; name: string; address?: string; lat: number; lng: number }>;
+    start_point: { lat: number; lng: number; name: string };
+  }): Promise<any> => {
+    const { data } = await api.post('/campaigns/preview-route', payload);
+    return data;
+  },
   optimizeRoute: async (campaignId: string, startPoint?: { lat: number; lng: number }): Promise<any> => {
     const params = startPoint ? { start_lat: startPoint.lat, start_lng: startPoint.lng } : {};
     const { data } = await api.post(`/campaigns/${campaignId}/optimize-route`, null, { params });
