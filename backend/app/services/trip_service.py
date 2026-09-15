@@ -97,8 +97,8 @@ class TripService:
             start_lng = trip_data.current_lng if trip_data.current_lng is not None else waypoints_list[0].lng
             start_pt = {"lat": start_lat, "lng": start_lng}
             
-            raw_wps = [wp.model_dump() for wp in waypoints_list]
-            ordered_wps, _, _ = routing_service.plan_dynamic_next_hop_route(start_pt, raw_wps)
+            route_res = routing_service.plan_dynamic_next_hop_route(start_pt, raw_wps)
+            ordered_wps = route_res[0] if isinstance(route_res, (list, tuple)) else route_res
         else:
             ordered_wps = [wp.model_dump() for wp in waypoints_list]
 

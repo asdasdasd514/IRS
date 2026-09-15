@@ -3,9 +3,10 @@ Campaign API Endpoints - Quản lý Chiến dịch Tuyển sinh & Tối ưu hóa
 Sử dụng thuật toán Dynamic Next-Hop Routing và lưu trữ kết quả trong route_plans & campaign_waypoints
 """
 
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from datetime import datetime, timezone
 import uuid
+from pydantic import BaseModel
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from app.core.database import get_database
@@ -21,6 +22,55 @@ from app.services.auth_service import get_current_user
 from app.services.routing_service import routing_service
 
 router = APIRouter(prefix="/campaigns", tags=["Campaigns"])
+
+
+class RoutePreviewDirectRequest(BaseModel):
+    destinations: List[Dict[str, Any]]
+    start_point: Dict[str, Any]
+
+
+@router.post("/preview-route")
+async def preview_campaign_route_direct(
+    payload: RoutePreviewDirectRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Tính toán và xem trước (Preview) lộ trình tối ưu đường bộ KHÔNG lưu vào Database:
+    Phục vụ xem trước trong wizard tạo chiến dịch, chỉ khi bấm xác nhận mới lưu chiến dịch.
+    """
+    destinations = payload.destinations or []
+    if not destinations:
+        raise HTTPException(status_code=400, detail="Vui lòng chọn ít nhất một trường mục tiêu để tính lộ trình.")
+
+    start_point = payload.start_point or {}
+    origin_lat = start_point.get("lat")
+    origin_lng = start_point.get("lng")
+    if origin_lat is None or origin_lng is None:
+        origin_lat = destinations[0].get("lat")
+        origin_lng = destinations[0].get("lng")
+        origin_name = destinations[0].get("name", "Điểm xuất phát")
+    else:
+        origin_name = start_point.get("name", "Điểm xuất phát")
+
+    st_pt = {"lat": float(origin_lat), "lng": float(origin_lng), "name": origin_name}
+
+    ordered_dests, total_dist_meters, total_dur_seconds, route_geometry, encoded_polyline, duration_text = (
+        routing_service.plan_dynamic_next_hop_route(st_pt, destinations)
+    )
+
+    return {
+        "routing_algorithm": "Dynamic Next-Hop Routing",
+        "start_point": st_pt,
+        "total_destinations": len(ordered_dests),
+        "estimated_distance_km": round(total_dist_meters / 1000, 2),
+        "estimated_duration_minutes": int(total_dur_seconds / 60),
+        "estimated_duration_text": duration_text,
+        "optimized_order": [d["name"] for d in ordered_dests],
+        "destinations": ordered_dests,
+        "polyline": encoded_polyline,
+        "route_geometry": route_geometry
+    }
+
 
 
 def format_campaign_response(c: dict) -> CampaignResponse:
@@ -151,8 +201,8 @@ async def preview_optimized_route(
     origin_name = start_name or "Điểm xuất phát"
     start_point = {"lat": origin_lat, "lng": origin_lng}
 
-    ordered_dests, total_dist_meters, total_dur_seconds = routing_service.plan_dynamic_next_hop_route(
-        start_point, destinations
+    ordered_dests, total_dist_meters, total_dur_seconds, route_geometry, encoded_polyline, duration_text = (
+        routing_service.plan_dynamic_next_hop_route(start_point, destinations)
     )
 
     # Lưu kết quả tính toán vào collection route_plans
@@ -171,6 +221,7 @@ async def preview_optimized_route(
         "estimated_distance_km": round(total_dist_meters / 1000, 2),
         "total_duration_seconds": int(total_dur_seconds),
         "estimated_duration_minutes": int(total_dur_seconds / 60),
+        "estimated_duration_text": duration_text,
         "destinations": [
             {
                 "order": idx + 1,
@@ -181,11 +232,14 @@ async def preview_optimized_route(
                 "lng": d.get("lng"),
                 "address": d.get("address"),
                 "distance_meters": d.get("distance_meters"),
-                "duration_seconds": d.get("duration_seconds")
+                "duration_seconds": d.get("duration_seconds"),
+                "distance_text": d.get("distance_text"),
+                "duration_text": d.get("duration_text")
             }
             for idx, d in enumerate(ordered_dests)
         ],
-        "polyline": None,
+        "polyline": encoded_polyline,
+        "route_geometry": route_geometry,
         "status": "draft",
         "is_deleted": False,
         "created_at": now,
@@ -202,8 +256,11 @@ async def preview_optimized_route(
         "total_destinations": len(ordered_dests),
         "estimated_distance_km": round(total_dist_meters / 1000, 2),
         "estimated_duration_minutes": int(total_dur_seconds / 60),
+        "estimated_duration_text": duration_text,
         "optimized_order": [d["name"] for d in ordered_dests],
-        "destinations": ordered_dests
+        "destinations": ordered_dests,
+        "polyline": encoded_polyline,
+        "route_geometry": route_geometry
     }
 
 
@@ -236,9 +293,9 @@ async def deploy_campaign_route(
     origin_lng = start_lng if start_lng is not None else destinations[0]["lng"]
     start_point = {"lat": origin_lat, "lng": origin_lng}
 
-    # 1. Thuật toán Dynamic Next-Hop Routing
-    ordered_dests, total_dist_meters, total_dur_seconds = routing_service.plan_dynamic_next_hop_route(
-        start_point, destinations
+    # 1. Thuật toán Dynamic Next-Hop Routing đường bộ
+    ordered_dests, total_dist_meters, total_dur_seconds, route_geometry, encoded_polyline, duration_text = (
+        routing_service.plan_dynamic_next_hop_route(start_point, destinations)
     )
     dist_km = round(total_dist_meters / 1000, 2)
     dur_min = int(total_dur_seconds / 60)
@@ -252,6 +309,8 @@ async def deploy_campaign_route(
         "status": "active",
         "current_lat": origin_lat,
         "current_lng": origin_lng,
+        "polyline": encoded_polyline,
+        "route_geometry": route_geometry,
         "is_deleted": False,
         "created_at": now,
         "updated_at": now
