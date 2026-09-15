@@ -1,4 +1,6 @@
-import { Menu, HelpCircle, ShieldCheck } from 'lucide-react';
+import { useState, useRef, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Menu, HelpCircle, ShieldCheck, ChevronDown, LogOut } from 'lucide-react';
 import { useAppStore } from '../../store/useAppStore';
 
 interface HeaderProps {
@@ -8,11 +10,34 @@ interface HeaderProps {
 }
 
 export function Header({ onOpenMobileMenu, title, subtitle }: HeaderProps) {
-  const user = useAppStore((state) => state.user);
+  const navigate = useNavigate();
+  const { user, logout } = useAppStore();
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
   const userRole = user?.role || (user?.is_admin ? 'admin' : 'staff');
 
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setDropdownOpen(false);
+      }
+    }
+    if (dropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [dropdownOpen]);
+
+  const handleLogout = () => {
+    logout();
+    navigate('/login');
+  };
+
   return (
-    <header className="h-16 bg-white border-b border-slate-200/80 px-6 flex items-center justify-between shrink-0">
+    <header className="h-16 bg-white border-b border-slate-200/80 px-4 sm:px-6 flex items-center justify-between shrink-0 relative z-30">
       <div className="flex items-center gap-3">
         {/* Mobile toggle button */}
         <button
@@ -47,33 +72,101 @@ export function Header({ onOpenMobileMenu, title, subtitle }: HeaderProps) {
         </div>
       </div>
 
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2 sm:gap-3">
         {/* Role badge */}
-        <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-blue-50 border border-blue-200/60 text-[#0f3b7d] text-xs font-semibold">
+        <div className="hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-blue-50 border border-blue-200/60 text-[#0f3b7d] text-xs font-semibold">
           <ShieldCheck className="w-3.5 h-3.5 text-[#0f3b7d]" />
           <span>{userRole === 'admin' ? 'Quyền Quản Trị Viên' : 'Quyền Cán Bộ'}</span>
         </div>
 
-        {/* Help circle icon as seen in provided UI screenshot */}
+        {/* Help circle icon */}
         <button
           title="Trợ giúp & Hướng dẫn"
-          className="w-9 h-9 flex items-center justify-center rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition"
+          className="w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition"
         >
-          <HelpCircle className="w-5 h-5" />
+          <HelpCircle className="w-4 h-4 sm:w-5 sm:h-5" />
         </button>
 
-        {/* User avatar display */}
-        <div className="flex items-center gap-2 pl-2 border-l border-slate-200">
-          <div className="w-8 h-8 rounded-full bg-[#0f3b7d] text-white flex items-center justify-center font-bold text-xs uppercase shadow-xs">
-            {user?.full_name
-              ? user.full_name.charAt(0)
-              : user?.username
-              ? user.username.charAt(0)
-              : 'U'}
-          </div>
-          <span className="hidden md:inline-block text-xs font-medium text-slate-700">
-            {user?.full_name || user?.username}
-          </span>
+        {/* User Account Menu with Logout Dropdown in Top-Right Corner */}
+        <div className="relative pl-1 sm:pl-2 border-l border-slate-200" ref={dropdownRef}>
+          <button
+            onClick={() => setDropdownOpen((prev) => !prev)}
+            className="flex items-center gap-2 sm:gap-2.5 p-1 sm:p-1.5 rounded-xl hover:bg-slate-100 transition duration-150 border border-transparent hover:border-slate-200 group"
+          >
+            <div className="w-8 h-8 rounded-full bg-[#0f3b7d] text-white flex items-center justify-center font-bold text-xs uppercase shadow-xs shrink-0 group-hover:scale-105 transition-transform">
+              {user?.full_name
+                ? user.full_name.charAt(0)
+                : user?.username
+                ? user.username.charAt(0)
+                : 'U'}
+            </div>
+
+            <div className="hidden sm:block text-left min-w-0">
+              <p className="text-xs font-bold text-slate-800 leading-tight truncate max-w-[140px]">
+                {user?.full_name || user?.username || 'Người dùng'}
+              </p>
+              <div className="flex items-center gap-1 mt-0.5">
+                <span
+                  className={`inline-block w-1.5 h-1.5 rounded-full ${
+                    userRole === 'admin' ? 'bg-amber-500' : 'bg-emerald-500'
+                  }`}
+                />
+                <span className="text-[10.5px] text-slate-500 capitalize">
+                  {userRole === 'admin' ? 'Quản Trị Viên' : 'Cán Bộ'}
+                </span>
+              </div>
+            </div>
+
+            <ChevronDown
+              className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 ${
+                dropdownOpen ? 'rotate-180 text-slate-700' : ''
+              }`}
+            />
+          </button>
+
+          {/* Dropdown Menu */}
+          {dropdownOpen && (
+            <div className="absolute right-0 mt-2 w-60 bg-white rounded-2xl shadow-xl border border-slate-200/80 py-1.5 z-50 animate-scale-in">
+              {/* User summary */}
+              <div className="px-4 py-3 border-b border-slate-100">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-full bg-[#0f3b7d] text-white flex items-center justify-center font-bold text-sm uppercase shadow-xs shrink-0">
+                    {user?.full_name
+                      ? user.full_name.charAt(0)
+                      : user?.username
+                      ? user.username.charAt(0)
+                      : 'U'}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs font-bold text-slate-900 truncate">
+                      {user?.full_name || user?.username || 'Người dùng'}
+                    </p>
+                    <p className="text-[11px] text-slate-500 truncate">
+                      {user?.email || (user?.username ? `@${user.username}` : '')}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-2.5 pt-2 border-t border-slate-50 flex items-center justify-between text-[11px]">
+                  <span className="text-slate-400">Vai trò:</span>
+                  <span className="font-semibold text-[#0f3b7d]">
+                    {userRole === 'admin' ? 'Quản trị viên' : 'Cán bộ tuyển sinh'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Logout button */}
+              <div className="p-1.5">
+                <button
+                  onClick={handleLogout}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-red-600 hover:bg-red-50 rounded-xl transition duration-150"
+                >
+                  <LogOut className="w-4 h-4 text-red-500" />
+                  <span>Đăng xuất</span>
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </header>

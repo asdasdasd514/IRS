@@ -1,5 +1,4 @@
-import { NavLink, useNavigate } from 'react-router-dom';
-import { LogOut } from 'lucide-react';
+import { NavLink } from 'react-router-dom';
 import { useAppStore } from '../../store/useAppStore';
 import { NAV_GROUPS, BOTTOM_NAV_ITEMS } from './sidebarNavConfig';
 
@@ -8,8 +7,7 @@ interface SidebarProps {
 }
 
 export function Sidebar({ onCloseMobile }: SidebarProps) {
-  const navigate = useNavigate();
-  const { user, logout } = useAppStore();
+  const { user } = useAppStore();
 
   const userRole = user?.role || (user?.is_admin ? 'admin' : 'staff');
 
@@ -21,11 +19,6 @@ export function Sidebar({ onCloseMobile }: SidebarProps) {
   const filteredBottomItems = BOTTOM_NAV_ITEMS.filter((item) =>
     item.roles.includes(userRole)
   );
-
-  const handleLogout = () => {
-    logout();
-    navigate('/login');
-  };
 
   return (
     <aside className="w-64 bg-white h-screen flex flex-col border-r border-slate-200/80 select-none shrink-0 transition-all duration-300">
@@ -126,42 +119,6 @@ export function Sidebar({ onCloseMobile }: SidebarProps) {
             </NavLink>
           );
         })}
-
-        {/* User Card & Logout */}
-        <div className="mt-2 pt-2 border-t border-slate-100 px-2 py-2 flex items-center justify-between bg-slate-50/80 rounded-xl">
-          <div className="flex items-center gap-2.5 min-w-0">
-            <div className="w-8 h-8 rounded-full bg-[#0f3b7d] text-white flex items-center justify-center font-bold text-xs uppercase shrink-0">
-              {user?.full_name
-                ? user.full_name.charAt(0)
-                : user?.username
-                ? user.username.charAt(0)
-                : 'U'}
-            </div>
-            <div className="min-w-0">
-              <p className="text-xs font-semibold text-slate-800 truncate leading-tight">
-                {user?.full_name || user?.username || 'Người dùng'}
-              </p>
-              <div className="flex items-center gap-1.5 mt-0.5">
-                <span
-                  className={`inline-block w-1.5 h-1.5 rounded-full ${
-                    userRole === 'admin' ? 'bg-amber-500' : 'bg-emerald-500'
-                  }`}
-                />
-                <span className="text-[10.5px] text-slate-500 capitalize">
-                  {userRole === 'admin' ? 'Quản trị viên' : 'Cán bộ'}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          <button
-            onClick={handleLogout}
-            title="Đăng xuất"
-            className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition"
-          >
-            <LogOut className="w-4 h-4" />
-          </button>
-        </div>
       </div>
     </aside>
   );
