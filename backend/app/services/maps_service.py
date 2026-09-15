@@ -82,36 +82,73 @@ def _fetch_and_extract_deep(link: str) -> Optional[Tuple[float, float]]:
 def _extract_coords_from_string(text: str) -> Optional[Tuple[float, float]]:
     text = unquote(text)
 
-    match1 = re.search(r'/@(-?\d+\.\d+),(-?\d+\.\d+)', text)
-    if match1:
-        return _validate_coordinates(match1.group(1), match1.group(2))
-    
+    # 0. Nếu người dùng dán cả mã nhúng HTML iframe (<iframe src="..."></iframe>)
+    iframe_match = re.search(r'src=["\']([^"\']+)["\']', text)
+    if iframe_match:
+        text = iframe_match.group(1)
+
+    # 1. Chuỗi tọa độ nhập trực tiếp (VD: "10.953047, 106.803714")
+    direct_match = re.match(r'^\s*(-?\d+\.\d+)[,\s]+(-?\d+\.\d+)\s*$', text)
+    if direct_match:
+        coords = _validate_coordinates(direct_match.group(1), direct_match.group(2))
+        if coords:
+            return coords
+
+    # 2. ƯU TIÊN HÀNG ĐẦU: Tọa độ chính xác của ghim địa điểm
+    # - Link place thông thường: !3d<lat>!4d<lng>
+    # - Mã nhúng Google Maps Embed: !2d<lng>!3d<lat>
     lat_match = re.search(r'!3d(-?\d+\.?\d*)', text)
-    lng_match = re.search(r'!4d(-?\d+\.?\d*)', text)
-    
+    lng_match = re.search(r'!4d(-?\d+\.?\d*)', text) or re.search(r'!2d(-?\d+\.?\d*)', text)
     if lat_match and lng_match:
-        return _validate_coordinates(lat_match.group(1), lng_match.group(1))
-    
+        coords = _validate_coordinates(lat_match.group(1), lng_match.group(1))
+        if coords:
+            return coords
+
+    # 3. Tham số query tìm kiếm (?q=lat,lng hoặc ?query=lat,lng hoặc ?ll=lat,lng)
     try:
         parsed = urlparse(text)
         params = parse_qs(parsed.query)
+        for q_key in ['q', 'query', 'll', 'daddr', 'saddr']:
+            if q_key in params:
+                val = params[q_key][0]
+                coord_match = re.search(r'(-?\d+\.\d+)[,\s]+(-?\d+\.\d+)', val)
+                if coord_match:
+                    coords = _validate_coordinates(coord_match.group(1), coord_match.group(2))
+                    if coords:
+                        return coords
         
-        if 'q' in params:
-            val = params['q'][0]
-            parts = re.split(r'[,\s]+', val)
-            if len(parts) >= 2:
-                return _validate_coordinates(parts[0], parts[1])
-
         if 'lat' in params and 'lng' in params:
-            return _validate_coordinates(params['lat'][0], params['lng'][0])
-            
-    except (ValueError, IndexError):
+            coords = _validate_coordinates(params['lat'][0], params['lng'][0])
+            if coords:
+                return coords
+    except Exception:
         pass
-    
+
+    # 4. Dự phòng cuối: Tâm camera màn hình /@lat,lng (chỉ dùng khi link không có ghim địa điểm cụ thể)
+    match_at = re.search(r'/@(-?\d+\.\d+),(-?\d+\.\d+)', text)
+    if match_at:
+        return _validate_coordinates(match_at.group(1), match_at.group(2))
+
     return None
 
 
 def _extract_coords_from_html(html_content: str) -> Optional[Tuple[float, float]]:
+    # 1. Tìm trong URL canonical hoặc og:url nếu có !3d!4d
+    url_matches = re.findall(r'(?:property="og:url"\s+content="|rel="canonical"\s+href=")([^"]+)"', html_content)
+    for u in url_matches:
+        coords = _extract_coords_from_string(u)
+        if coords:
+            return coords
+
+    # 2. Tìm trực tiếp !3d và !4d trong toàn bộ mã HTML
+    lat_match = re.search(r'!3d(-?\d+\.?\d*)', html_content)
+    lng_match = re.search(r'!4d(-?\d+\.?\d*)', html_content)
+    if lat_match and lng_match:
+        coords = _validate_coordinates(lat_match.group(1), lng_match.group(1))
+        if coords:
+            return coords
+
+    # 3. Tìm trong window.APP_INITIALIZATION_STATE
     try:
         init_match = re.search(r'window\.APP_INITIALIZATION_STATE=\[\[\[[^,]+,(-?\d+\.\d+),(-?\d+\.\d+)', html_content)
         if init_match:
@@ -121,8 +158,9 @@ def _extract_coords_from_html(html_content: str) -> Optional[Tuple[float, float]
     except Exception:
         pass
 
+    # 4. Tìm trong meta og:image
     try:
-        meta_match = re.search(r'property="og:image" content=".*?center=(-?\d+\.\d+)%2C(-?\d+\.\d+)', html_content)
+        meta_match = re.search(r'property="og:image"\s+content=".*?center=(-?\d+\.\d+)%2C(-?\d+\.\d+)', html_content)
         if meta_match:
             return _validate_coordinates(meta_match.group(1), meta_match.group(2))
     except Exception:
@@ -134,6 +172,11 @@ def _extract_coords_from_html(html_content: str) -> Optional[Tuple[float, float]
             return _validate_coordinates(json_matches[0][0], json_matches[0][1])
     except Exception:
         pass
+
+    # 5. Dự phòng cuối: /@lat,lng trong HTML
+    match_at = re.search(r'/@(-?\d+\.\d+),(-?\d+\.\d+)', html_content)
+    if match_at:
+        return _validate_coordinates(match_at.group(1), match_at.group(2))
 
     return None
 

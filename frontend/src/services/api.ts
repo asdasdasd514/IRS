@@ -431,7 +431,7 @@ export const reportApi = {
 
 // School API
 export const schoolApi = {
-  getAll: async (params?: { search?: string; district?: string }): Promise<any[]> => {
+  getAll: async (params?: { search?: string }): Promise<any[]> => {
     try {
       const { data } = await api.get('/schools', { params });
       return Array.isArray(data) ? data : [];

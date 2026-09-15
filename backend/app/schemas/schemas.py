@@ -94,18 +94,19 @@ class SchoolBoard(BaseModel):
 
 class SchoolBase(BaseModel):
     id: Optional[str] = None
-    code: str # Mã trường (ví dụ: BK-HN, THPT-CT-01)
+    code: Optional[str] = None # Mã trường (ví dụ: BK-HN, THPT-CT-01)
     name: str
-    address: str
+    address: Optional[str] = None
     lat: float
     lng: float
     description: Optional[str] = None # Giới thiệu trường
     website: Optional[str] = None # Website trường
     image_url: Optional[str] = None # Ảnh đại diện
     images: List[str] = [] # Bộ sưu tập ảnh
-    admissions_info: Optional[str] = None # Thông tin tuyển sinh
     representative_name: Optional[str] = None # Người đại diện
     representative_phone: Optional[str] = None # SĐT đại diện
+    principal_name: Optional[str] = None
+    principal_phone: Optional[str] = None
     school_board: Optional[SchoolBoard] = None
     notes: Optional[str] = None
 
@@ -124,9 +125,10 @@ class SchoolUpdate(BaseModel):
     website: Optional[str] = None
     image_url: Optional[str] = None
     images: Optional[List[str]] = None
-    admissions_info: Optional[str] = None
     representative_name: Optional[str] = None
     representative_phone: Optional[str] = None
+    principal_name: Optional[str] = None
+    principal_phone: Optional[str] = None
     school_board: Optional[SchoolBoard] = None
     notes: Optional[str] = None
 

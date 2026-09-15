@@ -1,11 +1,22 @@
 import { create } from 'zustand';
 import type { Trip, Waypoint, NextHopCandidate, Location, User } from '../types';
 
+const getInitialUser = (): User | null => {
+  try {
+    const raw = localStorage.getItem('user');
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+};
+
 interface AppState {
 
   // Auth state
   user: User | null;
   token: string | null;
+  authChecked: boolean;
+  setAuthChecked: (checked: boolean) => void;
   setAuth: (user: User | null, token: string | null) => void;
   logout: () => void;
 
@@ -44,19 +55,27 @@ interface AppState {
 
 export const useAppStore = create<AppState>((set) => ({
   // Auth
-  user: null,
+  user: getInitialUser(),
   token: localStorage.getItem('token'),
+  authChecked: false,
+  setAuthChecked: (checked) => set({ authChecked: checked }),
   setAuth: (user, token) => {
     if (token) {
       localStorage.setItem('token', token);
     } else {
       localStorage.removeItem('token');
     }
-    set({ user, token });
+    if (user) {
+      localStorage.setItem('user', JSON.stringify(user));
+    } else {
+      localStorage.removeItem('user');
+    }
+    set({ user, token, authChecked: true });
   },
   logout: () => {
     localStorage.removeItem('token');
-    set({ user: null, token: null, currentTrip: null });
+    localStorage.removeItem('user');
+    set({ user: null, token: null, authChecked: true, currentTrip: null });
   },
 
   // Current trip

@@ -29,7 +29,7 @@ async def list_schools(
             {"address": search_regex}
         ]
 
-    cursor = db.schools.find(query).sort("code", 1)
+    cursor = db.schools.find(query).sort("created_at", -1)
     schools = await cursor.to_list(length=500)
     return schools
 
@@ -51,23 +51,55 @@ async def create_school(
     school_data: SchoolCreate,
     current_user: dict = Depends(get_current_user)
 ):
+    import uuid
     db = get_database()
     now = datetime.now(timezone.utc)
-    school_id = school_data.id or school_data.code
     
-    existing = await db.schools.find_one({"code": school_data.code, "is_deleted": {"$ne": True}})
+    code = school_data.code.strip() if school_data.code and school_data.code.strip() else f"SCH-{uuid.uuid4().hex[:6].upper()}"
+    school_id = school_data.id or str(uuid.uuid4())
+    
+    existing = await db.schools.find_one({"code": code, "is_deleted": {"$ne": True}})
     if existing:
         raise HTTPException(status_code=400, detail="Mã trường này đã tồn tại trong hệ thống")
 
+    dumped = school_data.model_dump(exclude_unset=True)
+    dumped["code"] = code
+    dumped["id"] = school_id
+
+    # Đồng bộ trường học và ban giám hiệu
+    p_name = dumped.get("principal_name")
+    p_phone = dumped.get("principal_phone")
+    board = dumped.get("school_board") or {}
+    if p_name and "principal_name" not in board:
+        board["principal_name"] = p_name
+    if p_phone and "principal_phone" not in board:
+        board["principal_phone"] = p_phone
+    if board:
+        dumped["school_board"] = board
+
     school_doc = {
-        **school_data.model_dump(exclude_unset=True),
-        "id": school_id,
+        **dumped,
         "is_deleted": False,
         "created_at": now,
         "updated_at": now
     }
-    school_doc["id"] = school_id
     await db.schools.insert_one(school_doc)
+
+    # Tự động tạo/đồng bộ địa điểm Waypoint trên bản đồ để các chuyến đi có thể sử dụng ngay
+    waypoint_doc = {
+        "id": str(uuid.uuid4()),
+        "school_id": school_id,
+        "name": school_doc.get("name"),
+        "address": school_doc.get("address"),
+        "lat": float(school_doc["lat"]),
+        "lng": float(school_doc["lng"]),
+        "type": "SCHOOL",
+        "is_deleted": False,
+        "created_at": now,
+        "updated_at": now
+    }
+    await db.waypoints.insert_one(waypoint_doc)
+
     return school_doc
 
 
