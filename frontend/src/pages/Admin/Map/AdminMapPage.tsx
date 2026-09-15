@@ -10,7 +10,7 @@ import {
   Globe,
   School
 } from 'lucide-react';
-import { schoolApi, tripApi } from '../../../services/api';
+import { schoolApi } from '../../../services/api';
 
 // Sửa lỗi hiển thị icon mặc định của Leaflet
 const schoolIcon = new L.Icon({
@@ -49,7 +49,6 @@ function MapController({
 
 export function AdminMapPage() {
   const [schools, setSchools] = useState<any[]>([]);
-  const [activeTrips, setActiveTrips] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedSchool, setSelectedSchool] = useState<any | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -61,17 +60,8 @@ export function AdminMapPage() {
     const fetchData = async () => {
       try {
         setLoading(true);
-        const [schoolsData, tripsData] = await Promise.allSettled([
-          schoolApi.getAll(),
-          tripApi.getTrips(),
-        ]);
-
-        if (schoolsData.status === 'fulfilled') {
-          setSchools(schoolsData.value || []);
-        }
-        if (tripsData.status === 'fulfilled') {
-          setActiveTrips(tripsData.value || []);
-        }
+        const schoolsData = await schoolApi.getAll();
+        setSchools(schoolsData || []);
       } catch (err) {
         console.error('Error loading map data:', err);
       } finally {
@@ -92,36 +82,22 @@ export function AdminMapPage() {
   });
 
   return (
-    <div className="max-w-7xl mx-auto space-y-6">
+    <div className="max-w-[1600px] mx-auto space-y-5">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-black text-slate-900 tracking-tight">
-            Bản Đồ Quản Trị Hệ Thống (IRS Map)
-          </h1>
-          <p className="text-sm text-slate-500 mt-1">
-            Hiển thị trực quan toàn bộ các điểm trường THPT mục tiêu, tọa độ GPS từ Google Maps và hành trình thực địa.
-          </p>
-        </div>
-
-        {/* Quick Stats Badges */}
-        <div className="flex items-center gap-3">
-          <div className="px-3.5 py-1.5 bg-white border border-slate-200/80 rounded-xl shadow-xs text-xs">
-            <span className="text-slate-400">Tổng điểm trường: </span>
-            <span className="font-bold text-[#0f3b7d]">{schools.length}</span>
-          </div>
-          <div className="px-3.5 py-1.5 bg-white border border-slate-200/80 rounded-xl shadow-xs text-xs">
-            <span className="text-slate-400">Đoàn xe tuyển sinh: </span>
-            <span className="font-bold text-emerald-600">{activeTrips.length}</span>
-          </div>
-        </div>
+      <div>
+        <h1 className="text-2xl font-black text-slate-900 tracking-tight">
+          Bản Đồ Quản Trị Hệ Thống (IRS Map)
+        </h1>
+        <p className="text-sm text-slate-500 mt-1">
+          Hiển thị trực quan toàn bộ các điểm trường THPT mục tiêu, tọa độ GPS từ Google Maps và hành trình thực địa.
+        </p>
       </div>
 
       {/* Main Grid: School Selector List + Map Container */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        {/* Danh sách địa điểm bên trái (4 cols) */}
-        <div className="lg:col-span-4 bg-white rounded-2xl border border-slate-200/80 p-4 shadow-xs space-y-3">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+        {/* Danh sách địa điểm bên trái (chiếm 4 cột trên lg, 3 cột trên xl) */}
+        <div className="lg:col-span-4 xl:col-span-3 bg-white rounded-2xl border border-slate-200/80 p-3.5 shadow-xs space-y-3">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
             <div className="flex items-center gap-2">
               <Building2 className="w-4 h-4 text-[#0f3b7d]" />
               <h2 className="text-sm font-bold text-slate-900">Danh sách địa điểm</h2>
@@ -145,10 +121,8 @@ export function AdminMapPage() {
             />
           </div>
 
-
-
-          {/* Scrollable list of schools */}
-          <div className="max-h-[500px] overflow-y-auto space-y-2 pr-1">
+          {/* Danh sách trường hiển thị khoảng 8 địa điểm, quá 8 địa điểm có scrollbar */}
+          <div className="max-h-[580px] overflow-y-auto space-y-2 pr-1">
             {filteredSchools.length === 0 ? (
               <p className="text-xs text-slate-400 text-center py-8">
                 Không tìm thấy trường nào.
@@ -160,28 +134,28 @@ export function AdminMapPage() {
                   <div
                     key={s.id || s._id}
                     onClick={() => setSelectedSchool(s)}
-                    className={`p-3 rounded-xl border text-xs cursor-pointer transition ${
+                    className={`p-2.5 rounded-xl border text-xs cursor-pointer transition ${
                       isSelected
                         ? 'border-[#0f3b7d] bg-blue-50/70 shadow-xs'
                         : 'border-slate-100 hover:border-slate-200 hover:bg-slate-50/80 bg-white'
                     }`}
                   >
                     <div className="flex items-start justify-between gap-1">
-                      <p className="font-bold text-slate-900 leading-snug">
+                      <p className="font-bold text-slate-900 leading-snug truncate">
                         {s.name}
                       </p>
                       {s.code && (
-                        <span className="text-[10px] font-mono text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded shrink-0">
+                        <span className="text-[10px] font-mono text-slate-500 bg-slate-100 px-1.5 py-0.2 rounded shrink-0">
                           {s.code}
                         </span>
                       )}
                     </div>
 
-                    <p className="text-[11px] text-slate-500 mt-1 line-clamp-1">
+                    <p className="text-[11px] text-slate-500 mt-0.5 truncate">
                       {s.address || 'Chưa có địa chỉ'}
                     </p>
 
-                    <div className="mt-2 flex items-center justify-between text-[10.5px]">
+                    <div className="mt-1.5 flex items-center justify-between text-[10.5px]">
                       <span className="text-emerald-700 font-mono font-medium">
                         {s.lat && s.lng
                           ? `${Number(s.lat).toFixed(4)}, ${Number(s.lng).toFixed(4)}`
@@ -199,9 +173,9 @@ export function AdminMapPage() {
           </div>
         </div>
 
-        {/* Khung bản đồ bên phải (8 cols) */}
-        <div className="lg:col-span-8 bg-white rounded-2xl border border-slate-200/80 p-4 shadow-xs space-y-4">
-          <div className="h-[580px] w-full rounded-xl overflow-hidden relative border border-slate-100">
+        {/* Khung bản đồ bên phải mở rộng to hơn (8 cột trên lg, 9 cột trên xl) */}
+        <div className="lg:col-span-8 xl:col-span-9 bg-white rounded-2xl border border-slate-200/80 p-3 shadow-xs">
+          <div className="h-[700px] w-full rounded-xl overflow-hidden relative border border-slate-100">
             {loading && (
               <div className="absolute inset-0 z-20 bg-white/75 backdrop-blur-xs flex items-center justify-center">
                 <div className="text-center">
@@ -299,62 +273,7 @@ export function AdminMapPage() {
                 );
               })}
             </MapContainer>
-
-            {/* Quick Floating Legend on Map */}
-            <div className="absolute bottom-4 left-4 bg-white/95 backdrop-blur-xs p-3 rounded-xl border border-slate-200/80 shadow-md text-xs z-10 space-y-1.5 pointer-events-auto">
-              <div className="flex items-center gap-2 font-semibold text-slate-800">
-                <span className="w-2.5 h-2.5 rounded-full bg-blue-600 inline-block" />
-                <span>Trường THPT mục tiêu ({filteredSchools.length})</span>
-              </div>
-              <div className="flex items-center gap-2 text-slate-600">
-                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block" />
-                <span>Đoàn xe tuyển sinh lưu động</span>
-              </div>
-            </div>
           </div>
-
-          {/* Detailed Card for Selected School */}
-          {selectedSchool && (
-            <div className="p-4 rounded-xl bg-blue-50/70 border border-blue-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-slide-up">
-              <div>
-                <span className="text-[10.5px] font-bold text-blue-700 uppercase tracking-wider">
-                  Trường học đang được chọn trên bản đồ
-                </span>
-                <h3 className="text-base font-bold text-slate-900 mt-0.5">
-                  {selectedSchool.name}
-                </h3>
-                <p className="text-xs text-slate-600 mt-0.5">
-                  {selectedSchool.address || 'Chưa cập nhật địa chỉ chi tiết'}
-                </p>
-                <div className="flex items-center gap-3 mt-1.5 text-xs text-slate-500">
-                  <span className="font-mono text-emerald-700 font-semibold">
-                    GPS: {Number(selectedSchool.lat).toFixed(4)}, {Number(selectedSchool.lng).toFixed(4)}
-                  </span>
-                  {selectedSchool.principal_name && (
-                    <span>Hiệu trưởng: <strong>{selectedSchool.principal_name}</strong></span>
-                  )}
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2 shrink-0">
-                <a
-                  href={`https://www.google.com/maps/search/?api=1&query=${selectedSchool.lat},${selectedSchool.lng}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="px-3.5 py-2 bg-[#0f3b7d] text-white text-xs font-semibold rounded-xl hover:bg-[#0c2f64] transition flex items-center gap-1.5 shadow-xs"
-                >
-                  <span>Mở Google Maps</span>
-                  <ExternalLink className="w-3.5 h-3.5" />
-                </a>
-                <button
-                  onClick={() => setSelectedSchool(null)}
-                  className="px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-200/60 rounded-xl transition"
-                >
-                  Đóng
-                </button>
-              </div>
-            </div>
-          )}
         </div>
       </div>
     </div>

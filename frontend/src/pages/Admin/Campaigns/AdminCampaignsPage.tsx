@@ -502,11 +502,13 @@ export function AdminCampaignsPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/50 backdrop-blur-xs">
           <div className="bg-white rounded-2xl max-w-5xl w-full max-h-[92vh] flex flex-col shadow-2xl border border-slate-200 animate-slide-up overflow-hidden">
             {/* Header: Cố định */}
-            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between gap-4 shrink-0 bg-white">
+            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-white shrink-0">
               <div>
-                <h3 className="text-xl font-bold text-slate-900">Tạo chiến dịch tuyển sinh</h3>
-                <p className="text-sm text-slate-500 mt-0.5">
+                <h3 className="text-lg font-black text-slate-900">
                   {stepTitles[wizardStep - 1]}
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Bước {wizardStep}/4 - Thiết lập thông tin chiến dịch tuyển sinh
                 </p>
               </div>
               <button
@@ -515,40 +517,66 @@ export function AdminCampaignsPage() {
                   setIsModalOpen(false);
                   resetWizard();
                 }}
-                className="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg hover:bg-slate-100 text-sm font-medium transition"
+                className="text-slate-400 hover:text-slate-700 p-1.5 rounded-lg hover:bg-slate-100 text-sm font-semibold transition"
               >
                 ✕ Đóng
               </button>
             </div>
 
-            {/* Stepper: Cố định */}
-            <div className="px-6 py-3 border-b border-slate-100 bg-slate-50/60 shrink-0">
-              <div className="flex items-center gap-2">
-                {[1, 2, 3, 4].map((step) => (
-                  <div key={step} className="flex items-center flex-1 gap-2">
-                    <div
-                      className={`flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold ${
-                        wizardStep >= step
-                          ? 'bg-[#0f3b7d] text-white shadow-xs'
-                          : 'bg-white text-slate-400 border border-slate-200'
-                      }`}
-                    >
-                      {step}
+            {/* Stepper: Căn giữa, hiển thị đầy đủ tên bước, cân đối và thẩm mỹ */}
+            <div className="px-6 py-3.5 border-b border-slate-100 bg-slate-50/80 shrink-0">
+              <div className="max-w-xl mx-auto flex items-center justify-between">
+                {[
+                  { step: 1, title: 'Thông tin' },
+                  { step: 2, title: 'Chọn trường' },
+                  { step: 3, title: 'Điểm xuất phát' },
+                  { step: 4, title: 'Xem lộ trình' },
+                ].map((item, idx) => {
+                  const isCurrent = wizardStep === item.step;
+                  const isCompleted = wizardStep > item.step;
+                  return (
+                    <div key={item.step} className="flex items-center flex-1 last:flex-none">
+                      <div className="flex flex-col items-center">
+                        <div
+                          className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-200 ${
+                            isCompleted
+                              ? 'bg-emerald-600 text-white shadow-xs'
+                              : isCurrent
+                              ? 'bg-[#0f3b7d] text-white ring-4 ring-blue-100 shadow-xs'
+                              : 'bg-white text-slate-400 border border-slate-200'
+                          }`}
+                        >
+                          {isCompleted ? <Check className="w-3.5 h-3.5 stroke-[3]" /> : item.step}
+                        </div>
+                        <span
+                          className={`text-[11px] font-semibold mt-1 whitespace-nowrap ${
+                            isCurrent
+                              ? 'text-[#0f3b7d]'
+                              : isCompleted
+                              ? 'text-slate-700'
+                              : 'text-slate-400'
+                          }`}
+                        >
+                          {item.title}
+                        </span>
+                      </div>
+                      {idx < 3 && (
+                        <div
+                          className={`h-0.5 flex-1 mx-3 -mt-3.5 transition-colors duration-200 ${
+                            wizardStep > item.step ? 'bg-emerald-500' : 'bg-slate-200'
+                          }`}
+                        />
+                      )}
                     </div>
-                    {step < 4 && (
-                      <div
-                        className={`h-0.5 flex-1 ${wizardStep > step ? 'bg-[#0f3b7d]' : 'bg-slate-200'}`}
-                      />
-                    )}
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
 
             {/* Body: Cuộn mượt bên trong modal, không bao giờ tràn màn hình */}
             <div className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-4">
               {wizardStep === 1 && (
-                <div className="space-y-4">
+                <div className="space-y-4 min-h-[380px] flex flex-col justify-center">
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 uppercase mb-1.5">
                       Tên chiến dịch *
@@ -567,7 +595,7 @@ export function AdminCampaignsPage() {
                       Ghi chú / mục tiêu
                     </label>
                     <textarea
-                      rows={4}
+                      rows={5}
                       value={campaignNotes}
                       onChange={(e) => setCampaignNotes(e.target.value)}
                       placeholder="Mô tả đợt tuyển sinh, mục tiêu, lĩnh vực quan tâm..."
@@ -605,11 +633,13 @@ export function AdminCampaignsPage() {
                     />
                   </div>
 
-                  {/* Hiển thị dạng LIST rõ ràng */}
-                  <div className="space-y-2 max-h-[380px] overflow-y-auto pr-1">
+                  {/* Hiển thị dạng LIST với chiều cao cố định để không co giãn khi tìm kiếm */}
+                  <div className="h-[380px] overflow-y-auto space-y-2 pr-1 border border-slate-100 rounded-xl p-1 bg-slate-50/30">
                     {filteredSchools.length === 0 ? (
-                      <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-6 text-center text-sm text-slate-500">
-                        Chưa có trường học nào được lưu trong hệ thống.
+                      <div className="h-full flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-200 bg-white p-6 text-center text-sm text-slate-500">
+                        <Building2 className="w-8 h-8 text-slate-300 mb-2" />
+                        <p className="font-semibold text-slate-700">Không tìm thấy trường nào phù hợp</p>
+                        <p className="text-xs text-slate-400 mt-1">Thử tìm kiếm với từ khóa khác</p>
                       </div>
                     ) : (
                       filteredSchools.map((school) => {
@@ -679,8 +709,8 @@ export function AdminCampaignsPage() {
                     />
                   </div>
 
-                  {/* Hiển thị dạng LIST rõ ràng */}
-                  <div className="space-y-2 max-h-[380px] overflow-y-auto pr-1">
+                  {/* Hiển thị dạng LIST cố định chiều cao 380px để không co giãn khi tìm kiếm */}
+                  <div className="h-[380px] overflow-y-auto space-y-2 pr-1 border border-slate-100 rounded-xl p-1 bg-slate-50/30">
                     {schools.filter((school) => {
                       const q = schoolSearch.trim().toLowerCase();
                       if (!q) return true;
@@ -690,8 +720,10 @@ export function AdminCampaignsPage() {
                         school.code?.toLowerCase().includes(q)
                       );
                     }).length === 0 ? (
-                      <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-6 text-center text-sm text-slate-500">
-                        Không tìm thấy địa điểm nào để làm điểm bắt đầu.
+                      <div className="h-full flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-200 bg-white p-6 text-center text-sm text-slate-500">
+                        <Building2 className="w-8 h-8 text-slate-300 mb-2" />
+                        <p className="font-semibold text-slate-700">Không tìm thấy địa điểm nào</p>
+                        <p className="text-xs text-slate-400 mt-1">Thử tìm kiếm với từ khóa khác</p>
                       </div>
                     ) : (
                       schools
