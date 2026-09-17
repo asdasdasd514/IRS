@@ -454,6 +454,25 @@ export const schoolApi = {
   delete: async (id: string): Promise<void> => {
     await api.delete(`/schools/${id}`);
   },
+  uploadImage: async (schoolId: string, file: File): Promise<{ success: boolean; url: string; public_id?: string; filename: string }> => {
+    const formData = new FormData();
+    formData.append('file', file);
+    const { data } = await api.post(`/schools/${schoolId}/upload-image`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return data;
+  },
+  getMediaLibrary: async (schoolId: string): Promise<Array<{ id: string; url: string; filename?: string; created_at?: string }>> => {
+    try {
+      const { data } = await api.get(`/schools/${schoolId}/media-library`);
+      return Array.isArray(data) ? data : [];
+    } catch {
+      return [];
+    }
+  },
+  deleteMediaImage: async (schoolId: string, imageId: string): Promise<void> => {
+    await api.delete(`/schools/${schoolId}/media-library/${encodeURIComponent(imageId)}`);
+  },
 };
 
 // Campaign API

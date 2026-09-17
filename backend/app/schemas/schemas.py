@@ -102,6 +102,9 @@ class SchoolBase(BaseModel):
     description: Optional[str] = None # Giới thiệu trường
     website: Optional[str] = None # Website trường
     image_url: Optional[str] = None # Ảnh đại diện
+    banner_url: Optional[str] = None # Ảnh bìa trường
+    theme: Optional[dict] = None # Tùy chỉnh màu sắc / theme
+    blocks: Optional[List[dict]] = None # Danh sách các khối nội dung tùy biến (Page Builder)
     images: List[str] = [] # Bộ sưu tập ảnh
     representative_name: Optional[str] = None # Người đại diện
     representative_phone: Optional[str] = None # SĐT đại diện
@@ -124,6 +127,9 @@ class SchoolUpdate(BaseModel):
     description: Optional[str] = None
     website: Optional[str] = None
     image_url: Optional[str] = None
+    banner_url: Optional[str] = None
+    theme: Optional[dict] = None
+    blocks: Optional[List[dict]] = None
     images: Optional[List[str]] = None
     representative_name: Optional[str] = None
     representative_phone: Optional[str] = None

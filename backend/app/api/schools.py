@@ -3,13 +3,17 @@ School API Endpoints - Quản lý Danh mục Trường THPT Mục tiêu Tuyển 
 Hồ sơ trường học lưu trữ tập trung, chuẩn hóa: Ban giám hiệu, mô tả, tuyển sinh, liên hệ, website.
 """
 
+import uuid
+import re
+import unicodedata
 from typing import List, Optional
 from datetime import datetime, timezone
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status, File, UploadFile
 
 from app.core.database import get_database
 from app.schemas import SchoolCreate, SchoolUpdate, SchoolResponse
 from app.services.auth_service import get_current_user
+from app.services.cloudinary_service import CloudinaryService
 
 router = APIRouter(prefix="/schools", tags=["Schools"])
 
@@ -34,15 +38,24 @@ async def list_schools(
     return schools
 
 
+from bson import ObjectId
+
+
+def get_school_filter(school_id: str):
+    or_clauses = [{"id": school_id}, {"code": school_id}]
+    if ObjectId.is_valid(school_id):
+        or_clauses.append({"_id": ObjectId(school_id)})
+    return {"$or": or_clauses, "is_deleted": {"$ne": True}}
+
+
 @router.get("/{school_id}", response_model=SchoolResponse)
 async def get_school(school_id: str, current_user: dict = Depends(get_current_user)):
     db = get_database()
-    school = await db.schools.find_one({
-        "$or": [{"id": school_id}, {"code": school_id}],
-        "is_deleted": {"$ne": True}
-    })
+    school = await db.schools.find_one(get_school_filter(school_id))
     if not school:
         raise HTTPException(status_code=404, detail="Không tìm thấy trường học")
+    if "id" not in school or not school["id"]:
+        school["id"] = str(school["_id"])
     return school
 
 
@@ -112,10 +125,7 @@ async def update_school(
     """Cập nhật thông tin chi tiết trường học (Ban giám hiệu, liên hệ, ảnh, tuyển sinh)"""
     db = get_database()
     now = datetime.now(timezone.utc)
-    school = await db.schools.find_one({
-        "$or": [{"id": school_id}, {"code": school_id}],
-        "is_deleted": {"$ne": True}
-    })
+    school = await db.schools.find_one(get_school_filter(school_id))
     if not school:
         raise HTTPException(status_code=404, detail="Không tìm thấy trường học")
 
@@ -127,11 +137,13 @@ async def update_school(
 
     update_dict["updated_at"] = now
     await db.schools.update_one(
-        {"id": school["id"]},
+        {"_id": school["_id"]},
         {"$set": update_dict}
     )
 
-    updated_school = await db.schools.find_one({"id": school["id"]})
+    updated_school = await db.schools.find_one({"_id": school["_id"]})
+    if "id" not in updated_school or not updated_school["id"]:
+        updated_school["id"] = str(updated_school["_id"])
     return updated_school
 
 
@@ -140,13 +152,146 @@ async def delete_school(school_id: str, current_user: dict = Depends(get_current
     """Xóa mềm trường học khỏi danh mục"""
     db = get_database()
     now = datetime.now(timezone.utc)
-    school = await db.schools.find_one({
-        "$or": [{"id": school_id}, {"code": school_id}],
-        "is_deleted": {"$ne": True}
-    })
+    school = await db.schools.find_one(get_school_filter(school_id))
     if not school:
         raise HTTPException(status_code=404, detail="Không tìm thấy trường học")
     await db.schools.update_one(
-        {"id": school["id"]},
+        {"_id": school["_id"]},
         {"$set": {"is_deleted": True, "deleted_at": now, "updated_at": now}}
     )
+
+
+def slugify_folder_name(text: str) -> str:
+    """Tạo tên thư mục chuẩn hóa không dấu cho Cloudinary từ tên trường"""
+    text = unicodedata.normalize('NFKD', text).encode('ASCII', 'ignore').decode('utf-8')
+    text = re.sub(r'[^\w\s-]', '', text).strip()
+    text = re.sub(r'[-\s]+', '_', text)
+    return text or "school_media"
+
+
+@router.post("/{school_id}/upload-image")
+async def upload_school_image(
+    school_id: str,
+    file: UploadFile = File(...),
+    current_user: dict = Depends(get_current_user)
+):
+    """Upload ảnh lên Cloudinary vào thư mục mang tên trường học và lưu vào Kho ảnh của trường"""
+    db = get_database()
+    school = await db.schools.find_one(get_school_filter(school_id))
+    if not school:
+        raise HTTPException(status_code=404, detail="Không tìm thấy trường học")
+
+    school_name = school.get("name", "Truong_Hoc")
+    folder = f"schools/{slugify_folder_name(school_name)}"
+
+    content = await file.read()
+    if len(content) > 15 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="Ảnh quá lớn (tối đa 15MB)")
+
+    # Upload lên Cloudinary
+    upload_res = await CloudinaryService.upload_image(
+        content,
+        filename=file.filename or "image.jpg",
+        folder=folder
+    )
+    image_url = upload_res.get("url")
+
+    # Lưu vào kho ảnh (media_library & images) của trường trong MongoDB
+    image_item = {
+        "id": str(uuid.uuid4()),
+        "url": image_url,
+        "public_id": upload_res.get("public_id"),
+        "filename": file.filename or "image.jpg",
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+
+    await db.schools.update_one(
+        {"_id": school["_id"]},
+        {
+            "$addToSet": {"images": image_url},
+            "$push": {"media_library": image_item}
+        }
+    )
+
+    return {
+        "success": True,
+        "url": image_url,
+        "public_id": upload_res.get("public_id"),
+        "filename": file.filename,
+        "folder": folder
+    }
+
+
+@router.get("/{school_id}/media-library")
+async def get_school_media_library(
+    school_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Lấy danh sách toàn bộ ảnh trong kho ảnh của trường học"""
+    db = get_database()
+    school = await db.schools.find_one(get_school_filter(school_id))
+    if not school:
+        raise HTTPException(status_code=404, detail="Không tìm thấy trường học")
+
+    images_set = set()
+    media_list = []
+
+    # 1. Từ media_library đã lưu
+    for m in school.get("media_library", []):
+        if m.get("url") and m["url"] not in images_set:
+            images_set.add(m["url"])
+            media_list.append(m)
+
+    # 2. Từ mảng images
+    for u in school.get("images", []):
+        if isinstance(u, str) and u not in images_set:
+            images_set.add(u)
+            media_list.append({
+                "id": str(uuid.uuid4()),
+                "url": u,
+                "filename": u.split("/")[-1].split("?")[0] if "/" in u else "image.jpg",
+                "created_at": school.get("updated_at", datetime.now(timezone.utc)).isoformat() if hasattr(school.get("updated_at"), "isoformat") else str(school.get("updated_at", ""))
+            })
+
+    # 3. Từ banner_url & image_url
+    for u in [school.get("banner_url"), school.get("image_url")]:
+        if u and u not in images_set:
+            images_set.add(u)
+            media_list.append({
+                "id": str(uuid.uuid4()),
+                "url": u,
+                "filename": "banner_image",
+                "created_at": datetime.now(timezone.utc).isoformat()
+            })
+
+    return media_list
+
+
+@router.delete("/{school_id}/media-library/{image_id}")
+async def delete_school_media_image(
+    school_id: str,
+    image_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Xóa ảnh khỏi kho ảnh của trường học"""
+    db = get_database()
+    school = await db.schools.find_one(get_school_filter(school_id))
+    if not school:
+        raise HTTPException(status_code=404, detail="Không tìm thấy trường học")
+
+    target_url = None
+    for m in school.get("media_library", []):
+        if m.get("id") == image_id or m.get("url") == image_id:
+            target_url = m.get("url")
+            break
+
+    update_ops: dict = {
+        "$pull": {"media_library": {"$or": [{"id": image_id}, {"url": image_id}]}}
+    }
+    if target_url:
+        update_ops["$pull"]["images"] = target_url
+    else:
+        update_ops["$pull"]["images"] = image_id
+
+    await db.schools.update_one({"_id": school["_id"]}, update_ops)
+    return {"success": True, "message": "Đã xóa ảnh khỏi kho"}

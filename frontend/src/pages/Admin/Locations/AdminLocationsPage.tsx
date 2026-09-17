@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Building2,
   Plus,
@@ -12,16 +13,21 @@ import {
   AlertCircle,
   Globe,
   Trash2,
-  Pencil
+  Pencil,
+  LayoutGrid,
+  List,
+  Eye
 } from 'lucide-react';
 import { schoolApi, mapsApi } from '../../../services/api';
 
 export function AdminLocationsPage() {
+  const navigate = useNavigate();
   const [schools, setSchools] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingSchool, setEditingSchool] = useState<any | null>(null);
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
 
   // Form State
   const [formData, setFormData] = useState({
@@ -324,9 +330,9 @@ export function AdminLocationsPage() {
 
 
 
-      {/* Search & Filter Bar */}
-      <div className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-4">
-        <div className="relative flex-1 w-full">
+      {/* Search & Filter Bar with View Mode Toggle */}
+      <div className="bg-white rounded-2xl border border-slate-200/80 p-3 sm:p-4 shadow-xs flex items-center justify-between gap-3">
+        <div className="relative flex-1">
           <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
             <Search className="w-4 h-4" />
           </div>
@@ -335,14 +341,40 @@ export function AdminLocationsPage() {
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="Tìm theo tên trường, mã, địa chỉ, hiệu trưởng..."
-            className="w-full pl-10 pr-4 py-2 text-sm bg-slate-50 border border-slate-300 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-[#0f3b7d] outline-none"
+            className="w-full pl-10 pr-4 py-2 text-sm bg-slate-50 border border-slate-300 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-[#0f3b7d] outline-none transition"
           />
         </div>
 
-
+        {/* Nút chuyển đổi giao diện: Lưới hoặc Danh sách (chỉ hiển thị icon không cần chữ) */}
+        <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200/80 shrink-0">
+          <button
+            type="button"
+            onClick={() => setViewMode('grid')}
+            title="Hiển thị dạng lưới"
+            className={`p-2 rounded-lg transition ${
+              viewMode === 'grid'
+                ? 'bg-white text-[#0f3b7d] shadow-xs'
+                : 'text-slate-400 hover:text-slate-700'
+            }`}
+          >
+            <LayoutGrid className="w-4 h-4" />
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewMode('list')}
+            title="Hiển thị dạng danh sách"
+            className={`p-2 rounded-lg transition ${
+              viewMode === 'list'
+                ? 'bg-white text-[#0f3b7d] shadow-xs'
+                : 'text-slate-400 hover:text-slate-700'
+            }`}
+          >
+            <List className="w-4 h-4" />
+          </button>
+        </div>
       </div>
 
-      {/* Schools Cards Grid */}
+      {/* Schools Cards Grid or List */}
       {loading ? (
         <div className="text-center py-16 bg-white rounded-2xl border border-slate-200/80">
           <div className="w-8 h-8 border-3 border-blue-600/30 border-t-blue-600 rounded-full animate-spin mx-auto mb-3" />
@@ -356,7 +388,7 @@ export function AdminLocationsPage() {
             Nhấn nút "Thêm trường học" để bổ sung trường mới cùng tọa độ Google Maps.
           </p>
         </div>
-      ) : (
+      ) : viewMode === 'grid' ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredSchools.map((s) => (
             <div
@@ -365,13 +397,17 @@ export function AdminLocationsPage() {
             >
               <div>
                 <div className="flex items-start justify-between gap-2 mb-3">
-                  <div className="flex items-start gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-blue-50 text-[#0f3b7d] flex items-center justify-center shrink-0 font-bold text-sm">
+                  <div
+                    onClick={() => navigate(`/admin/locations/${s.id || s._id}`)}
+                    className="flex items-start gap-3 cursor-pointer group/title flex-1 min-w-0"
+                    title="Bấm để xem & tùy biến trang thông tin chi tiết của trường"
+                  >
+                    <div className="w-10 h-10 rounded-xl bg-blue-50 text-[#0f3b7d] group-hover/title:bg-[#0f3b7d] group-hover/title:text-white transition flex items-center justify-center shrink-0 font-bold text-sm">
                       <Building2 className="w-5 h-5" />
                     </div>
-                    <div>
-                      <h3 className="text-base font-bold text-slate-900 leading-snug">
-                        {s.name}
+                    <div className="min-w-0">
+                      <h3 className="text-base font-bold text-slate-900 group-hover/title:text-[#0f3b7d] leading-snug transition flex items-center gap-1.5">
+                        <span className="truncate">{s.name}</span>
                       </h3>
                       <div className="flex items-center gap-2 mt-0.5">
                         {s.code && (
@@ -379,20 +415,39 @@ export function AdminLocationsPage() {
                             {s.code}
                           </span>
                         )}
+                        <span className="text-[10.5px] text-blue-600 font-medium opacity-0 group-hover/title:opacity-100 transition flex items-center gap-0.5">
+                          Xem trang trường →
+                        </span>
                       </div>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition">
+                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition shrink-0">
                     <button
-                      onClick={() => handleOpenEditModal(s)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        navigate(`/admin/locations/${s.id || s._id}`);
+                      }}
+                      title="Xem & Tùy biến trang trường học (WordPress Builder)"
+                      className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition"
+                    >
+                      <Eye className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleOpenEditModal(s);
+                      }}
                       title="Chỉnh sửa thông tin & tọa độ trường"
                       className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition"
                     >
                       <Pencil className="w-4 h-4" />
                     </button>
                     <button
-                      onClick={() => handleDeleteSchool(s)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeleteSchool(s);
+                      }}
                       title="Xóa trường này"
                       className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition"
                     >
@@ -465,6 +520,140 @@ export function AdminLocationsPage() {
               )}
             </div>
           ))}
+        </div>
+      ) : (
+        /* View Mode List: Bảng danh sách trường tinh gọn, đầy đủ thông tin */
+        <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse text-xs">
+              <thead>
+                <tr className="bg-slate-50/90 border-b border-slate-200/80 text-slate-500 font-bold uppercase tracking-wider text-[11px]">
+                  <th className="py-3.5 px-4">Tên trường & Mã</th>
+                  <th className="py-3.5 px-4 min-w-[220px]">Địa chỉ chi tiết</th>
+                  <th className="py-3.5 px-4 min-w-[180px]">Ban Giám Hiệu</th>
+                  <th className="py-3.5 px-4 min-w-[170px]">Tọa độ GPS & Map</th>
+                  <th className="py-3.5 px-4">Website</th>
+                  <th className="py-3.5 px-4 text-right">Thao tác</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {filteredSchools.map((s) => (
+                  <tr
+                    key={s.id || s._id}
+                    className="hover:bg-blue-50/40 transition group"
+                  >
+                    <td className="py-3.5 px-4">
+                      <div
+                        onClick={() => navigate(`/admin/locations/${s.id || s._id}`)}
+                        className="flex items-center gap-3 cursor-pointer group/school-item"
+                        title="Bấm để xem & tùy biến trang thông tin chi tiết của trường"
+                      >
+                        <div className="w-8 h-8 rounded-lg bg-blue-50 text-[#0f3b7d] group-hover/school-item:bg-[#0f3b7d] group-hover/school-item:text-white transition flex items-center justify-center shrink-0 font-bold">
+                          <Building2 className="w-4 h-4" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="font-bold text-slate-900 group-hover/school-item:text-[#0f3b7d] text-sm leading-snug transition">
+                            {s.name}
+                          </p>
+                          {s.code && (
+                            <span className="inline-block mt-0.5 text-[10px] px-1.5 py-0.2 rounded bg-slate-100 font-mono text-slate-600 font-semibold">
+                              {s.code}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </td>
+                    <td className="py-3.5 px-4">
+                      <div className="flex items-start gap-1.5 text-slate-600 max-w-sm">
+                        <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0 mt-0.5" />
+                        <span className="line-clamp-2">{s.address || 'Chưa cập nhật'}</span>
+                      </div>
+                    </td>
+                    <td className="py-3.5 px-4">
+                      <div className="space-y-0.5">
+                        {(s.principal_name || s.school_board?.principal_name) ? (
+                          <p className="font-semibold text-slate-800 flex items-center gap-1">
+                            <User className="w-3 h-3 text-slate-400 shrink-0" />
+                            <span>{s.principal_name || s.school_board?.principal_name}</span>
+                          </p>
+                        ) : (
+                          <span className="text-slate-400 italic text-[11px]">Chưa cập nhật</span>
+                        )}
+                        {(s.principal_phone || s.school_board?.principal_phone) && (
+                          <p className="text-[#0f3b7d] font-semibold flex items-center gap-1">
+                            <Phone className="w-3 h-3 text-slate-400 shrink-0" />
+                            <span>{s.principal_phone || s.school_board?.principal_phone}</span>
+                          </p>
+                        )}
+                      </div>
+                    </td>
+                    <td className="py-3.5 px-4">
+                      {s.lat && s.lng ? (
+                        <div className="space-y-1">
+                          <span className="font-mono text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded text-[11px] font-semibold inline-block">
+                            GPS: {Number(s.lat).toFixed(4)}, {Number(s.lng).toFixed(4)}
+                          </span>
+                          <div>
+                            <a
+                              href={`https://www.google.com/maps/search/?api=1&query=${s.lat},${s.lng}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-[11px] text-blue-600 hover:text-blue-800 hover:underline inline-flex items-center gap-1 font-medium"
+                            >
+                              <span>Google Maps</span>
+                              <ExternalLink className="w-3 h-3" />
+                            </a>
+                          </div>
+                        </div>
+                      ) : (
+                        <span className="text-amber-600 italic text-[11px]">Chưa có tọa độ</span>
+                      )}
+                    </td>
+                    <td className="py-3.5 px-4">
+                      {s.website ? (
+                        <a
+                          href={s.website.startsWith('http') ? s.website : `https://${s.website}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-blue-600 hover:underline inline-flex items-center gap-1 font-medium truncate max-w-[140px]"
+                        >
+                          <Globe className="w-3 h-3 shrink-0" />
+                          <span className="truncate">Website</span>
+                        </a>
+                      ) : (
+                        <span className="text-slate-400 italic text-[11px]">—</span>
+                      )}
+                    </td>
+                    <td className="py-3.5 px-4 text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        <button
+                          onClick={() => navigate(`/admin/locations/${s.id || s._id}`)}
+                          title="Xem & Tùy biến trang trường học (WordPress Builder)"
+                          className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition"
+                        >
+                          <Eye className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => handleOpenEditModal(s)}
+                          title="Chỉnh sửa thông tin & tọa độ trường"
+                          className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition"
+                        >
+                          <Pencil className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteSchool(s)}
+                          title="Xóa trường này"
+                          className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 

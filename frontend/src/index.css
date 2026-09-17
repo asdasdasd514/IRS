@@ -40,12 +40,12 @@ body {
 }
 
 /* Hide scrollbar but keep functionality */
-.hide-scrollbar::-webkit-scrollbar {
-  display: none;
-}
-.hide-scrollbar {
+.hide-scrollbar, .no-scrollbar, .scrollbar-none {
   -ms-overflow-style: none;
   scrollbar-width: none;
+}
+.hide-scrollbar::-webkit-scrollbar, .no-scrollbar::-webkit-scrollbar, .scrollbar-none::-webkit-scrollbar {
+  display: none;
 }
 
 /* Pulse animation for current location */

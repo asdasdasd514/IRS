@@ -9,6 +9,7 @@ import { RegisterPage } from './pages/Auth/Register/RegisterPage';
 import { AdminMapPage } from './pages/Admin/Map/AdminMapPage';
 import { AdminCampaignsPage } from './pages/Admin/Campaigns/AdminCampaignsPage';
 import { AdminLocationsPage } from './pages/Admin/Locations/AdminLocationsPage';
+import { AdminSchoolDetailPage } from './pages/Admin/Locations/AdminSchoolDetailPage';
 import { AdminMembersPage } from './pages/Admin/Members/AdminMembersPage';
 import { AdminLogsPage } from './pages/Admin/Logs/AdminLogsPage';
 import { ReportPage } from './pages/Report/ReportPage';
@@ -162,6 +163,7 @@ function App() {
         <Route path="map" element={<AdminMapPage />} />
         <Route path="campaigns" element={<AdminCampaignsPage />} />
         <Route path="locations" element={<AdminLocationsPage />} />
+        <Route path="locations/:schoolId" element={<AdminSchoolDetailPage />} />
         <Route path="members" element={<AdminMembersPage />} />
         <Route path="logs" element={<AdminLogsPage />} />
         <Route path="settings" element={<AdminMembersPage />} />
@@ -208,6 +210,14 @@ function App() {
         element={
           <ProtectedRoute>
             <ReportPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/schools/:schoolId"
+        element={
+          <ProtectedRoute>
+            <AdminSchoolDetailPage />
           </ProtectedRoute>
         }
       />

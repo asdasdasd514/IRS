@@ -63,16 +63,51 @@ export interface Waypoint {
   updated_at?: string | null;
 }
 
+export interface SchoolBlock {
+  id: string;
+  type: 'hero' | 'rich_text' | 'admissions' | 'leadership' | 'gallery' | 'map' | 'stats';
+  title?: string;
+  subtitle?: string;
+  content?: string;
+  bgColor?: string; // white, blue, gray, dark, gradient
+  data?: Record<string, any>;
+}
+
 export interface School {
   id: string;
-  code: string;
+  _id?: string;
+  code?: string;
   name: string;
-  address: string;
-  description?: string;
+  address?: string;
   lat: number;
   lng: number;
+  description?: string;
+  website?: string;
+  image_url?: string;
+  banner_url?: string;
+  images?: string[];
+  theme?: {
+    primaryColor?: string;
+    bgPattern?: string;
+    heroStyle?: 'classic' | 'modern' | 'minimal';
+  };
+  blocks?: SchoolBlock[];
+  representative_name?: string;
+  representative_phone?: string;
+  principal_name?: string;
+  principal_phone?: string;
+  vice_principal_name?: string;
+  vice_principal_phone?: string;
+  school_board?: {
+    principal_name?: string;
+    principal_phone?: string;
+    vice_principal_name?: string;
+    vice_principal_phone?: string;
+  };
   preferred_visit_hours?: string;
+  notes?: string;
   created_at?: string;
+  updated_at?: string;
 }
 
 export interface CreateWaypointInput {
