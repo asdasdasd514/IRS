@@ -16,7 +16,9 @@ import {
   Pencil,
   LayoutGrid,
   List,
-  Eye
+  Eye,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import { schoolApi, mapsApi } from '../../../services/api';
 
@@ -27,7 +29,23 @@ export function AdminLocationsPage() {
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingSchool, setEditingSchool] = useState<any | null>(null);
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>(() => {
+    try {
+      const saved = localStorage.getItem('irs_location_view_mode');
+      return saved === 'grid' || saved === 'list' ? saved : 'grid';
+    } catch {
+      return 'grid';
+    }
+  });
+
+  const handleSetViewMode = (mode: 'grid' | 'list') => {
+    setViewMode(mode);
+    try {
+      localStorage.setItem('irs_location_view_mode', mode);
+    } catch {
+      // ignore
+    }
+  };
 
   // Form State
   const [formData, setFormData] = useState({
@@ -288,6 +306,13 @@ export function AdminLocationsPage() {
     }
   };
 
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 20;
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm]);
+
   const filteredSchools = schools.filter((s) => {
     const term = searchTerm.toLowerCase();
     return (
@@ -298,8 +323,14 @@ export function AdminLocationsPage() {
     );
   });
 
+  const totalPages = Math.ceil(filteredSchools.length / ITEMS_PER_PAGE);
+  const paginatedSchools = filteredSchools.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE
+  );
+
   return (
-    <div className="max-w-7xl mx-auto space-y-6">
+    <div className="w-full space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
@@ -349,9 +380,9 @@ export function AdminLocationsPage() {
         <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200/80 shrink-0">
           <button
             type="button"
-            onClick={() => setViewMode('grid')}
+            onClick={() => handleSetViewMode('grid')}
             title="Hiển thị dạng lưới"
-            className={`p-2 rounded-lg transition ${
+            className={`p-2 rounded-lg transition cursor-pointer ${
               viewMode === 'grid'
                 ? 'bg-white text-[#0f3b7d] shadow-xs'
                 : 'text-slate-400 hover:text-slate-700'
@@ -361,9 +392,9 @@ export function AdminLocationsPage() {
           </button>
           <button
             type="button"
-            onClick={() => setViewMode('list')}
+            onClick={() => handleSetViewMode('list')}
             title="Hiển thị dạng danh sách"
-            className={`p-2 rounded-lg transition ${
+            className={`p-2 rounded-lg transition cursor-pointer ${
               viewMode === 'list'
                 ? 'bg-white text-[#0f3b7d] shadow-xs'
                 : 'text-slate-400 hover:text-slate-700'
@@ -390,7 +421,7 @@ export function AdminLocationsPage() {
         </div>
       ) : viewMode === 'grid' ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredSchools.map((s) => (
+          {paginatedSchools.map((s) => (
             <div
               key={s.id || s._id}
               className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs flex flex-col justify-between hover:shadow-md transition-shadow group"
@@ -537,7 +568,7 @@ export function AdminLocationsPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {filteredSchools.map((s) => (
+                {paginatedSchools.map((s) => (
                   <tr
                     key={s.id || s._id}
                     className="hover:bg-blue-50/40 transition group"
@@ -653,6 +684,60 @@ export function AdminLocationsPage() {
                 ))}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* Phân trang góc dưới bên phải nếu quá 20 trường */}
+      {totalPages > 1 && (
+        <div className="flex flex-col sm:flex-row items-center justify-end gap-3 pt-2">
+          <div className="text-xs text-slate-500 font-medium">
+            Trang <span className="font-bold text-slate-800">{currentPage}</span> / {totalPages} (Tổng {filteredSchools.length} trường)
+          </div>
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
+              disabled={currentPage === 1}
+              className="p-2 rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition shadow-2xs cursor-pointer"
+              title="Trang trước"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+
+            {Array.from({ length: totalPages }, (_, i) => i + 1)
+              .filter((page) => page === 1 || page === totalPages || Math.abs(page - currentPage) <= 1)
+              .map((page, idx, arr) => {
+                const prev = arr[idx - 1];
+                return (
+                  <div key={page} className="flex items-center gap-1">
+                    {prev && page - prev > 1 && (
+                      <span className="px-1 text-slate-400 text-xs">...</span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setCurrentPage(page)}
+                      className={`min-w-[34px] h-[34px] px-2.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                        currentPage === page
+                          ? 'bg-[#0f3b7d] text-white shadow-2xs'
+                          : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+                      }`}
+                    >
+                      {page}
+                    </button>
+                  </div>
+                );
+              })}
+
+            <button
+              type="button"
+              onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))}
+              disabled={currentPage === totalPages}
+              className="p-2 rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition shadow-2xs cursor-pointer"
+              title="Trang sau"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
           </div>
         </div>
       )}

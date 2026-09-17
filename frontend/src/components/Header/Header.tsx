@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Menu, HelpCircle, ShieldCheck, ChevronDown, LogOut } from 'lucide-react';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { Menu, HelpCircle, ShieldCheck, ChevronDown, LogOut, Bell } from 'lucide-react';
 import { useAppStore } from '../../store/useAppStore';
 
 interface HeaderProps {
@@ -11,11 +11,22 @@ interface HeaderProps {
 
 export function Header({ onOpenMobileMenu, title, subtitle }: HeaderProps) {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user, logout } = useAppStore();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   const userRole = user?.role || (user?.is_admin ? 'admin' : 'staff');
+
+  const getBreadcrumbTitle = () => {
+    if (title) return title;
+    if (location.pathname.startsWith('/admin/campaigns')) return 'Quản Lý Chiến Dịch Tuyển Sinh';
+    if (location.pathname.startsWith('/admin/locations')) return 'Quản Lý Địa Điểm Trường';
+    if (location.pathname.startsWith('/admin/members')) return 'Quản Lý Tài Khoản Nhân Sự';
+    if (location.pathname.startsWith('/admin/logs')) return 'Nhật Ký Hệ Thống';
+    if (location.pathname.startsWith('/admin/map')) return 'Bản Đồ Tuyển Sinh';
+    return userRole === 'admin' ? 'Bảng Quản Trị Hệ Thống' : 'Cổng Cán Bộ Thực Địa';
+  };
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -37,7 +48,7 @@ export function Header({ onOpenMobileMenu, title, subtitle }: HeaderProps) {
   };
 
   return (
-    <header className="h-16 bg-white border-b border-slate-200/80 px-4 sm:px-6 flex items-center justify-between shrink-0 relative z-30">
+    <header className="h-16 bg-white border-b border-slate-200/80 px-4 sm:px-6 lg:px-8 flex items-center justify-between shrink-0 relative z-30">
       <div className="flex items-center gap-3">
         {/* Mobile toggle button */}
         <button
@@ -65,7 +76,7 @@ export function Header({ onOpenMobileMenu, title, subtitle }: HeaderProps) {
               <span className="font-semibold text-[#0f3b7d]">IRS Admissions</span>
               <span>/</span>
               <span className="text-slate-700 font-medium capitalize">
-                {userRole === 'admin' ? 'Bảng Quản Trị Hệ Thống' : 'Cổng Cán Bộ Thực Địa'}
+                {getBreadcrumbTitle()}
               </span>
             </div>
           )}
@@ -85,6 +96,14 @@ export function Header({ onOpenMobileMenu, title, subtitle }: HeaderProps) {
           className="w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition"
         >
           <HelpCircle className="w-4 h-4 sm:w-5 sm:h-5" />
+        </button>
+
+        {/* Notification Bell */}
+        <button
+          title="Thông báo"
+          className="w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition cursor-pointer"
+        >
+          <Bell className="w-4 h-4 sm:w-5 sm:h-5" />
         </button>
 
         {/* User Account Menu with Logout Dropdown in Top-Right Corner */}

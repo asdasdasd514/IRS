@@ -42,6 +42,22 @@ class CampaignDestination(BaseModel):
     preferred_time: Optional[str] = None
 
 
+# Đoàn công tác / Phân công nhân sự
+class TripTeamMember(BaseModel):
+    name: str
+    role: str = "Cán bộ tuyển sinh"
+    phone: Optional[str] = None
+
+
+class TripTeam(BaseModel):
+    leader_name: Optional[str] = None
+    leader_phone: Optional[str] = None
+    members_count: int = 1
+    members: List[TripTeamMember] = []
+    vehicle_plate: Optional[str] = None
+    notes: Optional[str] = None
+
+
 # Campaign Schemas (Chiến dịch Tuyển sinh)
 class CampaignBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
@@ -50,6 +66,7 @@ class CampaignBase(BaseModel):
     start_date: Optional[str] = None
     end_date: Optional[str] = None
     notes: Optional[str] = None
+    team: Optional[TripTeam] = None # Đoàn công tác / Phân công nhân sự
     destinations: List[CampaignDestination] = [] # Danh sách các trường / địa điểm dự kiến
 
 
@@ -64,6 +81,7 @@ class CampaignUpdate(BaseModel):
     start_date: Optional[str] = None
     end_date: Optional[str] = None
     notes: Optional[str] = None
+    team: Optional[TripTeam] = None
     destinations: Optional[List[CampaignDestination]] = None
 
 
@@ -291,20 +309,6 @@ class RoutePlanResponse(RoutePlanBase):
 
 
 # Trip Schemas (Đợt/Chuyến xe Tuyển sinh)
-class TripTeamMember(BaseModel):
-    name: str
-    role: str
-    phone: Optional[str] = None
-
-
-class TripTeam(BaseModel):
-    leader_name: Optional[str] = None
-    leader_phone: Optional[str] = None
-    members_count: int = 1
-    members: List[TripTeamMember] = []
-    vehicle_plate: Optional[str] = None
-
-
 class TripBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
     campaign_id: Optional[str] = None
