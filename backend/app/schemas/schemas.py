@@ -29,9 +29,15 @@ class CampaignDestination(BaseModel):
     id: Optional[str] = None
     school_id: Optional[str] = None
     name: str
+    code: Optional[str] = None
     address: Optional[str] = None
     lat: float
     lng: float
+    order: Optional[int] = None
+    distance_text: Optional[str] = None
+    duration_text: Optional[str] = None
+    distance_meters: Optional[float] = None
+    duration_seconds: Optional[float] = None
     notes: Optional[str] = None
     preferred_time: Optional[str] = None
 
@@ -68,6 +74,10 @@ class CampaignResponse(CampaignBase):
     total_destinations: int = 0
     estimated_distance_km: Optional[float] = None
     estimated_duration_minutes: Optional[int] = None
+    estimated_duration_text: Optional[str] = None
+    start_point: Optional[dict] = None
+    route_geometry: Optional[List[List[float]]] = None
+    polyline: Optional[str] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 

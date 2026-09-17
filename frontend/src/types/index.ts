@@ -65,7 +65,7 @@ export interface Waypoint {
 
 export interface SchoolBlock {
   id: string;
-  type: 'hero' | 'rich_text' | 'admissions' | 'leadership' | 'gallery' | 'map' | 'stats';
+  type: 'hero' | 'rich_text' | 'admissions' | 'leadership' | 'gallery' | 'map' | 'stats' | 'heading' | 'spacer';
   title?: string;
   subtitle?: string;
   content?: string;

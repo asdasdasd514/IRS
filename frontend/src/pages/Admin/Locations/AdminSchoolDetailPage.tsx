@@ -9,7 +9,6 @@ import {
   Trash2,
   ArrowUp,
   ArrowDown,
-  LayoutGrid,
   Building2,
   MapPin,
   Phone,
@@ -38,7 +37,9 @@ import {
   ChevronLeft,
   ChevronRight,
   Undo2,
-  Redo2
+  Redo2,
+  Heading,
+  SeparatorHorizontal
 } from 'lucide-react';
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
 import L from 'leaflet';
@@ -114,7 +115,7 @@ const BLOCK_TEMPLATES: Array<{
 }> = [
   {
     type: 'hero',
-    title: 'Ảnh bìa & Tiêu đề (Hero)',
+    title: 'Ảnh bìa (Hero)',
     desc: 'Banner lớn, tên trường, mã trường, địa chỉ và nút gọi nhanh',
     icon: ImageIcon,
     defaultBlock: () => ({
@@ -134,9 +135,27 @@ const BLOCK_TEMPLATES: Array<{
     }),
   },
   {
+    type: 'heading',
+    title: 'Tiêu đề',
+    desc: 'Khối tiêu đề phân mục nội dung với tùy chọn cỡ chữ và căn lề',
+    icon: Heading,
+    defaultBlock: () => ({
+      id: `block-${Date.now()}-heading`,
+      type: 'heading',
+      title: '',
+      subtitle: '',
+      bgColor: 'white',
+      data: {
+        level: 'h2',
+        align: 'left',
+        hasDivider: true,
+      },
+    }),
+  },
+  {
     type: 'rich_text',
-    title: 'Khối thông tin & giới thiệu',
-    desc: 'Khối văn bản thông tin, bài viết giới thiệu do bạn tự nhập',
+    title: 'Văn bản',
+    desc: 'Khối văn bản, đoạn giới thiệu và thông tin bài viết tự do',
     icon: FileText,
     defaultBlock: () => ({
       id: `block-${Date.now()}-text`,
@@ -146,6 +165,38 @@ const BLOCK_TEMPLATES: Array<{
       content: '',
       bgColor: 'white',
       data: {},
+    }),
+  },
+  {
+    type: 'gallery',
+    title: 'Ảnh',
+    desc: 'Khối hiển thị bộ sưu tập hình ảnh cơ sở vật chất và hoạt động',
+    icon: ImageIcon,
+    defaultBlock: () => ({
+      id: `block-${Date.now()}-gallery`,
+      type: 'gallery',
+      title: '',
+      subtitle: '',
+      bgColor: 'white',
+      data: {
+        images: [],
+      },
+    }),
+  },
+  {
+    type: 'spacer',
+    title: 'Khối cách',
+    desc: 'Tạo khoảng cách trống hoặc vạch phân cách giữa các khối',
+    icon: SeparatorHorizontal,
+    defaultBlock: () => ({
+      id: `block-${Date.now()}-spacer`,
+      type: 'spacer',
+      title: '',
+      bgColor: 'white',
+      data: {
+        height: 32,
+        showDivider: false,
+      },
     }),
   },
   {
@@ -167,76 +218,6 @@ const BLOCK_TEMPLATES: Array<{
         repName: '',
         repPhone: '',
         website: '',
-      },
-    }),
-  },
-  {
-    type: 'map',
-    title: 'Bản Đồ Tọa Độ Thực Địa',
-    desc: 'Bản đồ tương tác Leaflet hiển thị tọa độ GPS chính xác và Google Maps',
-    icon: Map,
-    defaultBlock: () => ({
-      id: `block-${Date.now()}-map`,
-      type: 'map',
-      title: '',
-      subtitle: '',
-      bgColor: 'white',
-      data: {
-        address: '',
-        lat: undefined,
-        lng: undefined,
-        website: '',
-      },
-    }),
-  },
-  {
-    type: 'admissions',
-    title: 'Thông Tin Tuyển Sinh & Ghi Chú',
-    desc: 'Ghi chú công tác tuyển sinh, hotline và thông báo tuyển sinh',
-    icon: GraduationCap,
-    defaultBlock: () => ({
-      id: `block-${Date.now()}-admissions`,
-      type: 'admissions',
-      title: '',
-      subtitle: '',
-      bgColor: 'white',
-      data: {
-        targetGroups: '',
-        notes: '',
-        hotline: '',
-        website: '',
-      },
-    }),
-  },
-  {
-    type: 'gallery',
-    title: 'Thư Viện Hình Ảnh',
-    desc: 'Lưới ảnh chụp cơ sở vật chất và hoạt động thực tế',
-    icon: LayoutGrid,
-    defaultBlock: () => ({
-      id: `block-${Date.now()}-gallery`,
-      type: 'gallery',
-      title: '',
-      subtitle: '',
-      bgColor: 'white',
-      data: {
-        images: [],
-      },
-    }),
-  },
-  {
-    type: 'stats',
-    title: 'Thông Số & Tọa Độ Tuyển Sinh',
-    desc: 'Hộp số liệu tọa độ, mã định danh, tình trạng định vị GPS',
-    icon: BarChart2,
-    defaultBlock: () => ({
-      id: `block-${Date.now()}-stats`,
-      type: 'stats',
-      title: '',
-      subtitle: '',
-      bgColor: 'white',
-      data: {
-        stats: [],
       },
     }),
   },
@@ -1108,30 +1089,145 @@ export function AdminSchoolDetailPage() {
                     </p>
                   </div>
 
-                  {/* Tiêu đề & Phụ đề */}
+                  {/* Tiêu đề & Phụ đề (Ẩn đối với khối cách) */}
+                  {selectedBlock.type !== 'spacer' && (
+                    <div className="space-y-3">
+                      <div>
+                        <label className="font-semibold text-slate-700 block mb-1">Tiêu đề chính</label>
+                        <input
+                          type="text"
+                          value={selectedBlock.title || ''}
+                          onChange={(e) => handleUpdateBlockField('title', e.target.value)}
+                          className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs focus:outline-hidden focus:ring-2 focus:ring-[#0f3b7d]/20 focus:border-[#0f3b7d]"
+                          placeholder={selectedBlock.type === 'heading' ? 'Nhập tiêu đề mục...' : 'Nhập tiêu đề...'}
+                        />
+                      </div>
+
+                      <div>
+                        <label className="font-semibold text-slate-700 block mb-1">Tiêu đề phụ / Slogan</label>
+                        <input
+                          type="text"
+                          value={selectedBlock.subtitle || ''}
+                          onChange={(e) => handleUpdateBlockField('subtitle', e.target.value)}
+                          className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs focus:outline-hidden focus:ring-2 focus:ring-[#0f3b7d]/20 focus:border-[#0f3b7d]"
+                          placeholder="Nhập phụ đề (tùy chọn)..."
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Chi tiết cho khối Tiêu Đề */}
+                  {selectedBlock.type === 'heading' && (
+                    <div className="space-y-3 pt-2 border-t border-slate-200">
+                      <div>
+                        <label className="font-semibold text-slate-700 block mb-1">Cỡ chữ tiêu đề</label>
+                        <div className="grid grid-cols-3 gap-2">
+                          {[
+                            { id: 'h1', label: 'H1 - Lớn' },
+                            { id: 'h2', label: 'H2 - Chuẩn' },
+                            { id: 'h3', label: 'H3 - Nhỏ' },
+                          ].map((lvl) => (
+                            <button
+                              key={lvl.id}
+                              type="button"
+                              onClick={() => handleUpdateBlockData('level', lvl.id)}
+                              className={`py-1.5 px-2 rounded-xl text-xs font-semibold border transition ${
+                                (selectedBlock.data?.level || 'h2') === lvl.id
+                                  ? 'border-[#0f3b7d] bg-blue-50 text-[#0f3b7d]'
+                                  : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+                              }`}
+                            >
+                              {lvl.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="font-semibold text-slate-700 block mb-1">Căn lề chữ</label>
+                        <div className="grid grid-cols-3 gap-2">
+                          {[
+                            { id: 'left', label: 'Căn trái' },
+                            { id: 'center', label: 'Căn giữa' },
+                            { id: 'right', label: 'Căn phải' },
+                          ].map((a) => (
+                            <button
+                              key={a.id}
+                              type="button"
+                              onClick={() => handleUpdateBlockData('align', a.id)}
+                              className={`py-1.5 px-2 rounded-xl text-xs font-semibold border transition ${
+                                (selectedBlock.data?.align || 'left') === a.id
+                                  ? 'border-[#0f3b7d] bg-blue-50 text-[#0f3b7d]'
+                                  : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+                              }`}
+                            >
+                              {a.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between pt-1">
+                        <label className="font-semibold text-slate-700 text-xs">Vạch kẻ trang trí dưới tiêu đề</label>
+                        <input
+                          type="checkbox"
+                          checked={selectedBlock.data?.hasDivider !== false}
+                          onChange={(e) => handleUpdateBlockData('hasDivider', e.target.checked)}
+                          className="w-4 h-4 rounded text-[#0f3b7d] border-slate-300 focus:ring-[#0f3b7d]"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Chi tiết cho Khối Cách (Spacer) */}
+                  {selectedBlock.type === 'spacer' && (
+                    <div className="space-y-3 pt-2 border-t border-slate-200">
+                      <div>
+                        <label className="font-semibold text-slate-700 block mb-1">Chiều cao khoảng cách</label>
+                        <p className="text-[11px] text-slate-400 mb-2">
+                          Chọn độ rộng khoảng đệm trống giữa 2 khối liền kề.
+                        </p>
+                        <div className="grid grid-cols-3 gap-2">
+                          {[
+                            { h: 16, label: '16px (Nhỏ)' },
+                            { h: 24, label: '24px (Vừa)' },
+                            { h: 32, label: '32px (Chuẩn)' },
+                            { h: 48, label: '48px (Lớn)' },
+                            { h: 64, label: '64px (Rất lớn)' },
+                            { h: 96, label: '96px (Rộng)' },
+                          ].map((s) => (
+                            <button
+                              key={s.h}
+                              type="button"
+                              onClick={() => handleUpdateBlockData('height', s.h)}
+                              className={`py-1.5 px-2 rounded-xl text-xs font-semibold border transition ${
+                                (selectedBlock.data?.height || 32) === s.h
+                                  ? 'border-[#0f3b7d] bg-blue-50 text-[#0f3b7d]'
+                                  : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+                              }`}
+                            >
+                              {s.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
+                        <div>
+                          <p className="font-semibold text-slate-700 text-xs">Hiện vạch kẻ mờ phân cách</p>
+                          <p className="text-[11px] text-slate-400">Đường kẻ ngang phân tách rõ ràng 2 phần</p>
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={!!selectedBlock.data?.showDivider}
+                          onChange={(e) => handleUpdateBlockData('showDivider', e.target.checked)}
+                          className="w-4 h-4 rounded text-[#0f3b7d] border-slate-300 focus:ring-[#0f3b7d]"
+                        />
+                      </div>
+                    </div>
+                  )}
+
                   <div className="space-y-3">
-                    <div>
-                      <label className="font-semibold text-slate-700 block mb-1">Tiêu đề chính</label>
-                      <input
-                        type="text"
-                        value={selectedBlock.title || ''}
-                        onChange={(e) => handleUpdateBlockField('title', e.target.value)}
-                        className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs focus:outline-hidden focus:ring-2 focus:ring-[#0f3b7d]/20 focus:border-[#0f3b7d]"
-                        placeholder="Nhập tiêu đề..."
-                      />
-                    </div>
-
-                    <div>
-                      <label className="font-semibold text-slate-700 block mb-1">Tiêu đề phụ / Slogan</label>
-                      <input
-                        type="text"
-                        value={selectedBlock.subtitle || ''}
-                        onChange={(e) => handleUpdateBlockField('subtitle', e.target.value)}
-                        className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs focus:outline-hidden focus:ring-2 focus:ring-[#0f3b7d]/20 focus:border-[#0f3b7d]"
-                        placeholder="Nhập phụ đề..."
-                      />
-                    </div>
-
                     {/* Chi tiết cho khối Hero Banner */}
                     {selectedBlock.type === 'hero' && (
                       <div className="space-y-3 pt-2 border-t border-slate-200">
@@ -2416,6 +2512,70 @@ function BlockRenderer({ block, school, isEditing, onOpenLightbox }: BlockRender
                 </a>
               )}
             </div>
+          )}
+        </div>
+      );
+    }
+
+    case 'heading': {
+      const level = block.data?.level || 'h2';
+      const align = block.data?.align || 'left';
+      const hasDivider = block.data?.hasDivider !== false;
+      const title = block.title || (isEditing ? 'Nhấp để nhập tiêu đề mục' : '');
+      const subtitle = block.subtitle || '';
+      const alignClass = align === 'center' ? 'text-center' : align === 'right' ? 'text-right' : 'text-left';
+
+      return (
+        <div className="px-6 py-4 sm:px-8 sm:py-6 bg-white border-b border-slate-100">
+          <div className={alignClass}>
+            {level === 'h1' && (
+              <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight leading-snug">
+                {title}
+              </h1>
+            )}
+            {level === 'h2' && (
+              <h2 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight leading-snug">
+                {title}
+              </h2>
+            )}
+            {level === 'h3' && (
+              <h3 className="text-lg sm:text-xl font-bold text-slate-800 tracking-tight leading-snug">
+                {title}
+              </h3>
+            )}
+            {subtitle && (
+              <p className="mt-1.5 text-xs sm:text-sm text-slate-500 font-medium leading-relaxed">
+                {subtitle}
+              </p>
+            )}
+            {hasDivider && (
+              <div
+                className={`mt-3 h-0.5 bg-gradient-to-r from-blue-600 via-indigo-500 to-transparent w-24 ${
+                  align === 'center' ? 'mx-auto' : align === 'right' ? 'ml-auto' : ''
+                }`}
+              />
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    case 'spacer': {
+      const height = Number(block.data?.height) || 32;
+      const showDivider = !!block.data?.showDivider;
+
+      return (
+        <div
+          className={`relative w-full bg-white transition-all flex items-center justify-center ${
+            isEditing ? 'hover:bg-blue-50/20' : ''
+          }`}
+          style={{ height: `${height}px` }}
+        >
+          {showDivider && <div className="w-full border-t border-slate-200" />}
+          {isEditing && (
+            <span className="absolute inset-0 flex items-center justify-center text-[10.5px] font-mono text-slate-300 select-none pointer-events-none group-hover:text-slate-500">
+              {showDivider ? '── Khối cách (Có vạch kẻ) ──' : `↕ Khối cách ${height}px`}
+            </span>
           )}
         </div>
       );

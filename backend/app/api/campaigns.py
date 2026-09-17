@@ -73,31 +73,70 @@ async def preview_campaign_route_direct(
 
 
 
-def format_campaign_response(c: dict) -> CampaignResponse:
+def format_campaign_response(c: dict, route_plan: dict = None) -> CampaignResponse:
     doc = dict(c)
     doc.pop("_id", None)
     destinations = doc.get("destinations", [])
     doc["total_destinations"] = len(destinations)
+
+    # Nếu có route_plan, tự động merge các thông tin định tuyến đã tính toán
+    if route_plan:
+        if not doc.get("start_point") and route_plan.get("start_lat") is not None and route_plan.get("start_lng") is not None:
+            doc["start_point"] = {
+                "lat": route_plan["start_lat"],
+                "lng": route_plan["start_lng"],
+                "name": route_plan.get("start_name", "Điểm xuất phát")
+            }
+        if not doc.get("route_geometry") and route_plan.get("route_geometry"):
+            doc["route_geometry"] = route_plan["route_geometry"]
+        if not doc.get("polyline") and route_plan.get("polyline"):
+            doc["polyline"] = route_plan["polyline"]
+        if doc.get("estimated_distance_km") is None and route_plan.get("estimated_distance_km") is not None:
+            doc["estimated_distance_km"] = route_plan["estimated_distance_km"]
+        if doc.get("estimated_duration_minutes") is None and route_plan.get("estimated_duration_minutes") is not None:
+            doc["estimated_duration_minutes"] = route_plan["estimated_duration_minutes"]
+        if not doc.get("estimated_duration_text") and route_plan.get("estimated_duration_text"):
+            doc["estimated_duration_text"] = route_plan["estimated_duration_text"]
+        if route_plan.get("destinations") and len(route_plan["destinations"]) > 0:
+            doc["destinations"] = route_plan["destinations"]
+            doc["total_destinations"] = len(route_plan["destinations"])
+
     return CampaignResponse.model_validate(doc)
 
 
 @router.get("", response_model=List[CampaignResponse])
 async def list_campaigns(current_user: dict = Depends(get_current_user)):
-    """Lấy danh sách tất cả các chiến dịch tuyển sinh"""
+    """Lấy danh sách tất cả các chiến dịch tuyển sinh kèm dữ liệu lộ trình"""
     db = get_database()
     cursor = db.campaigns.find({"is_deleted": {"$ne": True}}).sort("created_at", -1)
     campaigns = await cursor.to_list(length=100)
-    return [format_campaign_response(c) for c in campaigns]
+
+    # Lấy kèm route_plans để gắn đầy đủ lộ trình cho các chiến dịch
+    camp_ids = [c["id"] for c in campaigns if "id" in c]
+    route_plans_cursor = db.route_plans.find({"campaign_id": {"$in": camp_ids}, "is_deleted": {"$ne": True}}).sort("created_at", -1)
+    route_plans = await route_plans_cursor.to_list(length=200)
+    route_plans_map = {}
+    for rp in route_plans:
+        cid = rp.get("campaign_id")
+        if cid and cid not in route_plans_map:
+            route_plans_map[cid] = rp
+
+    return [format_campaign_response(c, route_plans_map.get(c.get("id"))) for c in campaigns]
 
 
 @router.get("/{campaign_id}", response_model=CampaignResponse)
 async def get_campaign(campaign_id: str, current_user: dict = Depends(get_current_user)):
-    """Xem chi tiết một chiến dịch tuyển sinh kèm danh sách địa điểm mục tiêu"""
+    """Xem chi tiết một chiến dịch tuyển sinh kèm danh sách địa điểm mục tiêu và lộ trình"""
     db = get_database()
     campaign = await db.campaigns.find_one({"id": campaign_id, "is_deleted": {"$ne": True}})
     if not campaign:
         raise HTTPException(status_code=404, detail="Chiến dịch tuyển sinh không tồn tại")
-    return format_campaign_response(campaign)
+
+    route_plan = await db.route_plans.find_one(
+        {"campaign_id": campaign_id, "is_deleted": {"$ne": True}},
+        sort=[("created_at", -1)]
+    )
+    return format_campaign_response(campaign, route_plan)
 
 
 @router.post("", response_model=CampaignResponse, status_code=status.HTTP_201_CREATED)
@@ -246,6 +285,23 @@ async def preview_optimized_route(
         "updated_at": now
     }
     await db.route_plans.insert_one(route_plan_doc)
+
+    # Cập nhật trực tiếp kết quả định tuyến vào collection campaigns
+    await db.campaigns.update_one(
+        {"id": campaign_id},
+        {
+            "$set": {
+                "start_point": {"lat": origin_lat, "lng": origin_lng, "name": origin_name},
+                "estimated_distance_km": round(total_dist_meters / 1000, 2),
+                "estimated_duration_minutes": int(total_dur_seconds / 60),
+                "estimated_duration_text": duration_text,
+                "destinations": ordered_dests,
+                "route_geometry": route_geometry,
+                "polyline": encoded_polyline,
+                "updated_at": now
+            }
+        }
+    )
 
     return {
         "plan_id": plan_id,
