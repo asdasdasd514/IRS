@@ -51,8 +51,15 @@ async def preview_campaign_route_direct(
         origin_name = destinations[0].get("name", "Điểm xuất phát")
     else:
         origin_name = start_point.get("name", "Điểm xuất phát")
+        origin_address = start_point.get("address")
 
-    st_pt = {"lat": float(origin_lat), "lng": float(origin_lng), "name": origin_name}
+    st_pt = {
+        "lat": float(origin_lat),
+        "lng": float(origin_lng),
+        "name": origin_name,
+        "address": origin_address,
+        "school_id": start_point.get("school_id")
+    }
 
     ordered_dests, total_dist_meters, total_dur_seconds, route_geometry, encoded_polyline, duration_text = (
         routing_service.plan_dynamic_next_hop_route(st_pt, destinations)
@@ -85,7 +92,8 @@ def format_campaign_response(c: dict, route_plan: dict = None) -> CampaignRespon
             doc["start_point"] = {
                 "lat": route_plan["start_lat"],
                 "lng": route_plan["start_lng"],
-                "name": route_plan.get("start_name", "Điểm xuất phát")
+                "name": route_plan.get("start_name", "Điểm xuất phát"),
+                "address": route_plan.get("start_address")
             }
         if not doc.get("route_geometry") and route_plan.get("route_geometry"):
             doc["route_geometry"] = route_plan["route_geometry"]
@@ -218,6 +226,7 @@ async def preview_optimized_route(
     start_lat: Optional[float] = Query(None, description="Vĩ độ điểm xuất phát"),
     start_lng: Optional[float] = Query(None, description="Kinh độ điểm xuất phát"),
     start_name: Optional[str] = Query(None, description="Tên điểm xuất phát"),
+    start_address: Optional[str] = Query(None, description="Địa chỉ điểm xuất phát"),
     current_user: dict = Depends(get_current_user)
 ):
     """
@@ -235,10 +244,12 @@ async def preview_optimized_route(
     if not destinations:
         raise HTTPException(status_code=400, detail="Chiến dịch chưa có địa điểm nào để tối ưu đường đi.")
 
+    existing_start = camp.get("start_point") or {}
     origin_lat = start_lat if start_lat is not None else destinations[0]["lat"]
     origin_lng = start_lng if start_lng is not None else destinations[0]["lng"]
-    origin_name = start_name or "Điểm xuất phát"
-    start_point = {"lat": origin_lat, "lng": origin_lng}
+    origin_name = start_name or existing_start.get("name") or "Điểm xuất phát"
+    origin_address = start_address or existing_start.get("address")
+    start_point = {"lat": origin_lat, "lng": origin_lng, "name": origin_name, "address": origin_address}
 
     ordered_dests, total_dist_meters, total_dur_seconds, route_geometry, encoded_polyline, duration_text = (
         routing_service.plan_dynamic_next_hop_route(start_point, destinations)
@@ -255,6 +266,7 @@ async def preview_optimized_route(
         "start_lat": origin_lat,
         "start_lng": origin_lng,
         "start_name": origin_name,
+        "start_address": origin_address,
         "total_destinations": len(ordered_dests),
         "total_distance_meters": int(total_dist_meters),
         "estimated_distance_km": round(total_dist_meters / 1000, 2),
@@ -264,6 +276,7 @@ async def preview_optimized_route(
         "destinations": [
             {
                 "order": idx + 1,
+                "priority": d.get("priority"),
                 "school_id": d.get("school_id"),
                 "waypoint_id": d.get("waypoint_id") or d.get("id"),
                 "name": d.get("name"),
@@ -291,7 +304,7 @@ async def preview_optimized_route(
         {"id": campaign_id},
         {
             "$set": {
-                "start_point": {"lat": origin_lat, "lng": origin_lng, "name": origin_name},
+                "start_point": {"lat": origin_lat, "lng": origin_lng, "name": origin_name, "address": origin_address},
                 "estimated_distance_km": round(total_dist_meters / 1000, 2),
                 "estimated_duration_minutes": int(total_dur_seconds / 60),
                 "estimated_duration_text": duration_text,
@@ -389,6 +402,7 @@ async def deploy_campaign_route(
             "lng": dest.get("lng"),
             "type": WaypointType.SCHOOL.value,
             "visit_order": i,
+            "priority": dest.get("priority"),
             "is_visited": False,
             "visited_at": None,
             "notes": dest.get("notes"),
@@ -422,6 +436,7 @@ async def deploy_campaign_route(
         "destinations": [
             {
                 "order": idx + 1,
+                "priority": d.get("priority"),
                 "school_id": d.get("school_id"),
                 "waypoint_id": d.get("waypoint_id") or d.get("id"),
                 "name": d.get("name"),

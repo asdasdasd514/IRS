@@ -145,7 +145,7 @@ export function Header({ onOpenMobileMenu, title, subtitle }: HeaderProps) {
 
           {/* Dropdown Menu */}
           {dropdownOpen && (
-            <div className="absolute right-0 mt-2 w-60 bg-white rounded-2xl shadow-xl border border-slate-200/80 py-1.5 z-50 animate-scale-in">
+            <div className="absolute right-0 mt-2 w-60 bg-white rounded-[5px] shadow-xl border border-slate-200/80 py-1.5 z-50 animate-scale-in">
               {/* User summary */}
               <div className="px-4 py-3 border-b border-slate-100">
                 <div className="flex items-center gap-2.5">

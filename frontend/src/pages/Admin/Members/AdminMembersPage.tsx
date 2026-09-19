@@ -142,7 +142,7 @@ export function AdminMembersPage() {
 
         <button
           onClick={() => setIsModalOpen(true)}
-          className="bg-[#0f3b7d] hover:bg-[#0c2f64] text-white font-semibold py-2.5 px-4 rounded-xl transition duration-200 flex items-center justify-center gap-2 text-sm shadow-sm"
+          className="bg-[#0f3b7d] hover:bg-[#0c2f64] text-white font-semibold py-2.5 px-4 rounded-[5px] transition duration-200 flex items-center justify-center gap-2 text-sm shadow-sm"
         >
           <Plus className="w-4 h-4" />
           <span>Thêm thành viên</span>
@@ -150,14 +150,14 @@ export function AdminMembersPage() {
       </div>
 
       {successMsg && (
-        <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl flex items-center gap-3 text-emerald-800 text-sm animate-slide-up">
+        <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-[5px] flex items-center gap-3 text-emerald-800 text-sm animate-slide-up">
           <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
           <span className="font-semibold">{successMsg}</span>
         </div>
       )}
 
       {/* Filter and Search Bar */}
-      <div className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-4">
+      <div className="bg-white rounded-[5px] border border-slate-200/80 p-4 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-4">
         <div className="relative flex-1 w-full">
           <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
             <Search className="w-4 h-4" />
@@ -167,7 +167,7 @@ export function AdminMembersPage() {
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="Tìm kiếm theo username, họ tên, email..."
-            className="w-full pl-10 pr-4 py-2 text-sm bg-slate-50 border border-slate-300 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-[#0f3b7d] outline-none"
+            className="w-full pl-10 pr-4 py-2 text-sm bg-slate-50 border border-slate-300 rounded-[5px] focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-[#0f3b7d] outline-none"
           />
         </div>
 
@@ -176,7 +176,7 @@ export function AdminMembersPage() {
             <button
               key={r}
               onClick={() => setRoleFilter(r)}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold capitalize transition ${
+              className={`px-3.5 py-1.5 rounded-[5px] text-xs font-semibold capitalize transition ${
                 roleFilter === r
                   ? 'bg-[#0f3b7d] text-white'
                   : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200/80'
@@ -189,7 +189,7 @@ export function AdminMembersPage() {
       </div>
 
       {/* Users Table / Grid */}
-      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
+      <div className="bg-white rounded-[5px] border border-slate-200/80 shadow-xs overflow-hidden">
         {loading ? (
           <div className="text-center py-16">
             <div className="w-8 h-8 border-3 border-blue-600/30 border-t-blue-600 rounded-full animate-spin mx-auto mb-3" />
@@ -339,7 +339,7 @@ export function AdminMembersPage() {
       {/* Modal Thêm Thành Viên Mới */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-slate-200 animate-slide-up">
+          <div className="bg-white rounded-[5px] max-w-md w-full p-6 shadow-xl border border-slate-200 animate-slide-up">
             <h3 className="text-lg font-bold text-slate-900 mb-4">
               Cấp Tài Khoản Thành Viên Mới
             </h3>
@@ -354,7 +354,7 @@ export function AdminMembersPage() {
                   value={formData.full_name}
                   onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
                   placeholder="Ví dụ: Trần Văn Nam"
-                  className="w-full px-3.5 py-2 text-sm bg-slate-50 border border-slate-300 rounded-xl focus:bg-white outline-none"
+                  className="w-full px-3.5 py-2 text-sm bg-slate-50 border border-slate-300 rounded-[5px] focus:bg-white outline-none"
                 />
               </div>
 
@@ -368,7 +368,7 @@ export function AdminMembersPage() {
                     value={formData.username}
                     onChange={(e) => setFormData({ ...formData, username: e.target.value })}
                     placeholder="namtv"
-                    className="w-full px-3.5 py-2 text-sm bg-slate-50 border border-slate-300 rounded-xl focus:bg-white outline-none"
+                    className="w-full px-3.5 py-2 text-sm bg-slate-50 border border-slate-300 rounded-[5px] focus:bg-white outline-none"
                     required
                   />
                 </div>
@@ -381,7 +381,7 @@ export function AdminMembersPage() {
                     value={formData.password}
                     onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                     placeholder="••••••••"
-                    className="w-full px-3.5 py-2 text-sm bg-slate-50 border border-slate-300 rounded-xl focus:bg-white outline-none"
+                    className="w-full px-3.5 py-2 text-sm bg-slate-50 border border-slate-300 rounded-[5px] focus:bg-white outline-none"
                     required
                   />
                 </div>
@@ -396,7 +396,7 @@ export function AdminMembersPage() {
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                   placeholder="namtv@domain.com"
-                  className="w-full px-3.5 py-2 text-sm bg-slate-50 border border-slate-300 rounded-xl focus:bg-white outline-none"
+                  className="w-full px-3.5 py-2 text-sm bg-slate-50 border border-slate-300 rounded-[5px] focus:bg-white outline-none"
                 />
               </div>
 
@@ -407,7 +407,7 @@ export function AdminMembersPage() {
                 <select
                   value={formData.role}
                   onChange={(e) => setFormData({ ...formData, role: e.target.value as UserRole })}
-                  className="w-full px-3.5 py-2 text-sm bg-slate-50 border border-slate-300 rounded-xl focus:bg-white outline-none"
+                  className="w-full px-3.5 py-2 text-sm bg-slate-50 border border-slate-300 rounded-[5px] focus:bg-white outline-none"
                 >
                   <option value="staff">Cán bộ tuyển sinh (Staff)</option>
                   <option value="admin">Quản trị viên (Admin)</option>
@@ -418,13 +418,13 @@ export function AdminMembersPage() {
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="flex-1 py-2 px-4 rounded-xl border border-slate-300 text-slate-600 font-semibold text-xs hover:bg-slate-50"
+                  className="flex-1 py-2 px-4 rounded-[5px] border border-slate-300 text-slate-600 font-semibold text-xs hover:bg-slate-50"
                 >
                   Hủy bỏ
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 py-2 px-4 rounded-xl bg-[#0f3b7d] text-white font-semibold text-xs hover:bg-[#0c2f64]"
+                  className="flex-1 py-2 px-4 rounded-[5px] bg-[#0f3b7d] text-white font-semibold text-xs hover:bg-[#0c2f64]"
                 >
                   Tạo tài khoản
                 </button>

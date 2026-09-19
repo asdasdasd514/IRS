@@ -450,10 +450,25 @@ class RoutingService:
         ordered = []
         curr_lat, curr_lng = start_point["lat"], start_point["lng"]
 
-        # 1. Áp dụng thuật toán Dynamic Next-Hop để xác định thứ tự ghé thăm tối ưu
+        def get_dest_priority(dest_dict: Dict[str, Any]) -> int:
+            p = dest_dict.get("priority")
+            if p is not None:
+                try:
+                    val = int(p)
+                    if val > 0:
+                        return val
+                except (ValueError, TypeError):
+                    pass
+            return 999999
+
+        # 1. Áp dụng thuật toán Priority-Aware Dynamic Next-Hop để xác định thứ tự ghé thăm tối ưu
+        # Trường có độ ưu tiên nhỏ hơn (1 > 2 > 3...) sẽ được ưu tiên đi trước tiên, sau đó tới các trường tự động
         while unvisited:
+            min_priority = min(get_dest_priority(d) for d in unvisited)
+            priority_pool = [d for d in unvisited if get_dest_priority(d) == min_priority]
+
             candidates = []
-            for dest in unvisited:
+            for dest in priority_pool:
                 d_lat = dest.get("lat", 0.0)
                 d_lng = dest.get("lng", 0.0)
                 dist_m = self._haversine(curr_lat, curr_lng, d_lat, d_lng)

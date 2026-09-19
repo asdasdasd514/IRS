@@ -736,12 +736,12 @@ export function AdminSchoolDetailPage() {
 
   if (!school) {
     return (
-      <div className="max-w-4xl mx-auto text-center py-20 bg-white rounded-2xl border border-slate-200">
+      <div className="max-w-4xl mx-auto text-center py-20 bg-white rounded-[5px] border border-slate-200">
         <Building2 className="w-12 h-12 text-slate-300 mx-auto mb-3" />
         <h2 className="text-lg font-bold text-slate-800">Không tìm thấy thông tin trường học</h2>
         <button
           onClick={() => navigate('/admin/locations')}
-          className="mt-4 px-4 py-2 bg-[#0f3b7d] text-white text-xs font-semibold rounded-xl"
+          className="mt-4 px-4 py-2 bg-[#0f3b7d] text-white text-xs font-semibold rounded-[5px]"
         >
           Quay lại danh mục trường
         </button>
@@ -785,7 +785,7 @@ export function AdminSchoolDetailPage() {
         <div className="flex items-center gap-3 min-w-0">
           <button
             onClick={() => navigate('/admin/locations')}
-            className="p-2 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-xl transition shrink-0"
+            className="p-2 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-[5px] transition shrink-0"
             title="Quay lại danh mục trường"
           >
             <ArrowLeft className="w-4 h-4" />
@@ -797,7 +797,7 @@ export function AdminSchoolDetailPage() {
                 {school.name}
               </h1>
               {school.code && (
-                <span className="text-[10.5px] font-mono font-bold bg-blue-50 text-[#0f3b7d] px-2 py-0.5 rounded-md shrink-0">
+                <span className="text-[10.5px] font-mono font-bold bg-blue-50 text-[#0f3b7d] px-2 py-0.5 rounded-[3px] shrink-0">
                   {school.code}
                 </span>
               )}
@@ -812,7 +812,7 @@ export function AdminSchoolDetailPage() {
         {/* Action Controls */}
         <div className="flex items-center gap-2.5 shrink-0">
           {saveSuccessMsg && (
-            <div className="hidden md:flex items-center gap-1.5 text-xs text-emerald-700 bg-emerald-50 px-3 py-1.5 rounded-xl border border-emerald-200 font-medium animate-slide-up">
+            <div className="hidden md:flex items-center gap-1.5 text-xs text-emerald-700 bg-emerald-50 px-3 py-1.5 rounded-[5px] border border-emerald-200 font-medium animate-slide-up">
               <CheckCircle2 className="w-4 h-4 text-emerald-600" />
               <span>{saveSuccessMsg}</span>
             </div>
@@ -826,7 +826,7 @@ export function AdminSchoolDetailPage() {
                     onClick={handleUndo}
                     disabled={!canUndo}
                     title="Hoàn tác (Ctrl+Z)"
-                    className="px-2.5 py-1.5 rounded-xl border border-slate-300 text-xs font-semibold text-slate-600 hover:bg-slate-100 disabled:opacity-30 disabled:hover:bg-transparent transition flex items-center gap-1.5 shadow-2xs"
+                    className="px-2.5 py-1.5 rounded-[5px] border border-slate-300 text-xs font-semibold text-slate-600 hover:bg-slate-100 disabled:opacity-30 disabled:hover:bg-transparent transition flex items-center gap-1.5 shadow-2xs"
                   >
                     <Undo2 className="w-3.5 h-3.5 text-slate-600" />
                     <span className="hidden md:inline">Hoàn tác</span>
@@ -836,7 +836,7 @@ export function AdminSchoolDetailPage() {
                     onClick={handleRedo}
                     disabled={!canRedo}
                     title="Làm lại (Ctrl+Y)"
-                    className="px-2.5 py-1.5 rounded-xl border border-slate-300 text-xs font-semibold text-slate-600 hover:bg-slate-100 disabled:opacity-30 disabled:hover:bg-transparent transition flex items-center gap-1.5 shadow-2xs"
+                    className="px-2.5 py-1.5 rounded-[5px] border border-slate-300 text-xs font-semibold text-slate-600 hover:bg-slate-100 disabled:opacity-30 disabled:hover:bg-transparent transition flex items-center gap-1.5 shadow-2xs"
                   >
                     <Redo2 className="w-3.5 h-3.5 text-slate-600" />
                     <span className="hidden md:inline">Làm lại</span>
@@ -847,7 +847,7 @@ export function AdminSchoolDetailPage() {
                       setIsEditing(false);
                       setSelectedBlockId(null);
                     }}
-                    className="px-3 py-1.5 rounded-xl border border-slate-300 text-xs font-semibold text-slate-600 hover:bg-slate-100 transition flex items-center gap-1.5"
+                    className="px-3 py-1.5 rounded-[5px] border border-slate-300 text-xs font-semibold text-slate-600 hover:bg-slate-100 transition flex items-center gap-1.5"
                   >
                     <Eye className="w-3.5 h-3.5" />
                     <span>Xem trước</span>
@@ -856,7 +856,7 @@ export function AdminSchoolDetailPage() {
                   <button
                     onClick={handleSavePage}
                     disabled={saving}
-                    className="px-4 py-1.5 rounded-xl bg-[#0f3b7d] hover:bg-[#0c2f64] text-white text-xs font-semibold shadow-xs flex items-center gap-1.5 transition disabled:opacity-50"
+                    className="px-4 py-1.5 rounded-[5px] bg-[#0f3b7d] hover:bg-[#0c2f64] text-white text-xs font-semibold shadow-xs flex items-center gap-1.5 transition disabled:opacity-50"
                   >
                     <Save className="w-3.5 h-3.5" />
                     <span>{saving ? 'Đang lưu...' : 'Lưu trang & Dữ liệu'}</span>
@@ -865,7 +865,7 @@ export function AdminSchoolDetailPage() {
               ) : (
                 <button
                   onClick={() => setIsEditing(true)}
-                  className="px-4 py-1.5 rounded-xl bg-[#0f3b7d] hover:bg-[#0c2f64] text-white text-xs font-semibold shadow-xs flex items-center gap-1.5 transition"
+                  className="px-4 py-1.5 rounded-[5px] bg-[#0f3b7d] hover:bg-[#0c2f64] text-white text-xs font-semibold shadow-xs flex items-center gap-1.5 transition"
                 >
                   <Pencil className="w-3.5 h-3.5" />
                   <span>Chỉnh sửa trang</span>
@@ -891,7 +891,7 @@ export function AdminSchoolDetailPage() {
           }`}
         >
           {isEditing && (
-            <div className="w-full max-w-6xl xl:max-w-7xl mx-auto bg-blue-50/80 border border-blue-200/80 rounded-2xl p-3 text-xs text-blue-800 flex items-center justify-between shadow-2xs">
+            <div className="w-full max-w-6xl xl:max-w-7xl mx-auto bg-blue-50/80 border border-blue-200/80 rounded-[5px] p-3 text-xs text-blue-800 flex items-center justify-between shadow-2xs">
               <div className="flex items-center gap-2">
                 <GripVertical className="w-4 h-4 text-blue-600 shrink-0" />
                 <span>
@@ -903,7 +903,7 @@ export function AdminSchoolDetailPage() {
                   onClick={handleUndo}
                   disabled={!canUndo}
                   title="Hoàn tác (Ctrl+Z)"
-                  className="px-2 py-1 rounded-lg bg-white border border-blue-200 text-blue-800 hover:bg-blue-100 disabled:opacity-35 flex items-center gap-1 font-semibold text-[11px] transition"
+                  className="px-2 py-1 rounded-[5px] bg-white border border-blue-200 text-blue-800 hover:bg-blue-100 disabled:opacity-35 flex items-center gap-1 font-semibold text-[11px] transition"
                 >
                   <Undo2 className="w-3 h-3" />
                   <span>Hoàn tác</span>
@@ -912,12 +912,12 @@ export function AdminSchoolDetailPage() {
                   onClick={handleRedo}
                   disabled={!canRedo}
                   title="Làm lại (Ctrl+Y)"
-                  className="px-2 py-1 rounded-lg bg-white border border-blue-200 text-blue-800 hover:bg-blue-100 disabled:opacity-35 flex items-center gap-1 font-semibold text-[11px] transition"
+                  className="px-2 py-1 rounded-[5px] bg-white border border-blue-200 text-blue-800 hover:bg-blue-100 disabled:opacity-35 flex items-center gap-1 font-semibold text-[11px] transition"
                 >
                   <Redo2 className="w-3 h-3" />
                   <span>Làm lại</span>
                 </button>
-                <span className="text-[11px] font-semibold bg-white text-blue-700 px-2.5 py-0.5 rounded-md border border-blue-200">
+                <span className="text-[11px] font-semibold bg-white text-blue-700 px-2.5 py-0.5 rounded-[3px] border border-blue-200">
                   {blocks.length} khối
                 </span>
               </div>
@@ -925,7 +925,7 @@ export function AdminSchoolDetailPage() {
           )}
 
           <div
-            className={`w-full max-w-6xl xl:max-w-7xl mx-auto rounded-3xl border overflow-hidden transition-all duration-300 ${
+            className={`w-full max-w-6xl xl:max-w-7xl mx-auto rounded-[5px] border overflow-hidden transition-all duration-300 ${
               THEMES[themeBg]?.containerBorder || 'border-slate-200'
             } ${THEMES[themeBg]?.containerShadow || 'shadow-sm'}`}
           >
@@ -1898,10 +1898,10 @@ export function AdminSchoolDetailPage() {
                                 e.dataTransfer.setData('template_type', tmpl.type);
                               }}
                               onClick={() => handleAddBlock(tmpl)}
-                              className="p-3 bg-white hover:bg-blue-50/50 border border-slate-200/90 hover:border-blue-300 rounded-2xl cursor-pointer transition shadow-2xs group flex items-start justify-between gap-3"
+                              className="p-3 bg-white hover:bg-blue-50/50 border border-slate-200/90 hover:border-blue-300 rounded-[5px] cursor-pointer transition shadow-2xs group flex items-start justify-between gap-3"
                             >
                               <div className="flex items-start gap-3">
-                                <div className="w-9 h-9 rounded-xl bg-blue-50 text-[#0f3b7d] group-hover:bg-[#0f3b7d] group-hover:text-white transition flex items-center justify-center shrink-0">
+                                <div className="w-9 h-9 rounded-[5px] bg-blue-50 text-[#0f3b7d] group-hover:bg-[#0f3b7d] group-hover:text-white transition flex items-center justify-center shrink-0">
                                   <Icon className="w-4 h-4" />
                                 </div>
                                 <div>
@@ -1915,7 +1915,7 @@ export function AdminSchoolDetailPage() {
                               </div>
 
                               <div className="shrink-0 pt-1">
-                                <span className="text-[11px] font-semibold text-blue-600 bg-blue-50 px-2 py-1 rounded-lg group-hover:bg-[#0f3b7d] group-hover:text-white transition inline-flex items-center gap-1">
+                                <span className="text-[11px] font-semibold text-blue-600 bg-blue-50 px-2 py-1 rounded-[5px] group-hover:bg-[#0f3b7d] group-hover:text-white transition inline-flex items-center gap-1">
                                   <Plus className="w-3 h-3" />
                                   <span>Thêm</span>
                                 </span>
@@ -1930,13 +1930,13 @@ export function AdminSchoolDetailPage() {
                   {/* TAB 4: KHO ẢNH */}
                   {activeMainTab === 'media' && (
                     <div className="space-y-4">
-                      <div className="bg-gradient-to-r from-blue-50 to-indigo-50/60 border border-blue-200/70 rounded-2xl p-3">
+                      <div className="bg-gradient-to-r from-blue-50 to-indigo-50/60 border border-blue-200/70 rounded-[5px] p-3">
                         <div className="flex items-center justify-between mb-2.5">
                           <p className="font-bold text-blue-950 text-xs flex items-center gap-1.5">
                             <Cloud className="w-4 h-4 text-blue-600" />
                             <span>Kho ảnh</span>
                           </p>
-                          <span className="text-[10.5px] font-semibold bg-white px-2 py-0.5 rounded-md text-blue-700 border border-blue-200">
+                          <span className="text-[10.5px] font-semibold bg-white px-2 py-0.5 rounded-[3px] text-blue-700 border border-blue-200">
                             {mediaLibrary.length} ảnh
                           </span>
                         </div>
@@ -1944,7 +1944,7 @@ export function AdminSchoolDetailPage() {
                         <button
                           onClick={() => generalUploadRef.current?.click()}
                           disabled={isUploading}
-                          className="w-full py-2 bg-[#0f3b7d] hover:bg-[#0c2f64] text-white font-semibold rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-2xs transition disabled:opacity-50"
+                          className="w-full py-2 bg-[#0f3b7d] hover:bg-[#0c2f64] text-white font-semibold rounded-[5px] text-xs flex items-center justify-center gap-1.5 shadow-2xs transition disabled:opacity-50"
                         >
                           <Upload className="w-3.5 h-3.5" />
                           <span>{isUploading ? 'Đang tải ảnh...' : 'Tải ảnh từ máy tính lên kho'}</span>
@@ -1960,7 +1960,7 @@ export function AdminSchoolDetailPage() {
                             <span>Đang kiểm tra kho ảnh...</span>
                           </div>
                         ) : mediaLibrary.length === 0 ? (
-                          <div className="py-8 text-center border border-dashed border-slate-200 rounded-2xl">
+                          <div className="py-8 text-center border border-dashed border-slate-200 rounded-[5px]">
                             <FolderOpen className="w-8 h-8 text-slate-300 mx-auto mb-2" />
                             <p className="font-semibold text-slate-600 text-xs">Chưa có ảnh nào trong kho</p>
                             <p className="text-[11px] text-slate-400 mt-0.5">Nhấp nút tải ảnh bên trên để đưa ảnh đầu tiên lên.</p>
@@ -1970,7 +1970,7 @@ export function AdminSchoolDetailPage() {
                             {mediaLibrary.map((item, idx) => (
                               <div
                                 key={idx}
-                                className="group relative rounded-xl overflow-hidden aspect-4/3 border border-slate-200 bg-slate-100 shadow-2xs"
+                                className="group relative rounded-[5px] overflow-hidden aspect-4/3 border border-slate-200 bg-slate-100 shadow-2xs"
                               >
                                 <img src={item.url} alt="" className="w-full h-full object-cover group-hover:scale-105 transition" />
                                 <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition flex flex-col justify-between p-2 text-white">
@@ -1979,7 +1979,7 @@ export function AdminSchoolDetailPage() {
                                     href={item.url}
                                     target="_blank"
                                     rel="noreferrer"
-                                    className="self-end p-1 bg-white/20 hover:bg-white/40 rounded text-white"
+                                    className="self-end p-1 bg-white/20 hover:bg-white/40 rounded-[3px] text-white"
                                     title="Mở xem kích thước đầy đủ"
                                   >
                                     <ExternalLink className="w-3 h-3" />
@@ -2007,13 +2007,13 @@ export function AdminSchoolDetailPage() {
                             <button
                               key={t.id}
                               onClick={() => handleSelectTheme(t.id)}
-                              className={`p-3 rounded-2xl border text-left transition ${
+                              className={`p-3 rounded-[5px] border text-left transition ${
                                 themeBg === t.id
                                   ? 'border-[#0f3b7d] ring-2 ring-[#0f3b7d]/20 bg-blue-50/40 shadow-xs'
                                   : 'border-slate-200 hover:border-slate-300 bg-white'
                               }`}
                             >
-                              <div className={`w-full h-8 rounded-lg mb-2 border ${t.color}`} />
+                              <div className={`w-full h-8 rounded-[3px] mb-2 border ${t.color}`} />
                               <p className="font-bold text-slate-800 text-xs">{t.name}</p>
                               <p className="text-[10px] text-slate-400 mt-0.5">{t.desc}</p>
                             </button>
@@ -2075,11 +2075,11 @@ export function AdminSchoolDetailPage() {
       {/* MODAL CHỌN ẢNH TỪ KHO ẢNH TRƯỜNG HỌC (MEDIA PICKER MODAL) */}
       {mediaPickerTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
-          <div className="bg-white w-full max-w-2xl rounded-3xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[85vh] animate-scale-up">
+          <div className="bg-white w-full max-w-2xl rounded-[5px] shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[85vh] animate-scale-up">
             {/* Header modal */}
             <div className="p-4 sm:p-5 border-b border-slate-200 flex items-center justify-between bg-slate-50/80">
               <div className="flex items-center gap-2.5">
-                <div className="w-10 h-10 rounded-xl bg-blue-100 text-[#0f3b7d] flex items-center justify-center font-bold">
+                <div className="w-10 h-10 rounded-[5px] bg-blue-100 text-[#0f3b7d] flex items-center justify-center font-bold">
                   <Cloud className="w-5 h-5" />
                 </div>
                 <div>
@@ -2090,7 +2090,7 @@ export function AdminSchoolDetailPage() {
 
               <button
                 onClick={() => setMediaPickerTarget(null)}
-                className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 rounded-xl transition"
+                className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 rounded-[5px] transition"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -2098,14 +2098,14 @@ export function AdminSchoolDetailPage() {
 
             {/* Nội dung kho ảnh */}
             <div className="flex-1 overflow-y-auto p-4 sm:p-6 no-scrollbar space-y-4">
-              <div className="flex items-center justify-between bg-blue-50/70 p-3 rounded-2xl border border-blue-200/70">
+              <div className="flex items-center justify-between bg-blue-50/70 p-3 rounded-[5px] border border-blue-200/70">
                 <span className="text-xs text-blue-900 font-medium">
                   {mediaLibrary.length} ảnh trong kho
                 </span>
                 <button
                   onClick={() => fileInputRef.current?.click()}
                   disabled={isUploading}
-                  className="px-3 py-1.5 bg-[#0f3b7d] hover:bg-[#0c2f64] text-white text-xs font-semibold rounded-xl flex items-center gap-1.5 transition"
+                  className="px-3 py-1.5 bg-[#0f3b7d] hover:bg-[#0c2f64] text-white text-xs font-semibold rounded-[5px] flex items-center gap-1.5 transition"
                 >
                   <Upload className="w-3.5 h-3.5" />
                   <span>{isUploading ? 'Đang tải...' : 'Tải ảnh mới từ máy'}</span>
@@ -2124,12 +2124,12 @@ export function AdminSchoolDetailPage() {
                     <div
                       key={idx}
                       onClick={() => handleSelectFromMediaLibrary(item.url)}
-                      className="group relative rounded-2xl overflow-hidden aspect-4/3 border-2 border-slate-200 hover:border-blue-600 bg-slate-100 cursor-pointer shadow-xs transition"
+                      className="group relative rounded-[5px] overflow-hidden aspect-4/3 border-2 border-slate-200 hover:border-blue-600 bg-slate-100 cursor-pointer shadow-xs transition"
                     >
                       <img src={item.url} alt="" className="w-full h-full object-cover group-hover:scale-105 transition duration-300" />
                       <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent opacity-0 group-hover:opacity-100 transition flex flex-col justify-end p-2.5">
                         <p className="text-white text-[11px] font-medium truncate mb-1">{item.filename || 'Ảnh'}</p>
-                        <span className="self-start px-2 py-0.5 bg-blue-600 text-white rounded text-[10px] font-bold flex items-center gap-1">
+                        <span className="self-start px-2 py-0.5 bg-blue-600 text-white rounded-[3px] text-[10px] font-bold flex items-center gap-1">
                           <Check className="w-3 h-3" />
                           <span>Chọn ảnh này</span>
                         </span>
@@ -2144,7 +2144,7 @@ export function AdminSchoolDetailPage() {
             <div className="p-3.5 border-t border-slate-200 bg-slate-50 flex items-center justify-end">
               <button
                 onClick={() => setMediaPickerTarget(null)}
-                className="px-4 py-2 border border-slate-300 hover:bg-slate-100 text-slate-700 text-xs font-semibold rounded-xl transition"
+                className="px-4 py-2 border border-slate-300 hover:bg-slate-100 text-slate-700 text-xs font-semibold rounded-[5px] transition"
               >
                 Đóng
               </button>
@@ -2204,7 +2204,7 @@ export function AdminSchoolDetailPage() {
               <img
                 src={lightboxData.images[lightboxData.currentIndex]?.url}
                 alt=""
-                className="max-h-[62vh] sm:max-h-[70vh] w-auto max-w-[85vw] object-contain rounded-2xl shadow-2xl transition duration-200"
+                className="max-h-[62vh] sm:max-h-[70vh] w-auto max-w-[85vw] object-contain rounded-[5px] shadow-2xl transition duration-200"
               />
             </div>
 
@@ -2233,7 +2233,7 @@ export function AdminSchoolDetailPage() {
                 <button
                   key={idx}
                   onClick={() => setLightboxData((prev) => (prev ? { ...prev, currentIndex: idx } : null))}
-                  className={`w-16 h-12 sm:w-20 sm:h-14 rounded-xl overflow-hidden shrink-0 transition-all duration-200 border-2 ${
+                  className={`w-16 h-12 sm:w-20 sm:h-14 rounded-[5px] overflow-hidden shrink-0 transition-all duration-200 border-2 ${
                     lightboxData.currentIndex === idx
                       ? 'border-blue-500 ring-2 ring-white scale-108 opacity-100 shadow-lg'
                       : 'border-white/20 opacity-40 hover:opacity-85'
@@ -2266,7 +2266,7 @@ function GalleryCollage({
     return (
       <div
         onClick={() => onOpenLightbox(0)}
-        className="relative rounded-2xl overflow-hidden h-72 sm:h-96 w-full cursor-pointer group shadow-2xs border border-slate-200/80"
+        className="relative rounded-[5px] overflow-hidden h-72 sm:h-96 w-full cursor-pointer group shadow-2xs border border-slate-200/80"
       >
         <img
           src={images[0].url}
@@ -2280,12 +2280,12 @@ function GalleryCollage({
   // 2 Ảnh: 2 cột bằng nhau
   if (count === 2) {
     return (
-      <div className="grid grid-cols-2 gap-2.5 h-64 sm:h-80 rounded-2xl overflow-hidden">
+      <div className="grid grid-cols-2 gap-2.5 h-64 sm:h-80 rounded-[5px] overflow-hidden">
         {images.slice(0, 2).map((img, idx) => (
           <div
             key={idx}
             onClick={() => onOpenLightbox(idx)}
-            className="relative overflow-hidden cursor-pointer group rounded-2xl border border-slate-200/80 h-full bg-slate-100"
+            className="relative overflow-hidden cursor-pointer group rounded-[5px] border border-slate-200/80 h-full bg-slate-100"
           >
             <img
               src={img.url}
@@ -2301,10 +2301,10 @@ function GalleryCollage({
   // 3 Ảnh: 1 ảnh lớn bên trái, 2 ảnh xếp dọc bên phải
   if (count === 3) {
     return (
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 h-72 sm:h-96 rounded-2xl overflow-hidden">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 h-72 sm:h-96 rounded-[5px] overflow-hidden">
         <div
           onClick={() => onOpenLightbox(0)}
-          className="relative overflow-hidden cursor-pointer group rounded-2xl border border-slate-200/80 h-full bg-slate-100"
+          className="relative overflow-hidden cursor-pointer group rounded-[5px] border border-slate-200/80 h-full bg-slate-100"
         >
           <img
             src={images[0].url}
@@ -2317,7 +2317,7 @@ function GalleryCollage({
             <div
               key={idx}
               onClick={() => onOpenLightbox(idx + 1)}
-              className="relative overflow-hidden cursor-pointer group rounded-2xl border border-slate-200/80 h-full bg-slate-100"
+              className="relative overflow-hidden cursor-pointer group rounded-[5px] border border-slate-200/80 h-full bg-slate-100"
             >
               <img
                 src={img.url}
@@ -2334,12 +2334,12 @@ function GalleryCollage({
   // 4 Ảnh: Lưới đối xứng 2x2
   if (count === 4) {
     return (
-      <div className="grid grid-cols-2 grid-rows-2 gap-2.5 h-72 sm:h-96 rounded-2xl overflow-hidden">
+      <div className="grid grid-cols-2 grid-rows-2 gap-2.5 h-72 sm:h-96 rounded-[5px] overflow-hidden">
         {images.slice(0, 4).map((img, idx) => (
           <div
             key={idx}
             onClick={() => onOpenLightbox(idx)}
-            className="relative overflow-hidden cursor-pointer group rounded-2xl border border-slate-200/80 h-full bg-slate-100"
+            className="relative overflow-hidden cursor-pointer group rounded-[5px] border border-slate-200/80 h-full bg-slate-100"
           >
             <img
               src={img.url}
@@ -2357,14 +2357,14 @@ function GalleryCollage({
   const remainingCount = images.length - 5;
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 h-80 sm:h-[450px] rounded-2xl overflow-hidden">
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 h-80 sm:h-[450px] rounded-[5px] overflow-hidden">
       {/* Cột trái: 2 ảnh xếp dọc */}
       <div className="grid grid-rows-2 gap-2.5 h-full">
         {visibleImages.slice(0, 2).map((img, idx) => (
           <div
             key={idx}
             onClick={() => onOpenLightbox(idx)}
-            className="relative overflow-hidden cursor-pointer group rounded-2xl border border-slate-200/80 h-full bg-slate-100"
+            className="relative overflow-hidden cursor-pointer group rounded-[5px] border border-slate-200/80 h-full bg-slate-100"
           >
             <img
               src={img.url}
@@ -2381,7 +2381,7 @@ function GalleryCollage({
           <div
             key={idx}
             onClick={() => onOpenLightbox(idx + 2)}
-            className="relative overflow-hidden cursor-pointer group rounded-2xl border border-slate-200/80 h-full bg-slate-100"
+            className="relative overflow-hidden cursor-pointer group rounded-[5px] border border-slate-200/80 h-full bg-slate-100"
           >
             <img
               src={img.url}
@@ -2394,7 +2394,7 @@ function GalleryCollage({
         {/* Ảnh thứ 5 (Góc dưới bên phải - Hiện +N nếu > 5 ảnh) */}
         <div
           onClick={() => onOpenLightbox(4)}
-          className="relative overflow-hidden cursor-pointer group rounded-2xl border border-slate-200/80 h-full bg-slate-100"
+          className="relative overflow-hidden cursor-pointer group rounded-[5px] border border-slate-200/80 h-full bg-slate-100"
         >
           <img
             src={visibleImages[4].url}
@@ -2504,7 +2504,7 @@ function BlockRenderer({ block, school, isEditing, onOpenLightbox }: BlockRender
                   href={website.startsWith('http') ? website : `https://${website}`}
                   target="_blank"
                   rel="noreferrer"
-                  className="px-3 py-1.5 rounded-xl bg-blue-50 text-[#0f3b7d] hover:bg-blue-100 font-semibold flex items-center gap-1.5 transition"
+                  className="px-3 py-1.5 rounded-[5px] bg-blue-50 text-[#0f3b7d] hover:bg-blue-100 font-semibold flex items-center gap-1.5 transition"
                 >
                   <Globe className="w-3.5 h-3.5" />
                   <span>Cổng thông tin</span>
@@ -2600,7 +2600,7 @@ function BlockRenderer({ block, school, isEditing, onOpenLightbox }: BlockRender
               </div>
             ) : (
               isEditing && (
-                <div className="mt-3 p-4 rounded-xl border border-dashed border-slate-300 bg-slate-50/60 text-center">
+                <div className="mt-3 p-4 rounded-[5px] border border-dashed border-slate-300 bg-slate-50/60 text-center">
                   <FileText className="w-6 h-6 text-slate-300 mx-auto mb-1" />
                   <p className="text-xs font-semibold text-slate-600">Khối thông tin chưa có nội dung</p>
                   <p className="text-[11px] text-slate-400 mt-0.5">Nhấp vào khối để nhập tiêu đề và nội dung bài viết / giới thiệu</p>
@@ -2637,8 +2637,8 @@ function BlockRenderer({ block, school, isEditing, onOpenLightbox }: BlockRender
           {hasData ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {(pName || pPhone) && (
-                <div className="p-4 rounded-2xl bg-slate-50/70 border border-slate-200/80 shadow-xs flex items-start gap-3.5">
-                  <div className="w-12 h-12 rounded-xl bg-blue-50 text-[#0f3b7d] flex items-center justify-center shrink-0 font-bold">
+                <div className="p-4 rounded-[5px] bg-slate-50/70 border border-slate-200/80 shadow-xs flex items-start gap-3.5">
+                  <div className="w-12 h-12 rounded-[5px] bg-blue-50 text-[#0f3b7d] flex items-center justify-center shrink-0 font-bold">
                     <User className="w-6 h-6" />
                   </div>
                   <div className="min-w-0">
@@ -2664,8 +2664,8 @@ function BlockRenderer({ block, school, isEditing, onOpenLightbox }: BlockRender
               )}
 
               {(vpName || vpPhone) && (
-                <div className="p-4 rounded-2xl bg-slate-50/70 border border-slate-200/80 shadow-xs flex items-start gap-3.5">
-                  <div className="w-12 h-12 rounded-xl bg-slate-100 text-slate-700 flex items-center justify-center shrink-0 font-bold">
+                <div className="p-4 rounded-[5px] bg-slate-50/70 border border-slate-200/80 shadow-xs flex items-start gap-3.5">
+                  <div className="w-12 h-12 rounded-[5px] bg-slate-100 text-slate-700 flex items-center justify-center shrink-0 font-bold">
                     <Users className="w-6 h-6" />
                   </div>
                   <div className="min-w-0">
@@ -2689,7 +2689,7 @@ function BlockRenderer({ block, school, isEditing, onOpenLightbox }: BlockRender
             </div>
           ) : (
             isEditing && (
-              <div className="p-4 rounded-xl border border-dashed border-slate-300 bg-slate-50/60 text-center">
+              <div className="p-4 rounded-[5px] border border-dashed border-slate-300 bg-slate-50/60 text-center">
                 <Users className="w-6 h-6 text-slate-300 mx-auto mb-1" />
                 <p className="text-xs font-semibold text-slate-600">Chưa có thông tin lãnh đạo</p>
                 <p className="text-[11px] text-slate-400 mt-0.5">Nhấp vào khối để nhập thông tin Ban Giám Hiệu</p>
@@ -2724,7 +2724,7 @@ function BlockRenderer({ block, school, isEditing, onOpenLightbox }: BlockRender
                 href={`https://www.google.com/maps/search/?api=1&query=${lat},${lng}`}
                 target="_blank"
                 rel="noreferrer"
-                className="px-3 py-1.5 rounded-xl bg-blue-50 text-blue-700 hover:bg-blue-100 text-xs font-semibold flex items-center gap-1.5 transition shrink-0"
+                className="px-3 py-1.5 rounded-[5px] bg-blue-50 text-blue-700 hover:bg-blue-100 text-xs font-semibold flex items-center gap-1.5 transition shrink-0"
               >
                 <span>Xem trên Google Maps</span>
                 <ExternalLink className="w-3 h-3" />
@@ -2737,7 +2737,7 @@ function BlockRenderer({ block, school, isEditing, onOpenLightbox }: BlockRender
               <MapPin className="w-4 h-4 text-[#0f3b7d] shrink-0" />
               <span className="font-medium">{address}</span>
               {lat != null && lng != null && (
-                <span className="font-mono text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded text-[11px] font-semibold ml-auto shrink-0">
+                <span className="font-mono text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-[3px] text-[11px] font-semibold ml-auto shrink-0">
                   GPS: {lat.toFixed(4)}, {lng.toFixed(4)}
                 </span>
               )}
@@ -2745,7 +2745,7 @@ function BlockRenderer({ block, school, isEditing, onOpenLightbox }: BlockRender
           )}
 
           {lat != null && lng != null ? (
-            <div className="h-64 w-full rounded-2xl overflow-hidden border border-slate-200/90 shadow-xs relative z-0">
+            <div className="h-64 w-full rounded-[5px] overflow-hidden border border-slate-200/90 shadow-xs relative z-0">
               <MapContainer
                 center={[lat, lng]}
                 zoom={15}
@@ -2771,7 +2771,7 @@ function BlockRenderer({ block, school, isEditing, onOpenLightbox }: BlockRender
             </div>
           ) : (
             isEditing && (
-              <div className="h-44 rounded-2xl border-2 border-dashed border-slate-200 flex flex-col items-center justify-center text-center p-4 bg-slate-50/50">
+              <div className="h-44 rounded-[5px] border-2 border-dashed border-slate-200 flex flex-col items-center justify-center text-center p-4 bg-slate-50/50">
                 <Map className="w-8 h-8 text-slate-300 mb-1.5" />
                 <p className="font-bold text-slate-700 text-xs">Chưa cấu hình tọa độ GPS</p>
                 <p className="text-[11px] text-slate-400 mt-0.5">Nhấp vào khối để nhập vĩ độ (Lat) và kinh độ (Lng)</p>
@@ -2805,7 +2805,7 @@ function BlockRenderer({ block, school, isEditing, onOpenLightbox }: BlockRender
           )}
 
           {hasContent ? (
-            <div className="p-4 rounded-2xl bg-blue-50/40 border border-blue-200/70 text-xs text-slate-700 space-y-3">
+            <div className="p-4 rounded-[5px] bg-blue-50/40 border border-blue-200/70 text-xs text-slate-700 space-y-3">
               {targetGroups && (
                 <div>
                   <p className="font-bold text-blue-900 text-xs">Đối tượng tuyển sinh mục tiêu:</p>
@@ -2848,7 +2848,7 @@ function BlockRenderer({ block, school, isEditing, onOpenLightbox }: BlockRender
             </div>
           ) : (
             isEditing && (
-              <div className="p-4 rounded-xl border border-dashed border-slate-300 bg-slate-50/60 text-center">
+              <div className="p-4 rounded-[5px] border border-dashed border-slate-300 bg-slate-50/60 text-center">
                 <GraduationCap className="w-6 h-6 text-slate-300 mx-auto mb-1" />
                 <p className="text-xs font-semibold text-slate-600">Chưa có thông tin tuyển sinh</p>
                 <p className="text-[11px] text-slate-400 mt-0.5">Nhấp vào khối để nhập ghi chú, hotline hoặc website tuyển sinh</p>
@@ -2884,7 +2884,7 @@ function BlockRenderer({ block, school, isEditing, onOpenLightbox }: BlockRender
             />
           ) : (
             isEditing && (
-              <div className="py-8 border-2 border-dashed border-slate-300 rounded-2xl flex flex-col items-center justify-center text-center p-4 bg-slate-50/50">
+              <div className="py-8 border-2 border-dashed border-slate-300 rounded-[5px] flex flex-col items-center justify-center text-center p-4 bg-slate-50/50">
                 <ImageIcon className="w-8 h-8 text-slate-300 mb-2" />
                 <p className="font-bold text-slate-700 text-xs">Thư viện ảnh chưa có ảnh nào</p>
                 <p className="text-[11px] text-slate-400 mt-0.5">Nhấp vào khối này để tải ảnh từ máy tính hoặc chọn từ Kho ảnh trường</p>
@@ -2918,7 +2918,7 @@ function BlockRenderer({ block, school, isEditing, onOpenLightbox }: BlockRender
               {statsList.map((stat, idx) => (
                 <div
                   key={idx}
-                  className="p-4 rounded-2xl bg-slate-50/80 border border-slate-200/80 text-center shadow-2xs"
+                  className="p-4 rounded-[5px] bg-slate-50/80 border border-slate-200/80 text-center shadow-2xs"
                 >
                   <p className="text-xl sm:text-2xl font-black text-[#0f3b7d] tracking-tight">
                     {stat.value || '--'}
@@ -2929,7 +2929,7 @@ function BlockRenderer({ block, school, isEditing, onOpenLightbox }: BlockRender
             </div>
           ) : (
             isEditing && (
-              <div className="p-4 rounded-xl border border-dashed border-slate-300 bg-slate-50/60 text-center">
+              <div className="p-4 rounded-[5px] border border-dashed border-slate-300 bg-slate-50/60 text-center">
                 <BarChart2 className="w-6 h-6 text-slate-300 mx-auto mb-1" />
                 <p className="text-xs font-semibold text-slate-600">Chưa có chỉ số nào</p>
                 <p className="text-[11px] text-slate-400 mt-0.5">Nhấp vào khối để thêm các chỉ số và dữ liệu thống kê</p>

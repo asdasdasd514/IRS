@@ -50,10 +50,10 @@ export function LoginPage() {
 
   return (
     <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
-      <div className="w-full max-w-md bg-white rounded-2xl shadow-sm border border-slate-200/80 p-8 sm:p-10">
+      <div className="w-full max-w-md bg-white rounded-[5px] shadow-sm border border-slate-200/80 p-8 sm:p-10">
         {/* Brand Header */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-tr from-[#0f3b7d] to-[#2563eb] text-white font-black text-2xl mb-3 shadow-md tracking-wider">
+          <div className="inline-flex items-center justify-center w-14 h-14 rounded-[5px] bg-gradient-to-tr from-[#0f3b7d] to-[#2563eb] text-white font-black text-2xl mb-3 shadow-md tracking-wider">
             IRS
           </div>
           <h1 className="text-2xl font-black text-[#0f3b7d] tracking-tight">
@@ -66,7 +66,7 @@ export function LoginPage() {
 
         {/* Error Alert */}
         {error && (
-          <div className="mb-6 p-3.5 bg-red-50 border border-red-200/80 rounded-xl flex items-start gap-2.5 text-red-700 text-sm animate-slide-up">
+          <div className="mb-6 p-3.5 bg-red-50 border border-red-200/80 rounded-[5px] flex items-start gap-2.5 text-red-700 text-sm animate-slide-up">
             <AlertCircle className="w-5 h-5 shrink-0 mt-0.5 text-red-500" />
             <span>{error}</span>
           </div>
@@ -92,7 +92,7 @@ export function LoginPage() {
                 value={usernameOrEmail}
                 onChange={(e) => setUsernameOrEmail(e.target.value)}
                 placeholder="admin hoặc email@domain.com"
-                className="w-full pl-10 pr-4 py-2.5 text-sm bg-slate-50/50 border border-slate-300 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-[#0f3b7d] outline-none transition"
+                className="w-full pl-10 pr-4 py-2.5 text-sm bg-slate-50/50 border border-slate-300 rounded-[5px] focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-[#0f3b7d] outline-none transition"
                 required
               />
             </div>
@@ -117,7 +117,7 @@ export function LoginPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
-                className="w-full pl-10 pr-10 py-2.5 text-sm bg-slate-50/50 border border-slate-300 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-[#0f3b7d] outline-none transition"
+                className="w-full pl-10 pr-10 py-2.5 text-sm bg-slate-50/50 border border-slate-300 rounded-[5px] focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-[#0f3b7d] outline-none transition"
                 required
               />
               <button
@@ -138,7 +138,7 @@ export function LoginPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full mt-2 bg-[#0f3b7d] hover:bg-[#0c2f64] text-white font-semibold py-2.5 px-4 rounded-xl transition duration-200 flex items-center justify-center gap-2 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full mt-2 bg-[#0f3b7d] hover:bg-[#0c2f64] text-white font-semibold py-2.5 px-4 rounded-[5px] transition duration-200 flex items-center justify-center gap-2 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading ? (
               <>

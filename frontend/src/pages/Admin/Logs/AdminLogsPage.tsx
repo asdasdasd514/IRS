@@ -83,7 +83,7 @@ export function AdminLogsPage() {
       </div>
 
       {savedSuccess && (
-        <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl flex items-center gap-3 text-emerald-800 text-sm animate-slide-up">
+        <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-[5px] flex items-center gap-3 text-emerald-800 text-sm animate-slide-up">
           <CheckCircle className="w-5 h-5 text-emerald-600 shrink-0" />
           <span className="font-semibold">
             Đã lưu minh chứng hoạt động tuyển sinh thành công vào nhật ký chuyến đi!
@@ -96,12 +96,12 @@ export function AdminLogsPage() {
         {/* Cột trái (8 cols): Tập tin đính kèm & Bản xem trước */}
         <div className="lg:col-span-8 space-y-6">
           {/* Card 1: Tập tin đính kèm */}
-          <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-xs">
+          <div className="bg-white rounded-[5px] border border-slate-200/80 p-6 shadow-xs">
             <h2 className="text-base font-bold text-slate-900 mb-4">
               Tập tin đính kèm
             </h2>
 
-            <div className="border-2 border-dashed border-slate-300 hover:border-[#0f3b7d] rounded-2xl p-8 sm:p-12 text-center transition-colors bg-slate-50/50 hover:bg-blue-50/20 cursor-pointer group">
+            <div className="border-2 border-dashed border-slate-300 hover:border-[#0f3b7d] rounded-[5px] p-8 sm:p-12 text-center transition-colors bg-slate-50/50 hover:bg-blue-50/20 cursor-pointer group">
               <div className="w-14 h-14 rounded-full bg-blue-50 text-[#0f3b7d] flex items-center justify-center mx-auto mb-3 group-hover:scale-105 transition-transform">
                 <UploadCloud className="w-7 h-7" />
               </div>
@@ -118,7 +118,7 @@ export function AdminLogsPage() {
           </div>
 
           {/* Card 2: Bản xem trước */}
-          <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-xs">
+          <div className="bg-white rounded-[5px] border border-slate-200/80 p-6 shadow-xs">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
                 <h2 className="text-base font-bold text-slate-900">
@@ -146,7 +146,7 @@ export function AdminLogsPage() {
               {previews.map((file) => (
                 <div
                   key={file.id}
-                  className="group relative rounded-xl overflow-hidden aspect-4/3 border border-slate-200 bg-slate-100 shadow-xs"
+                  className="group relative rounded-[5px] overflow-hidden aspect-4/3 border border-slate-200 bg-slate-100 shadow-xs"
                 >
                   <img
                     src={file.url}
@@ -182,7 +182,7 @@ export function AdminLogsPage() {
               {/* Box Thêm file */}
               <button
                 type="button"
-                className="rounded-xl border-2 border-dashed border-slate-300 hover:border-[#0f3b7d] flex flex-col items-center justify-center aspect-4/3 text-slate-500 hover:text-[#0f3b7d] transition-colors bg-slate-50/50 hover:bg-blue-50/30"
+                className="rounded-[5px] border-2 border-dashed border-slate-300 hover:border-[#0f3b7d] flex flex-col items-center justify-center aspect-4/3 text-slate-500 hover:text-[#0f3b7d] transition-colors bg-slate-50/50 hover:bg-blue-50/30"
               >
                 <Plus className="w-6 h-6 mb-1" />
                 <span className="text-xs font-semibold">Thêm file</span>
@@ -195,7 +195,7 @@ export function AdminLogsPage() {
         <div className="lg:col-span-4">
           <form
             onSubmit={handleSave}
-            className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-xs space-y-5"
+            className="bg-white rounded-[5px] border border-slate-200/80 p-6 shadow-xs space-y-5"
           >
             <h2 className="text-base font-bold text-slate-900 border-b border-slate-100 pb-3">
               Thông tin chi tiết
@@ -206,7 +206,7 @@ export function AdminLogsPage() {
               <label className="block text-xs font-semibold text-slate-600 mb-1.5">
                 Chuyến đi liên kết
               </label>
-              <div className="p-3 bg-blue-50/60 border border-blue-100 rounded-xl flex items-start gap-2.5">
+              <div className="p-3 bg-blue-50/60 border border-blue-100 rounded-[5px] flex items-start gap-2.5">
                 <School className="w-4 h-4 text-[#0f3b7d] shrink-0 mt-0.5" />
                 <div>
                   <p className="text-xs font-bold text-[#0f3b7d] leading-snug">
@@ -229,7 +229,7 @@ export function AdminLogsPage() {
                   type="date"
                   value={recordDate}
                   onChange={(e) => setRecordDate(e.target.value)}
-                  className="w-full px-3.5 py-2 text-sm bg-slate-50/50 border border-slate-300 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-[#0f3b7d] outline-none transition font-medium"
+                  className="w-full px-3.5 py-2 text-sm bg-slate-50/50 border border-slate-300 rounded-[5px] focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-[#0f3b7d] outline-none transition font-medium"
                   required
                 />
               </div>
@@ -245,7 +245,7 @@ export function AdminLogsPage() {
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 placeholder="Nhập tóm tắt nội dung, kết quả hoạt động hoặc lưu ý quan trọng..."
-                className="w-full p-3.5 text-xs bg-slate-50/50 border border-slate-300 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-[#0f3b7d] outline-none transition resize-none leading-relaxed"
+                className="w-full p-3.5 text-xs bg-slate-50/50 border border-slate-300 rounded-[5px] focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-[#0f3b7d] outline-none transition resize-none leading-relaxed"
                 required
               />
             </div>
@@ -254,7 +254,7 @@ export function AdminLogsPage() {
             <div className="space-y-2.5 pt-2">
               <button
                 type="submit"
-                className="w-full bg-[#0f3b7d] hover:bg-[#0c2f64] text-white font-semibold py-2.5 px-4 rounded-xl transition duration-200 flex items-center justify-center gap-2 text-sm shadow-sm"
+                className="w-full bg-[#0f3b7d] hover:bg-[#0c2f64] text-white font-semibold py-2.5 px-4 rounded-[5px] transition duration-200 flex items-center justify-center gap-2 text-sm shadow-sm"
               >
                 <FileText className="w-4 h-4" />
                 <span>Lưu minh chứng & tiếp tục</span>
@@ -266,7 +266,7 @@ export function AdminLogsPage() {
                   setNotes('');
                   setPreviews([]);
                 }}
-                className="w-full bg-white hover:bg-slate-50 text-slate-700 font-semibold py-2 px-4 rounded-xl border border-slate-300 transition duration-200 text-sm"
+                className="w-full bg-white hover:bg-slate-50 text-slate-700 font-semibold py-2 px-4 rounded-[5px] border border-slate-300 transition duration-200 text-sm"
               >
                 Hủy bỏ
               </button>

@@ -96,7 +96,7 @@ export function AdminMapPage() {
       {/* Main Grid: School Selector List + Map Container */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
         {/* Danh sách địa điểm bên trái (chiếm 4 cột trên lg, 3 cột trên xl) */}
-        <div className="lg:col-span-4 xl:col-span-3 bg-white rounded-2xl border border-slate-200/80 p-3.5 shadow-xs space-y-3">
+        <div className="lg:col-span-4 xl:col-span-3 bg-white rounded-[5px] border border-slate-200/80 p-3.5 shadow-xs space-y-3">
           <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
             <div className="flex items-center gap-2">
               <Building2 className="w-4 h-4 text-[#0f3b7d]" />
@@ -117,7 +117,7 @@ export function AdminMapPage() {
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder="Tìm trường trên bản đồ..."
-              className="w-full pl-8.5 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:bg-white focus:border-[#0f3b7d] outline-none"
+              className="w-full pl-8.5 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-300 rounded-[5px] focus:bg-white focus:border-[#0f3b7d] outline-none"
             />
           </div>
 
@@ -134,7 +134,7 @@ export function AdminMapPage() {
                   <div
                     key={s.id || s._id}
                     onClick={() => setSelectedSchool(s)}
-                    className={`p-2.5 rounded-xl border text-xs cursor-pointer transition ${
+                    className={`p-2.5 rounded-[5px] border text-xs cursor-pointer transition ${
                       isSelected
                         ? 'border-[#0f3b7d] bg-blue-50/70 shadow-xs'
                         : 'border-slate-100 hover:border-slate-200 hover:bg-slate-50/80 bg-white'
@@ -145,7 +145,7 @@ export function AdminMapPage() {
                         {s.name}
                       </p>
                       {s.code && (
-                        <span className="text-[10px] font-mono text-slate-500 bg-slate-100 px-1.5 py-0.2 rounded shrink-0">
+                        <span className="text-[10px] font-mono text-slate-500 bg-slate-100 px-1.5 py-0.2 rounded-[3px] shrink-0">
                           {s.code}
                         </span>
                       )}
@@ -174,8 +174,8 @@ export function AdminMapPage() {
         </div>
 
         {/* Khung bản đồ bên phải mở rộng to hơn (8 cột trên lg, 9 cột trên xl) */}
-        <div className="lg:col-span-8 xl:col-span-9 bg-white rounded-2xl border border-slate-200/80 p-3 shadow-xs">
-          <div className="h-[700px] w-full rounded-xl overflow-hidden relative border border-slate-100">
+        <div className="lg:col-span-8 xl:col-span-9 bg-white rounded-[5px] border border-slate-200/80 p-3 shadow-xs">
+          <div className="h-[700px] w-full rounded-[5px] overflow-hidden relative border border-slate-100">
             {loading && (
               <div className="absolute inset-0 z-20 bg-white/75 backdrop-blur-xs flex items-center justify-center">
                 <div className="text-center">

@@ -344,7 +344,7 @@ export function AdminLocationsPage() {
 
         <button
           onClick={handleOpenCreateModal}
-          className="bg-[#0f3b7d] hover:bg-[#0c2f64] text-white font-semibold py-2.5 px-4 rounded-xl transition duration-200 flex items-center justify-center gap-2 text-sm shadow-sm"
+          className="bg-[#0f3b7d] hover:bg-[#0c2f64] text-white font-semibold py-2.5 px-4 rounded-[5px] transition duration-200 flex items-center justify-center gap-2 text-sm shadow-sm"
         >
           <Plus className="w-4 h-4" />
           <span>Thêm trường học</span>
@@ -353,7 +353,7 @@ export function AdminLocationsPage() {
 
       {/* Success Notification */}
       {actionSuccessMsg && (
-        <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl flex items-center gap-3 text-emerald-800 text-sm animate-slide-up">
+        <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-[5px] flex items-center gap-3 text-emerald-800 text-sm animate-slide-up">
           <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
           <span className="font-semibold">{actionSuccessMsg}</span>
         </div>
@@ -362,7 +362,7 @@ export function AdminLocationsPage() {
 
 
       {/* Search & Filter Bar with View Mode Toggle */}
-      <div className="bg-white rounded-2xl border border-slate-200/80 p-3 sm:p-4 shadow-xs flex items-center justify-between gap-3">
+      <div className="bg-white rounded-[5px] border border-slate-200/80 p-3 sm:p-4 shadow-xs flex items-center justify-between gap-3">
         <div className="relative flex-1">
           <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
             <Search className="w-4 h-4" />
@@ -372,17 +372,17 @@ export function AdminLocationsPage() {
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="Tìm theo tên trường, mã, địa chỉ, hiệu trưởng..."
-            className="w-full pl-10 pr-4 py-2 text-sm bg-slate-50 border border-slate-300 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-[#0f3b7d] outline-none transition"
+            className="w-full pl-10 pr-4 py-2 text-sm bg-slate-50 border border-slate-300 rounded-[5px] focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-[#0f3b7d] outline-none transition"
           />
         </div>
 
         {/* Nút chuyển đổi giao diện: Lưới hoặc Danh sách (chỉ hiển thị icon không cần chữ) */}
-        <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200/80 shrink-0">
+        <div className="flex items-center bg-slate-100 p-1 rounded-[5px] border border-slate-200/80 shrink-0">
           <button
             type="button"
             onClick={() => handleSetViewMode('grid')}
             title="Hiển thị dạng lưới"
-            className={`p-2 rounded-lg transition cursor-pointer ${
+            className={`p-2 rounded-[5px] transition cursor-pointer ${
               viewMode === 'grid'
                 ? 'bg-white text-[#0f3b7d] shadow-xs'
                 : 'text-slate-400 hover:text-slate-700'
@@ -394,7 +394,7 @@ export function AdminLocationsPage() {
             type="button"
             onClick={() => handleSetViewMode('list')}
             title="Hiển thị dạng danh sách"
-            className={`p-2 rounded-lg transition cursor-pointer ${
+            className={`p-2 rounded-[5px] transition cursor-pointer ${
               viewMode === 'list'
                 ? 'bg-white text-[#0f3b7d] shadow-xs'
                 : 'text-slate-400 hover:text-slate-700'
@@ -407,12 +407,12 @@ export function AdminLocationsPage() {
 
       {/* Schools Cards Grid or List */}
       {loading ? (
-        <div className="text-center py-16 bg-white rounded-2xl border border-slate-200/80">
+        <div className="text-center py-16 bg-white rounded-[5px] border border-slate-200/80">
           <div className="w-8 h-8 border-3 border-blue-600/30 border-t-blue-600 rounded-full animate-spin mx-auto mb-3" />
           <p className="text-sm text-slate-500 font-medium">Đang tải danh bạ trường học...</p>
         </div>
       ) : filteredSchools.length === 0 ? (
-        <div className="text-center py-16 bg-white rounded-2xl border border-slate-200/80">
+        <div className="text-center py-16 bg-white rounded-[5px] border border-slate-200/80">
           <Building2 className="w-12 h-12 text-slate-300 mx-auto mb-3" />
           <p className="text-base font-bold text-slate-700">Chưa có trường học nào phù hợp</p>
           <p className="text-xs text-slate-400 mt-1">
@@ -424,7 +424,7 @@ export function AdminLocationsPage() {
           {paginatedSchools.map((s) => (
             <div
               key={s.id || s._id}
-              className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs flex flex-col justify-between hover:shadow-md transition-shadow group"
+              className="bg-white rounded-[5px] border border-slate-200/80 p-5 shadow-xs flex flex-col justify-between hover:shadow-md transition-shadow group"
             >
               <div>
                 <div className="flex items-start justify-between gap-2 mb-3">
@@ -433,7 +433,7 @@ export function AdminLocationsPage() {
                     className="flex items-start gap-3 cursor-pointer group/title flex-1 min-w-0"
                     title="Bấm để xem & tùy biến trang thông tin chi tiết của trường"
                   >
-                    <div className="w-10 h-10 rounded-xl bg-blue-50 text-[#0f3b7d] group-hover/title:bg-[#0f3b7d] group-hover/title:text-white transition flex items-center justify-center shrink-0 font-bold text-sm">
+                    <div className="w-10 h-10 rounded-[5px] bg-blue-50 text-[#0f3b7d] group-hover/title:bg-[#0f3b7d] group-hover/title:text-white transition flex items-center justify-center shrink-0 font-bold text-sm">
                       <Building2 className="w-5 h-5" />
                     </div>
                     <div className="min-w-0">
@@ -554,7 +554,7 @@ export function AdminLocationsPage() {
         </div>
       ) : (
         /* View Mode List: Bảng danh sách trường tinh gọn, đầy đủ thông tin */
-        <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
+        <div className="bg-white rounded-[5px] border border-slate-200/80 shadow-xs overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse text-xs">
               <thead>
@@ -699,7 +699,7 @@ export function AdminLocationsPage() {
               type="button"
               onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
               disabled={currentPage === 1}
-              className="p-2 rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition shadow-2xs cursor-pointer"
+              className="p-2 rounded-[5px] border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition shadow-2xs cursor-pointer"
               title="Trang trước"
             >
               <ChevronLeft className="w-4 h-4" />
@@ -717,7 +717,7 @@ export function AdminLocationsPage() {
                     <button
                       type="button"
                       onClick={() => setCurrentPage(page)}
-                      className={`min-w-[34px] h-[34px] px-2.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                      className={`min-w-[34px] h-[34px] px-2.5 rounded-[5px] text-xs font-bold transition cursor-pointer ${
                         currentPage === page
                           ? 'bg-[#0f3b7d] text-white shadow-2xs'
                           : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
@@ -733,7 +733,7 @@ export function AdminLocationsPage() {
               type="button"
               onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))}
               disabled={currentPage === totalPages}
-              className="p-2 rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition shadow-2xs cursor-pointer"
+              className="p-2 rounded-[5px] border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition shadow-2xs cursor-pointer"
               title="Trang sau"
             >
               <ChevronRight className="w-4 h-4" />
@@ -745,7 +745,7 @@ export function AdminLocationsPage() {
       {/* Modal Thêm Trường Học Mới Với Google Maps Integration */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs overflow-y-auto">
-          <div className="bg-white rounded-2xl max-w-xl w-full p-6 shadow-2xl border border-slate-200 my-8 max-h-[90vh] overflow-y-auto animate-slide-up">
+          <div className="bg-white rounded-[5px] max-w-xl w-full p-6 shadow-2xl border border-slate-200 my-8 max-h-[90vh] overflow-y-auto animate-slide-up">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
               <div>
                 <h3 className="text-lg font-bold text-slate-900">
@@ -767,7 +767,7 @@ export function AdminLocationsPage() {
 
             <form onSubmit={handleSaveSchool} className="space-y-4">
               {/* KHỐI 1: TỌA ĐỘ MAP */}
-              <div className="p-4 bg-gradient-to-br from-blue-50/80 to-indigo-50/50 border border-blue-200 rounded-2xl space-y-3">
+              <div className="p-4 bg-gradient-to-br from-blue-50/80 to-indigo-50/50 border border-blue-200 rounded-[5px] space-y-3">
                 <div className="flex items-center justify-between">
                   <label className="text-xs font-bold text-[#0f3b7d] uppercase tracking-wider flex items-center gap-1.5">
                     <Navigation className="w-4 h-4 text-blue-600" />
@@ -793,13 +793,13 @@ export function AdminLocationsPage() {
                     type="text"
                     value={mapsLink}
                     onChange={(e) => setMapsLink(e.target.value)}
-                    className="flex-1 px-3.5 py-2 text-xs bg-white border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-[#0f3b7d] outline-none font-mono"
+                    className="flex-1 px-3.5 py-2 text-xs bg-white border border-slate-300 rounded-[5px] focus:ring-2 focus:ring-blue-500/20 focus:border-[#0f3b7d] outline-none font-mono"
                   />
                   <button
                     type="button"
                     onClick={handleExtractFromGoogleMaps}
                     disabled={isParsingLink || !mapsLink.trim()}
-                    className="px-4 py-2 bg-[#0f3b7d] hover:bg-[#0c2f64] text-white text-xs font-semibold rounded-xl transition disabled:opacity-50 flex items-center gap-1.5 shrink-0 shadow-xs"
+                    className="px-4 py-2 bg-[#0f3b7d] hover:bg-[#0c2f64] text-white text-xs font-semibold rounded-[5px] transition disabled:opacity-50 flex items-center gap-1.5 shrink-0 shadow-xs"
                   >
                     {isParsingLink ? (
                       <>
@@ -816,14 +816,14 @@ export function AdminLocationsPage() {
                 </div>
 
                 {parseError && (
-                  <div className="p-2.5 bg-red-50 border border-red-200/80 rounded-xl text-red-700 text-xs flex items-start gap-1.5">
+                  <div className="p-2.5 bg-red-50 border border-red-200/80 rounded-[5px] text-red-700 text-xs flex items-start gap-1.5">
                     <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
                     <span>{parseError}</span>
                   </div>
                 )}
 
                 {parseSuccess && (
-                  <div className="p-2.5 bg-emerald-50 border border-emerald-200/80 rounded-xl text-emerald-800 text-xs flex items-center gap-1.5 font-semibold">
+                  <div className="p-2.5 bg-emerald-50 border border-emerald-200/80 rounded-[5px] text-emerald-800 text-xs flex items-center gap-1.5 font-semibold">
                     <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
                     <span>{parseSuccess}</span>
                   </div>
@@ -876,7 +876,7 @@ export function AdminLocationsPage() {
                       type="text"
                       value={formData.name}
                       onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                      className="w-full px-3.5 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:bg-white focus:border-[#0f3b7d] outline-none"
+                      className="w-full px-3.5 py-2 text-xs bg-slate-50 border border-slate-300 rounded-[5px] focus:bg-white focus:border-[#0f3b7d] outline-none"
                       required
                     />
                   </div>
@@ -889,7 +889,7 @@ export function AdminLocationsPage() {
                       type="text"
                       value={formData.code}
                       onChange={(e) => setFormData({ ...formData, code: e.target.value })}
-                      className="w-full px-3.5 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:bg-white outline-none font-mono"
+                      className="w-full px-3.5 py-2 text-xs bg-slate-50 border border-slate-300 rounded-[5px] focus:bg-white outline-none font-mono"
                     />
                   </div>
                 </div>
@@ -902,7 +902,7 @@ export function AdminLocationsPage() {
                     type="text"
                     value={formData.address}
                     onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                    className="w-full px-3.5 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:bg-white outline-none"
+                    className="w-full px-3.5 py-2 text-xs bg-slate-50 border border-slate-300 rounded-[5px] focus:bg-white outline-none"
                   />
                 </div>
 
@@ -915,7 +915,7 @@ export function AdminLocationsPage() {
                       type="text"
                       value={formData.principal_name}
                       onChange={(e) => setFormData({ ...formData, principal_name: e.target.value })}
-                      className="w-full px-3.5 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:bg-white outline-none"
+                      className="w-full px-3.5 py-2 text-xs bg-slate-50 border border-slate-300 rounded-[5px] focus:bg-white outline-none"
                     />
                   </div>
 
@@ -927,7 +927,7 @@ export function AdminLocationsPage() {
                       type="text"
                       value={formData.principal_phone}
                       onChange={(e) => setFormData({ ...formData, principal_phone: e.target.value })}
-                      className="w-full px-3.5 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:bg-white outline-none"
+                      className="w-full px-3.5 py-2 text-xs bg-slate-50 border border-slate-300 rounded-[5px] focus:bg-white outline-none"
                     />
                   </div>
                 </div>
@@ -940,7 +940,7 @@ export function AdminLocationsPage() {
                     type="text"
                     value={formData.website}
                     onChange={(e) => setFormData({ ...formData, website: e.target.value })}
-                    className="w-full px-3.5 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:bg-white outline-none"
+                    className="w-full px-3.5 py-2 text-xs bg-slate-50 border border-slate-300 rounded-[5px] focus:bg-white outline-none"
                   />
                 </div>
               </div>
@@ -950,13 +950,13 @@ export function AdminLocationsPage() {
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="flex-1 py-2.5 px-4 rounded-xl border border-slate-300 text-slate-600 font-semibold text-xs hover:bg-slate-50"
+                  className="flex-1 py-2.5 px-4 rounded-[5px] border border-slate-300 text-slate-600 font-semibold text-xs hover:bg-slate-50"
                 >
                   Hủy bỏ
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 py-2.5 px-4 rounded-xl bg-[#0f3b7d] text-white font-semibold text-xs hover:bg-[#0c2f64] flex items-center justify-center gap-1.5 shadow-sm"
+                  className="flex-1 py-2.5 px-4 rounded-[5px] bg-[#0f3b7d] text-white font-semibold text-xs hover:bg-[#0c2f64] flex items-center justify-center gap-1.5 shadow-sm"
                 >
                   <Building2 className="w-4 h-4" />
                   <span>{editingSchool ? 'Lưu thay đổi' : 'Lưu trường học'}</span>

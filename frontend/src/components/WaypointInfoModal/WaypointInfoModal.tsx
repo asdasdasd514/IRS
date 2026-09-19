@@ -61,7 +61,7 @@ export const WaypointInfoModal: React.FC<WaypointInfoModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-[9999] bg-black bg-opacity-50 flex items-end sm:items-center sm:justify-center">
-      <div className="bg-white w-full sm:max-w-3xl sm:rounded-2xl rounded-t-2xl max-h-[90vh] flex flex-col animate-slide-up">
+      <div className="bg-white w-full sm:max-w-3xl sm:rounded-[5px] rounded-t-[5px] max-h-[90vh] flex flex-col animate-slide-up">
         {/* Header */}
         <div className="flex-shrink-0 flex items-center justify-between p-4 border-b">
           <div>

@@ -34,6 +34,7 @@ class CampaignDestination(BaseModel):
     lat: float
     lng: float
     order: Optional[int] = None
+    priority: Optional[int] = None
     distance_text: Optional[str] = None
     duration_text: Optional[str] = None
     distance_meters: Optional[float] = None
@@ -68,6 +69,7 @@ class CampaignBase(BaseModel):
     notes: Optional[str] = None
     team: Optional[TripTeam] = None # Đoàn công tác / Phân công nhân sự
     destinations: List[CampaignDestination] = [] # Danh sách các trường / địa điểm dự kiến
+    start_point: Optional[dict] = None
 
 
 class CampaignCreate(CampaignBase):
@@ -83,6 +85,7 @@ class CampaignUpdate(BaseModel):
     notes: Optional[str] = None
     team: Optional[TripTeam] = None
     destinations: Optional[List[CampaignDestination]] = None
+    start_point: Optional[dict] = None
 
 
 class CampaignResponse(CampaignBase):
@@ -225,6 +228,7 @@ class CampaignWaypointBase(BaseModel):
     address: Optional[str] = None
     type: WaypointType = WaypointType.SCHOOL
     visit_order: int = 1
+    priority: Optional[int] = None
     is_visited: bool = False
     visited_at: Optional[datetime] = None
     notes: Optional[str] = None
@@ -236,6 +240,7 @@ class CampaignWaypointCreate(CampaignWaypointBase):
 
 class CampaignWaypointUpdate(BaseModel):
     visit_order: Optional[int] = None
+    priority: Optional[int] = None
     is_visited: Optional[bool] = None
     visited_at: Optional[datetime] = None
     notes: Optional[str] = None
@@ -266,6 +271,7 @@ class CampaignWaypointResponse(CampaignWaypointBase):
 # Route Plan Schemas (Kết quả Định tuyến Dynamic Next-Hop Routing)
 class RoutePlanDestination(BaseModel):
     order: int
+    priority: Optional[int] = None
     school_id: Optional[str] = None
     waypoint_id: Optional[str] = None
     name: str
