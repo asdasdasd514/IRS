@@ -27,7 +27,6 @@ import {
   AlertCircle,
   LayoutGrid,
   List,
-  Filter,
   ChevronLeft,
   ChevronRight,
   ChevronDown,
@@ -35,7 +34,7 @@ import {
   Edit,
   GripVertical,
 } from 'lucide-react';
-import { campaignApi, schoolApi, authApi } from '../../../services/api';
+import { campaignApi, schoolApi, authApi, tripApi } from '../../../services/api';
 
 const routeMarkerIcon = (color: string, label: string) =>
   L.divIcon({
@@ -255,7 +254,7 @@ export function AdminCampaignsPage() {
   const [campaigns, setCampaigns] = useState<any[]>([]);
   const [schools, setSchools] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [actionMessage, setActionMessage] = useState<string | null>(null);
+  const setActionMessage = (_msg: string | null) => {};
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
   // Tab chính: 'campaigns' (Chiến dịch) hoặc 'assignment' (Phân công)
@@ -273,7 +272,6 @@ export function AdminCampaignsPage() {
   const [teamNotes, setTeamNotes] = useState('');
   const [savingAssignment, setSavingAssignment] = useState(false);
   const [campaignSearch, setCampaignSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'draft' | 'assigned' | 'unassigned' | 'deployed'>('all');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>(() => {
     try {
       const saved = localStorage.getItem('irs_campaign_view_mode');
@@ -296,10 +294,17 @@ export function AdminCampaignsPage() {
   const [staffSearch, setStaffSearch] = useState('');
   const [selectedStopIdForAllocation, setSelectedStopIdForAllocation] = useState<string>('START');
   const [stopAssignments, setStopAssignments] = useState<
-    Record<string, Array<{ id: string; name: string; phone?: string; email?: string; role?: string }>>
+    Record<string, Array<{ id: string; name: string; email?: string; role?: string }>>
   >({});
   const [, setDraggedStaff] = useState<any | null>(null);
   const [dragOverStopId, setDragOverStopId] = useState<string | null>(null);
+
+  // Chế độ tự động phân bổ ngẫu nhiên
+  const [isAutoAllocating, setIsAutoAllocating] = useState(false);
+  const [autoAllocCounts, setAutoAllocCounts] = useState<Record<string, number | string>>({});
+
+  // Danh sách các chuyến đi đã phân bổ (mỗi chuyến lưu riêng biệt)
+  const [allocatedTrips, setAllocatedTrips] = useState<any[]>([]);
 
   const handleSetViewMode = (mode: 'grid' | 'list') => {
     setViewMode(mode);
@@ -363,10 +368,21 @@ export function AdminCampaignsPage() {
     }
   };
 
+  const loadAllocatedTrips = async () => {
+    try {
+      const data = await tripApi.getTrips();
+      setAllocatedTrips(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error('Error fetching allocated trips:', err);
+      setAllocatedTrips([]);
+    }
+  };
+
   useEffect(() => {
     loadCampaigns();
     loadSchools();
     loadSystemUsers();
+    loadAllocatedTrips();
   }, []);
 
   const openCreateModal = async () => {
@@ -548,7 +564,7 @@ export function AdminCampaignsPage() {
   };
 
   const extractStopAssignments = (camp: any) => {
-    const map: Record<string, Array<{ id: string; name: string; phone?: string; email?: string; role?: string }>> = {};
+    const map: Record<string, Array<{ id: string; name: string; email?: string; role?: string }>> = {};
     if (!camp) return map;
 
     // 1. Start point
@@ -582,7 +598,6 @@ export function AdminCampaignsPage() {
     const staffObj = {
       id: String(user.id || user._id || user.username),
       name: user.full_name || user.username,
-      phone: user.phone || '',
       email: user.email || '',
       role: user.role === 'staff' ? 'Cán bộ tuyển sinh' : (user.role || 'Cán bộ tuyển sinh'),
     };
@@ -615,7 +630,6 @@ export function AdminCampaignsPage() {
         const staffObj = {
           id: staffId,
           name: staffName,
-          phone: user.phone || '',
           email: user.email || '',
           role: user.role === 'staff' ? 'Cán bộ tuyển sinh' : (user.role || 'Cán bộ tuyển sinh'),
         };
@@ -641,23 +655,19 @@ export function AdminCampaignsPage() {
     if (camp) {
       setSelectedAllocationCampaignId(camp.id || camp._id);
       setSelectedAllocationCampaign(camp);
-      setAllocationStartDate(camp.start_date ? String(camp.start_date).substring(0, 10) : '');
-      setAllocationEndDate(camp.end_date ? String(camp.end_date).substring(0, 10) : '');
-      const existingTeam = camp.team || {};
-      setVehiclePlate(existingTeam.vehicle_plate || '');
-      setTeamNotes(existingTeam.notes || '');
-      setStopAssignments(extractStopAssignments(camp));
-      setSelectedStopIdForAllocation('START');
     } else {
       setSelectedAllocationCampaignId(null);
       setSelectedAllocationCampaign(null);
-      setAllocationStartDate('');
-      setAllocationEndDate('');
-      setVehiclePlate('');
-      setTeamNotes('');
-      setStopAssignments({});
-      setSelectedStopIdForAllocation('START');
     }
+    // PHÂN BỔ MỚI: Luôn bắt đầu với dữ liệu trống, không giữ data cũ
+    setAllocationStartDate('');
+    setAllocationEndDate('');
+    setVehiclePlate('');
+    setTeamNotes('');
+    setStopAssignments({});
+    setSelectedStopIdForAllocation('START');
+    setIsAutoAllocating(false);
+    setAutoAllocCounts({});
     setCampaignDropdownSearch('');
     setIsCampaignDropdownOpen(false);
     setIsAllocationModalOpen(true);
@@ -666,14 +676,120 @@ export function AdminCampaignsPage() {
   const handleSelectCampaignInAllocation = (camp: any) => {
     setSelectedAllocationCampaignId(camp.id || camp._id);
     setSelectedAllocationCampaign(camp);
-    setAllocationStartDate(camp.start_date ? String(camp.start_date).substring(0, 10) : '');
-    setAllocationEndDate(camp.end_date ? String(camp.end_date).substring(0, 10) : '');
-    const existingTeam = camp.team || {};
-    setVehiclePlate(existingTeam.vehicle_plate || '');
-    setTeamNotes(existingTeam.notes || '');
-    setStopAssignments(extractStopAssignments(camp));
+    // PHÂN BỔ MỚI: Bắt đầu mới hoàn toàn, không lấy lại ngày/xe/nhân sự đã phân trước đó
+    setAllocationStartDate('');
+    setAllocationEndDate('');
+    setVehiclePlate('');
+    setTeamNotes('');
+    setStopAssignments({});
     setSelectedStopIdForAllocation('START');
+    setIsAutoAllocating(false);
+    setAutoAllocCounts({});
     setIsCampaignDropdownOpen(false);
+  };
+
+  const handleStartAutoAllocate = () => {
+    if (!selectedAllocationCampaign) {
+      alert('Vui lòng chọn chiến dịch trước khi thực hiện tự động phân bổ.');
+      return;
+    }
+    const initialCounts: Record<string, number | string> = {};
+    if (selectedAllocationCampaign.start_point) {
+      initialCounts['START'] = 1;
+    }
+    (selectedAllocationCampaign.destinations || []).forEach((dest: any, idx: number) => {
+      const key = dest.school_id || dest.id || `STOP_${idx}`;
+      initialCounts[key] = 1;
+    });
+    setAutoAllocCounts(initialCounts);
+    setIsAutoAllocating(true);
+  };
+
+  const handleConfirmAutoAllocate = () => {
+    if (!selectedAllocationCampaign) return;
+
+    const availableStaff = systemUsers.filter((u) => u.role === 'staff');
+    const pool = availableStaff.length > 0 ? availableStaff : systemUsers;
+    if (pool.length === 0) {
+      alert('Hệ thống chưa có tài khoản nhân sự (staff) nào để phân bổ.');
+      return;
+    }
+
+    const stopsList: Array<{ key: string; count: number; name: string }> = [];
+    if (selectedAllocationCampaign.start_point) {
+      const c = Math.max(0, parseInt(String(autoAllocCounts['START'] ?? 0), 10) || 0);
+      stopsList.push({
+        key: 'START',
+        count: c,
+        name: selectedAllocationCampaign.start_point.name || 'Điểm xuất phát',
+      });
+    }
+
+    (selectedAllocationCampaign.destinations || []).forEach((dest: any, idx: number) => {
+      const key = dest.school_id || dest.id || `STOP_${idx}`;
+      const c = Math.max(0, parseInt(String(autoAllocCounts[key] ?? 0), 10) || 0);
+      stopsList.push({
+        key: key,
+        count: c,
+        name: dest.name || `Điểm dừng ${idx + 1}`,
+      });
+    });
+
+    const totalStaffNeeded = stopsList.reduce((sum, s) => sum + s.count, 0);
+    if (totalStaffNeeded === 0) {
+      alert('Vui lòng nhập số lượng người lớn hơn 0 cho ít nhất một điểm dừng.');
+      return;
+    }
+
+    // Thuật toán Shuffle Fisher-Yates
+    const shuffle = <T,>(arr: T[]): T[] => {
+      const copy = [...arr];
+      for (let i = copy.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [copy[i], copy[j]] = [copy[j], copy[i]];
+      }
+      return copy;
+    };
+
+    let poolQueue = shuffle(pool);
+    const newAssignments: Record<string, Array<{ id: string; name: string; email?: string; role?: string }>> = {
+      ...stopAssignments,
+    };
+
+    stopsList.forEach(({ key, count }) => {
+      if (count <= 0) {
+        newAssignments[key] = [];
+        return;
+      }
+
+      const assignedForThisStop: any[] = [];
+      const usedInThisStop = new Set<string>();
+
+      let attempts = 0;
+      while (assignedForThisStop.length < count && attempts < pool.length * 3) {
+        attempts++;
+        if (poolQueue.length === 0) {
+          poolQueue = shuffle(pool);
+        }
+        const candidate = poolQueue.shift()!;
+        const candidateId = String(candidate.id || candidate._id || candidate.username);
+
+        if (!usedInThisStop.has(candidateId)) {
+          usedInThisStop.add(candidateId);
+          assignedForThisStop.push({
+            id: candidateId,
+            name: candidate.full_name || candidate.username,
+            email: candidate.email || '',
+            role: candidate.role === 'staff' ? 'Cán bộ tuyển sinh' : (candidate.role || 'Cán bộ tuyển sinh'),
+          });
+        }
+      }
+
+      newAssignments[key] = assignedForThisStop;
+    });
+
+    setStopAssignments(newAssignments);
+    setIsAutoAllocating(false);
   };
 
   const handleSaveAllocation = async () => {
@@ -717,7 +833,6 @@ export function AdminCampaignsPage() {
         members: allAssignedList.map((s) => ({
           name: s.name,
           role: s.role || 'Cán bộ tuyển sinh',
-          phone: s.phone || '',
           email: s.email || '',
         })),
         stop_assignments: stopAssignments,
@@ -784,7 +899,11 @@ export function AdminCampaignsPage() {
       }
 
       setActionMessage(`Đã lưu và phân bổ nhân sự cho các điểm trên tuyến đường thành công!`);
+      setIsAutoAllocating(false);
+      setAutoAllocCounts({});
       setIsAllocationModalOpen(false);
+      await loadCampaigns();
+      await loadAllocatedTrips();
     } catch (err: any) {
       alert(err.response?.data?.detail || 'Lỗi khi lưu phân bổ nhân sự');
     } finally {
@@ -817,9 +936,55 @@ export function AdminCampaignsPage() {
       if (viewingAllocatedTrip && (viewingAllocatedTrip.id === cId || viewingAllocatedTrip._id === cId)) {
         setViewingAllocatedTrip(null);
       }
+      await loadCampaigns();
+      await loadAllocatedTrips();
       setActionMessage(`Đã hủy phân bổ cho chiến dịch "${camp.name}".`);
     } catch (err: any) {
       alert(err.response?.data?.detail || 'Lỗi khi hủy phân bổ');
+    }
+  };
+
+  const handleViewAllocatedTrip = async (camp: any) => {
+    const parentCamp = campaigns.find(
+      (c) => c.id === camp.campaign_id || c._id === camp.campaign_id
+    );
+    const effectiveRouteGeom =
+      camp.route_geometry && Array.isArray(camp.route_geometry) && camp.route_geometry.length > 1
+        ? camp.route_geometry
+        : parentCamp?.route_geometry && Array.isArray(parentCamp.route_geometry) && parentCamp.route_geometry.length > 1
+        ? parentCamp.route_geometry
+        : undefined;
+
+    const merged = {
+      ...camp,
+      start_point: camp.start_point || parentCamp?.start_point,
+      route_geometry: effectiveRouteGeom,
+      destinations: (camp.destinations && camp.destinations.length > 0) ? camp.destinations : parentCamp?.destinations,
+    };
+    setViewingAllocatedTrip(merged);
+
+    // Nếu chưa có route_geometry đầy đủ, chủ động fetch chi tiết chiến dịch từ server
+    if (!effectiveRouteGeom || effectiveRouteGeom.length <= 1) {
+      const campId = camp.campaign_id || camp.id || camp._id;
+      if (campId) {
+        try {
+          const fullCamp = await campaignApi.getById(campId);
+          if (fullCamp?.route_geometry && fullCamp.route_geometry.length > 1) {
+            setViewingAllocatedTrip((prev: any) =>
+              prev
+                ? {
+                    ...prev,
+                    route_geometry: fullCamp.route_geometry,
+                    start_point: prev.start_point || fullCamp.start_point,
+                    destinations: (prev.destinations && prev.destinations.length > 0) ? prev.destinations : fullCamp.destinations,
+                  }
+                : null
+            );
+          }
+        } catch (e) {
+          console.warn('Could not fetch full campaign for route geometry:', e);
+        }
+      }
     }
   };
 
@@ -848,18 +1013,7 @@ export function AdminCampaignsPage() {
         d.school?.name?.toLowerCase().includes(q)
       );
 
-    let matchStatus = true;
-    if (statusFilter === 'assigned') {
-      matchStatus = Boolean(camp.team?.leader_name);
-    } else if (statusFilter === 'unassigned') {
-      matchStatus = !camp.team?.leader_name;
-    } else if (statusFilter === 'deployed') {
-      matchStatus = camp.status === 'deployed';
-    } else if (statusFilter === 'draft') {
-      matchStatus = camp.status !== 'deployed';
-    }
-
-    return matchQuery && matchStatus;
+    return matchQuery;
   });
 
   const ITEMS_PER_PAGE = 20;
@@ -867,7 +1021,7 @@ export function AdminCampaignsPage() {
 
   useEffect(() => {
     setCampaignPage(1);
-  }, [campaignSearch, statusFilter, activeTab]);
+  }, [campaignSearch, activeTab]);
 
   const totalCampaignPages = Math.ceil(filteredCampaigns.length / ITEMS_PER_PAGE);
   const paginatedCampaigns = filteredCampaigns.slice(
@@ -895,16 +1049,37 @@ export function AdminCampaignsPage() {
       (u) =>
         u.full_name?.toLowerCase().includes(q) ||
         u.username?.toLowerCase().includes(q) ||
-        u.email?.toLowerCase().includes(q) ||
-        u.phone?.toLowerCase().includes(q)
+        u.email?.toLowerCase().includes(q)
     );
   }, [systemUsers, staffSearch]);
 
   const allocatedCampaigns = useMemo(() => {
+    if (allocatedTrips.length > 0) {
+      return allocatedTrips.map((t) => {
+        const parentCamp = campaigns.find(
+          (c) => c.id === t.campaign_id || c._id === t.campaign_id
+        );
+        const effectiveRouteGeom =
+          t.route_geometry && Array.isArray(t.route_geometry) && t.route_geometry.length > 1
+            ? t.route_geometry
+            : parentCamp?.route_geometry && Array.isArray(parentCamp.route_geometry) && parentCamp.route_geometry.length > 1
+            ? parentCamp.route_geometry
+            : undefined;
+
+        return {
+          ...t,
+          deployed_trip_id: t.trip_code || t.id,
+          start_point: t.start_point || parentCamp?.start_point,
+          route_geometry: effectiveRouteGeom,
+          polyline: t.polyline || parentCamp?.polyline,
+          destinations: (t.destinations && t.destinations.length > 0) ? t.destinations : parentCamp?.destinations,
+        };
+      });
+    }
     return campaigns.filter(
       (c) => Boolean(c.team?.leader_name) || c.status === 'assigned' || Boolean(c.deployed_trip_id)
     );
-  }, [campaigns]);
+  }, [allocatedTrips, campaigns]);
 
   const filteredAllocatedCampaigns = useMemo(() => {
     const q = allocatedSearch.trim().toLowerCase();
@@ -913,6 +1088,8 @@ export function AdminCampaignsPage() {
       (c) =>
         c.name?.toLowerCase().includes(q) ||
         c.deployed_trip_id?.toLowerCase().includes(q) ||
+        c.trip_code?.toLowerCase().includes(q) ||
+        c.id?.toLowerCase().includes(q) ||
         c.team?.leader_name?.toLowerCase().includes(q) ||
         c.team?.vehicle_plate?.toLowerCase().includes(q) ||
         c.team?.members?.some((m: any) => m.name?.toLowerCase().includes(q))
@@ -997,13 +1174,22 @@ export function AdminCampaignsPage() {
           </p>
         </div>
 
-        {activeTab === 'campaigns' && (
+        {activeTab === 'campaigns' ? (
           <button
             onClick={openCreateModal}
             className="bg-[#0f3b7d] hover:bg-[#0c2f64] text-white font-semibold py-2.5 px-4 rounded-[5px] transition duration-200 flex items-center justify-center gap-2 text-sm shadow-sm cursor-pointer shrink-0"
           >
             <Plus className="w-4 h-4" />
             <span>Tạo chiến dịch mới</span>
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() => openAllocationModal()}
+            className="bg-[#0f3b7d] hover:bg-[#0c2f64] text-white font-semibold py-2.5 px-4 rounded-[5px] transition duration-200 flex items-center justify-center gap-2 text-sm shadow-sm cursor-pointer shrink-0"
+          >
+            <UserPlus className="w-4 h-4" />
+            <span>Phân bổ</span>
           </button>
         )}
       </div>
@@ -1070,26 +1256,8 @@ export function AdminCampaignsPage() {
           )}
         </div>
 
-        {/* Right controls: Filter status & View toggle */}
+        {/* Right controls: View toggle */}
         <div className="flex items-center justify-between sm:justify-end gap-3 shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100">
-          {/* Status filter dropdown */}
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-[5px] hover:bg-slate-50 transition border border-slate-200/80 text-xs font-semibold text-slate-600">
-            <Filter className="w-3.5 h-3.5 text-slate-500 shrink-0" />
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value as any)}
-              className="bg-transparent border-none text-xs font-semibold text-slate-700 focus:outline-none cursor-pointer pr-1"
-            >
-              <option value="all">Tất cả trạng thái</option>
-              <option value="draft">Bản nháp / Kế hoạch</option>
-              <option value="assigned">Đã phân công</option>
-              <option value="unassigned">Chưa phân công</option>
-              <option value="deployed">Đã triển khai</option>
-            </select>
-          </div>
-
-          <div className="h-5 w-px bg-slate-200 hidden sm:block" />
-
           {/* View Switcher: Lưới / List (Chỉ icon) */}
           <div className="flex items-center bg-slate-100 p-1 rounded-[5px] border border-slate-200/60">
             <button
@@ -1121,21 +1289,6 @@ export function AdminCampaignsPage() {
       </div>
       )}
 
-      {actionMessage && (
-        <div className="p-4 bg-blue-50 border border-blue-200 rounded-[5px] flex items-center justify-between gap-3 text-blue-900 text-sm animate-slide-up">
-          <div className="flex items-center gap-2.5">
-            <Sparkles className="w-5 h-5 text-blue-600 shrink-0" />
-            <span className="font-semibold">{actionMessage}</span>
-          </div>
-          <button
-            onClick={() => setActionMessage(null)}
-            className="text-xs text-blue-700 hover:underline cursor-pointer"
-          >
-            Đóng
-          </button>
-        </div>
-      )}
-
       {/* ========================================================================= */}
       {/* TAB 1: CHIẾN DỊCH */}
       {/* ========================================================================= */}
@@ -1163,13 +1316,10 @@ export function AdminCampaignsPage() {
               </p>
               <button
                 type="button"
-                onClick={() => {
-                  setCampaignSearch('');
-                  setStatusFilter('all');
-                }}
+                onClick={() => setCampaignSearch('')}
                 className="mt-4 px-4 py-2 rounded-[5px] bg-blue-50 text-[#0f3b7d] font-bold text-xs hover:bg-blue-100 transition cursor-pointer"
               >
-                Đặt lại bộ lọc
+                Xóa tìm kiếm
               </button>
             </div>
           ) : viewMode === 'grid' ? (
@@ -1184,15 +1334,6 @@ export function AdminCampaignsPage() {
                       <h3 className="text-base font-bold text-slate-900 leading-snug">
                         {camp.name}
                       </h3>
-                      {camp.status === 'deployed' ? (
-                        <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 shrink-0">
-                          Đã triển khai
-                        </span>
-                      ) : (
-                        <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 shrink-0">
-                          Kế hoạch
-                        </span>
-                      )}
                     </div>
 
                     <p className="text-xs text-slate-500 mb-4 line-clamp-2">
@@ -1225,18 +1366,6 @@ export function AdminCampaignsPage() {
                             <span>Thuật toán:</span>
                           </div>
                           <span className="font-semibold text-blue-700">Dynamic Next-Hop</span>
-                        </div>
-                      )}
-
-                      {camp.team?.leader_name && (
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-1.5">
-                            <UserCheck className="w-3.5 h-3.5 text-emerald-600" />
-                            <span>Trưởng đoàn:</span>
-                          </div>
-                          <span className="font-semibold text-emerald-700 truncate max-w-[140px]">
-                            {camp.team.leader_name}
-                          </span>
                         </div>
                       )}
                     </div>
@@ -1402,63 +1531,29 @@ export function AdminCampaignsPage() {
       {/* ========================================================================= */}
       {activeTab === 'assignment' && (
         <div className="space-y-6">
-          {/* Header thanh công cụ Tab Phân bổ */}
-          <div className="bg-white rounded-[5px] border border-slate-200/80 p-5 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div>
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-[5px] bg-[#0f3b7d]/10 text-[#0f3b7d] flex items-center justify-center font-bold">
-                  <Calendar className="w-4 h-4" />
-                </div>
-                <div>
-                  <h2 className="text-base font-bold text-slate-900 leading-none">
-                    Danh Sách Tuyến Đi Đã Phân Bổ
-                  </h2>
-                  <p className="text-xs text-slate-500 mt-1">
-                    Theo dõi các chiến dịch đã được phân bổ đoàn công tác, thời gian xuất phát và lộ trình thực tế
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-3">
-              <span className="px-2.5 py-1 rounded-[5px] bg-emerald-50 text-emerald-700 border border-emerald-200/80 text-xs font-bold">
-                {allocatedCampaigns.length} tuyến đã phân bổ
-              </span>
-              <button
-                type="button"
-                onClick={() => openAllocationModal()}
-                className="h-9 px-4 rounded-[5px] bg-[#0f3b7d] hover:bg-[#0c2f64] text-white text-xs font-bold flex items-center gap-2 transition shadow-xs cursor-pointer shrink-0"
-              >
-                <UserPlus className="w-4 h-4" />
-                <span>+ Phân bổ nhân sự</span>
-              </button>
+          {/* Thanh tìm kiếm & nút Phân bổ (đồng bộ style như bên tab Chiến dịch) */}
+          <div className="bg-white rounded-[5px] border border-slate-200/80 p-2.5 sm:px-4 sm:py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
+            {/* Search box */}
+            <div className="relative flex-1">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                value={allocatedSearch}
+                onChange={(e) => setAllocatedSearch(e.target.value)}
+                placeholder="Tìm kiếm tuyến đi phân bổ..."
+                className="w-full pl-10 pr-8 py-1.5 text-sm bg-transparent placeholder:text-slate-400 text-slate-800 focus:outline-none"
+              />
+              {allocatedSearch && (
+                <button
+                  type="button"
+                  onClick={() => setAllocatedSearch('')}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 cursor-pointer"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
             </div>
           </div>
-
-          {/* Ô tìm kiếm cho danh sách đã phân bổ */}
-          {allocatedCampaigns.length > 0 && (
-            <div className="flex items-center justify-between gap-4">
-              <div className="relative w-full max-w-md">
-                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  value={allocatedSearch}
-                  onChange={(e) => setAllocatedSearch(e.target.value)}
-                  placeholder="Tìm theo tên chiến dịch, mã chuyến, trưởng đoàn, xe..."
-                  className="w-full pl-9 pr-8 py-2 text-xs bg-white border border-slate-200 rounded-[5px] focus:outline-none focus:border-[#0f3b7d] shadow-2xs"
-                />
-                {allocatedSearch && (
-                  <button
-                    type="button"
-                    onClick={() => setAllocatedSearch('')}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 cursor-pointer"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                )}
-              </div>
-            </div>
-          )}
 
           {/* Nội dung danh sách đã phân bổ */}
           {allocatedCampaigns.length === 0 ? (
@@ -1563,11 +1658,6 @@ export function AdminCampaignsPage() {
                           <span className="font-bold truncate">
                             {camp.team?.leader_name || 'Chưa chỉ định'}
                           </span>
-                          {camp.team?.leader_phone && (
-                            <span className="text-slate-400 font-mono text-[11px]">
-                              ({camp.team.leader_phone})
-                            </span>
-                          )}
                         </div>
 
                         {camp.team?.vehicle_plate && (
@@ -1609,7 +1699,7 @@ export function AdminCampaignsPage() {
                     <div className="px-4 py-2.5 bg-slate-50 border-t border-slate-100 flex items-center justify-between gap-2">
                       <button
                         type="button"
-                        onClick={() => setViewingAllocatedTrip(camp)}
+                        onClick={() => handleViewAllocatedTrip(camp)}
                         className="text-xs font-bold text-[#0f3b7d] hover:text-[#0c2f64] flex items-center gap-1 py-1 px-2 rounded-[5px] hover:bg-blue-50 transition cursor-pointer"
                         title="Xem lộ trình và bản đồ"
                       >
@@ -2488,7 +2578,10 @@ export function AdminCampaignsPage() {
 
               <button
                 type="button"
-                onClick={() => setIsAllocationModalOpen(false)}
+                onClick={() => {
+                  setIsAllocationModalOpen(false);
+                  setIsAutoAllocating(false);
+                }}
                 className="p-2 rounded-[5px] text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 transition cursor-pointer"
               >
                 <X className="w-5 h-5" />
@@ -3004,7 +3097,7 @@ export function AdminCampaignsPage() {
                         type="text"
                         value={staffSearch}
                         onChange={(e) => setStaffSearch(e.target.value)}
-                        placeholder="Tìm nhân sự theo tên, sđt, email..."
+                        placeholder="Tìm nhân sự theo tên, email..."
                         className="w-full pl-8 pr-7 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-[5px] focus:outline-none focus:border-[#0f3b7d]"
                       />
                       {staffSearch && (
@@ -3079,7 +3172,7 @@ export function AdminCampaignsPage() {
                                     {userName}
                                   </p>
                                   <p className="text-[11px] text-slate-400 truncate">
-                                    {user.phone ? `${user.phone} ` : ''}{user.email || ''}
+                                    {user.email || ''}
                                   </p>
                                 </div>
                               </div>
@@ -3110,33 +3203,134 @@ export function AdminCampaignsPage() {
             </div>
 
             {/* Footer Modal */}
-            <div className="px-6 py-3.5 border-t border-slate-100 bg-slate-50 flex items-center justify-between shrink-0">
+            <div className="px-6 py-3.5 border-t border-slate-100 bg-slate-50 flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0">
               <button
                 type="button"
-                onClick={() => setIsAllocationModalOpen(false)}
+                onClick={() => {
+                  setIsAllocationModalOpen(false);
+                  setIsAutoAllocating(false);
+                }}
                 className="px-4 py-2 rounded-[5px] border border-slate-300 text-slate-600 text-xs font-semibold hover:bg-slate-100 transition cursor-pointer"
               >
                 Hủy bỏ
               </button>
 
-              <button
-                type="button"
-                onClick={handleSaveAllocation}
-                disabled={savingAssignment || !selectedAllocationCampaign}
-                className="px-5 py-2 rounded-[5px] bg-[#0f3b7d] hover:bg-[#0c2f64] text-white text-xs font-bold transition shadow-xs disabled:opacity-50 flex items-center gap-2 cursor-pointer"
-              >
-                {savingAssignment ? (
+              <div className="flex items-center gap-2.5 flex-wrap justify-end w-full sm:w-auto">
+                {isAutoAllocating ? (
                   <>
-                    <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                    <span>Đang lưu vào hệ thống...</span>
+                    {/* Các ô nhập số lượng cho từng điểm: S, 1, 2, ... */}
+                    <div className="flex items-center gap-1.5 overflow-x-auto max-w-[280px] sm:max-w-md p-1 rounded-[5px] border border-slate-200/90 bg-white shadow-2xs">
+                      {/* Điểm S */}
+                      {selectedAllocationCampaign?.start_point && (
+                        <div
+                          className="flex items-center border border-blue-200 rounded-[4px] overflow-hidden shrink-0"
+                          title={`Điểm xuất phát [S]: ${selectedAllocationCampaign.start_point.name || 'Điểm bắt đầu'}`}
+                        >
+                          <span className="w-5 h-7 bg-[#0f3b7d] text-white flex items-center justify-center font-bold text-[11px] shrink-0">
+                            S
+                          </span>
+                          <input
+                            type="number"
+                            min="0"
+                            max="50"
+                            value={autoAllocCounts['START'] ?? ''}
+                            onChange={(e) =>
+                              setAutoAllocCounts((prev) => ({
+                                ...prev,
+                                START: e.target.value,
+                              }))
+                            }
+                            className="w-9 h-7 text-center text-xs font-bold text-slate-800 bg-slate-50 focus:bg-white focus:outline-none"
+                            placeholder="0"
+                          />
+                        </div>
+                      )}
+
+                      {/* Các điểm 1, 2, ... */}
+                      {(selectedAllocationCampaign?.destinations || []).map((dest: any, idx: number) => {
+                        const stopKey = dest.school_id || dest.id || `STOP_${idx}`;
+                        return (
+                          <div
+                            key={stopKey}
+                            className="flex items-center border border-emerald-200 rounded-[4px] overflow-hidden shrink-0"
+                            title={`Điểm dừng [${idx + 1}]: ${dest.name || `Trường ${idx + 1}`}`}
+                          >
+                            <span className="w-5 h-7 bg-emerald-600 text-white flex items-center justify-center font-bold text-[11px] shrink-0">
+                              {idx + 1}
+                            </span>
+                            <input
+                              type="number"
+                              min="0"
+                              max="50"
+                              value={autoAllocCounts[stopKey] ?? ''}
+                              onChange={(e) =>
+                                setAutoAllocCounts((prev) => ({
+                                  ...prev,
+                                  [stopKey]: e.target.value,
+                                }))
+                              }
+                              className="w-9 h-7 text-center text-xs font-bold text-slate-800 bg-slate-50 focus:bg-white focus:outline-none"
+                              placeholder="0"
+                            />
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* Nút Xác nhận màu xanh */}
+                    <button
+                      type="button"
+                      onClick={handleConfirmAutoAllocate}
+                      className="h-8.5 px-3 rounded-[5px] bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1.5 transition shadow-2xs cursor-pointer shrink-0"
+                    >
+                      <Check className="w-3.5 h-3.5" />
+                      <span>Xác nhận</span>
+                    </button>
+
+                    {/* Nút Hủy màu đỏ */}
+                    <button
+                      type="button"
+                      onClick={() => setIsAutoAllocating(false)}
+                      className="h-8.5 px-3 rounded-[5px] bg-red-600 hover:bg-red-700 text-white text-xs font-bold flex items-center gap-1.5 transition shadow-2xs cursor-pointer shrink-0"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                      <span>Hủy</span>
+                    </button>
                   </>
                 ) : (
-                  <>
-                    <Check className="w-4 h-4" />
-                    <span>Lưu & Phân bổ chuyến đi</span>
-                  </>
+                  /* Nút Tự động (bên trái nút Lưu & Phân bổ) */
+                  <button
+                    type="button"
+                    onClick={handleStartAutoAllocate}
+                    disabled={!selectedAllocationCampaign}
+                    title="Tự động phân bổ ngẫu nhiên nhân sự"
+                    className="h-9 px-3.5 rounded-[5px] bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold flex items-center gap-1.5 transition shadow-2xs disabled:opacity-50 cursor-pointer shrink-0"
+                  >
+                    <Sparkles className="w-3.5 h-3.5" />
+                    <span>Tự động</span>
+                  </button>
                 )}
-              </button>
+
+                {/* Nút Lưu & Phân bổ chuyến đi */}
+                <button
+                  type="button"
+                  onClick={handleSaveAllocation}
+                  disabled={savingAssignment || !selectedAllocationCampaign}
+                  className="h-9 px-5 rounded-[5px] bg-[#0f3b7d] hover:bg-[#0c2f64] text-white text-xs font-bold transition shadow-xs disabled:opacity-50 flex items-center gap-2 cursor-pointer shrink-0"
+                >
+                  {savingAssignment ? (
+                    <>
+                      <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      <span>Đang lưu vào hệ thống...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Check className="w-4 h-4" />
+                      <span>Lưu & Phân bổ chuyến đi</span>
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -3198,9 +3392,6 @@ export function AdminCampaignsPage() {
                 <div className="flex items-center gap-1.5">
                   <Shield className="w-3.5 h-3.5 text-[#0f3b7d]" />
                   <span className="font-bold">{viewingAllocatedTrip.team?.leader_name || 'Chưa có trưởng đoàn'}</span>
-                  {viewingAllocatedTrip.team?.leader_phone && (
-                    <span className="text-slate-400">({viewingAllocatedTrip.team.leader_phone})</span>
-                  )}
                 </div>
                 {viewingAllocatedTrip.team?.vehicle_plate && (
                   <div className="flex items-center gap-1.5">
@@ -3291,9 +3482,27 @@ export function AdminCampaignsPage() {
                 {/* Cột phải: Bản đồ tuyến đường */}
                 <div className="lg:col-span-7 h-[460px] rounded-[5px] overflow-hidden border border-slate-200 shadow-2xs">
                   <CampaignRouteMap
-                    startPoint={viewingAllocatedTrip.start_point}
-                    destinations={viewingAllocatedTrip.destinations || []}
-                    routeGeometry={viewingAllocatedTrip.route_geometry}
+                    startPoint={
+                      viewingAllocatedTrip.start_point ||
+                      campaigns.find((c) => c.id === viewingAllocatedTrip.campaign_id || c._id === viewingAllocatedTrip.campaign_id)?.start_point
+                    }
+                    destinations={
+                      (viewingAllocatedTrip.destinations && viewingAllocatedTrip.destinations.length > 0)
+                        ? viewingAllocatedTrip.destinations
+                        : (campaigns.find((c) => c.id === viewingAllocatedTrip.campaign_id || c._id === viewingAllocatedTrip.campaign_id)?.destinations || [])
+                    }
+                    routeGeometry={
+                      viewingAllocatedTrip.route_geometry && viewingAllocatedTrip.route_geometry.length > 1
+                        ? viewingAllocatedTrip.route_geometry
+                        : (() => {
+                            const pCamp = campaigns.find(
+                              (c) => c.id === viewingAllocatedTrip.campaign_id || c._id === viewingAllocatedTrip.campaign_id
+                            );
+                            return pCamp?.route_geometry && pCamp.route_geometry.length > 1
+                              ? pCamp.route_geometry
+                              : undefined;
+                          })()
+                    }
                   />
                 </div>
               </div>

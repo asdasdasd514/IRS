@@ -6,6 +6,7 @@ from enum import Enum
 
 # Enums
 class TripStatus(str, Enum):
+    ASSIGNED = "assigned"
     ACTIVE = "active"
     PAUSED = "paused"
     COMPLETED = "completed"
@@ -19,6 +20,7 @@ class WaypointType(str, Enum):
 
 class CampaignStatus(str, Enum):
     PLANNING = "planning"
+    ASSIGNED = "assigned"
     DEPLOYED = "deployed"
     IN_PROGRESS = "in_progress"
     COMPLETED = "completed"
@@ -43,13 +45,22 @@ class CampaignDestination(BaseModel):
     preferred_time: Optional[str] = None
     preferred_visit_time: Optional[str] = None
     visit_duration_minutes: Optional[int] = None
+    assigned_staff: Optional[List[dict]] = None
+
+    class Config:
+        extra = "ignore"
 
 
 # Đoàn công tác / Phân công nhân sự
 class TripTeamMember(BaseModel):
+    id: Optional[str] = None
     name: str
     role: str = "Cán bộ tuyển sinh"
     phone: Optional[str] = None
+    email: Optional[str] = None
+
+    class Config:
+        extra = "ignore"
 
 
 class TripTeam(BaseModel):
@@ -57,8 +68,12 @@ class TripTeam(BaseModel):
     leader_phone: Optional[str] = None
     members_count: int = 1
     members: List[TripTeamMember] = []
+    stop_assignments: Optional[dict] = None
     vehicle_plate: Optional[str] = None
     notes: Optional[str] = None
+
+    class Config:
+        extra = "ignore"
 
 
 # Campaign Schemas (Chiến dịch Tuyển sinh)
@@ -72,6 +87,9 @@ class CampaignBase(BaseModel):
     team: Optional[TripTeam] = None # Đoàn công tác / Phân công nhân sự
     destinations: List[CampaignDestination] = [] # Danh sách các trường / địa điểm dự kiến
     start_point: Optional[dict] = None
+
+    class Config:
+        extra = "ignore"
 
 
 class CampaignCreate(CampaignBase):
@@ -114,6 +132,7 @@ class CampaignResponse(CampaignBase):
 
     class Config:
         from_attributes = True
+        extra = "ignore"
 
 
 class CampaignDeployResponse(BaseModel):
@@ -342,6 +361,8 @@ class TripBase(BaseModel):
     estimated_duration_minutes: Optional[int] = None
     destinations: Optional[List[Any]] = None
     start_point: Optional[dict] = None
+    route_geometry: Optional[List[Any]] = None
+    polyline: Optional[str] = None
 
 
 class TripCreate(TripBase):
