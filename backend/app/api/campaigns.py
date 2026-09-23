@@ -180,6 +180,11 @@ async def get_campaign(campaign_id: str, current_user: dict = Depends(get_curren
     db = get_database()
     campaign = await db.campaigns.find_one({"id": campaign_id, "is_deleted": {"$ne": True}})
     if not campaign:
+        trip_check = await db.admission_trips.find_one({"id": campaign_id, "is_deleted": {"$ne": True}})
+        if trip_check and trip_check.get("campaign_id"):
+            campaign_id = trip_check["campaign_id"]
+            campaign = await db.campaigns.find_one({"id": campaign_id, "is_deleted": {"$ne": True}})
+    if not campaign:
         raise HTTPException(status_code=404, detail="Chiến dịch tuyển sinh không tồn tại")
 
     route_plan = await db.route_plans.find_one(
@@ -396,8 +401,18 @@ async def allocate_campaign(
     db = get_database()
     now = datetime.now(timezone.utc)
     camp = await db.campaigns.find_one({"id": campaign_id, "is_deleted": {"$ne": True}})
+    existing_trip = None
+    if not camp:
+        trip_doc = await db.admission_trips.find_one({"id": campaign_id, "is_deleted": {"$ne": True}})
+        if trip_doc and trip_doc.get("campaign_id"):
+            existing_trip = trip_doc
+            campaign_id = trip_doc["campaign_id"]
+            camp = await db.campaigns.find_one({"id": campaign_id, "is_deleted": {"$ne": True}})
     if not camp:
         raise HTTPException(status_code=404, detail="Chiến dịch tuyển sinh không tồn tại")
+
+    if payload.trip_id and not existing_trip:
+        existing_trip = await db.admission_trips.find_one({"id": payload.trip_id, "is_deleted": {"$ne": True}})
 
     destinations = camp.get("destinations", [])
     start_point = camp.get("start_point")
@@ -436,33 +451,55 @@ async def allocate_campaign(
     start_date = payload.start_date
     end_date = payload.end_date
 
-    # 1. Luôn tạo chuyến đi MỚI trong admission_trips (LƯU RIÊNG TỪNG CHUYẾN, KHÔNG DÙNG CHUNG 1 DATA)
-    trip_id = str(uuid.uuid4())
-    trip_count = await db.admission_trips.count_documents({"campaign_id": campaign_id})
-    trip_code = f"TRIP-{campaign_id[:6].upper()}-{trip_count + 1:02d}"
+    # 1. Cập nhật chuyến đi hiện tại (nếu đang chỉnh sửa) HOẶC tạo chuyến đi MỚI (nếu phân bổ mới)
+    if existing_trip:
+        trip_id = existing_trip["id"]
+        trip_code = existing_trip.get("trip_code") or f"TRIP-{campaign_id[:6].upper()}-01"
+        await db.admission_trips.update_one(
+            {"id": trip_id},
+            {"$set": {
+                "name": f"Chuyến đi: {camp.get('name')}",
+                "start_date": start_date,
+                "end_date": end_date,
+                "team": team_data,
+                "current_lat": origin_lat,
+                "current_lng": origin_lng,
+                "destinations": destinations,
+                "start_point": start_point,
+                "route_geometry": route_geom,
+                "polyline": poly,
+                "estimated_distance_km": dist_km,
+                "estimated_duration_minutes": dur_min,
+                "updated_at": now
+            }}
+        )
+    else:
+        trip_id = str(uuid.uuid4())
+        trip_count = await db.admission_trips.count_documents({"campaign_id": campaign_id})
+        trip_code = f"TRIP-{campaign_id[:6].upper()}-{trip_count + 1:02d}"
 
-    trip_doc = {
-        "id": trip_id,
-        "campaign_id": campaign_id,
-        "name": f"Chuyến đi: {camp.get('name')}",
-        "trip_code": trip_code,
-        "status": "assigned",
-        "start_date": start_date,
-        "end_date": end_date,
-        "team": team_data,
-        "current_lat": origin_lat,
-        "current_lng": origin_lng,
-        "destinations": destinations,
-        "start_point": start_point,
-        "route_geometry": route_geom,
-        "polyline": poly,
-        "estimated_distance_km": dist_km,
-        "estimated_duration_minutes": dur_min,
-        "is_deleted": False,
-        "created_at": now,
-        "updated_at": now
-    }
-    await db.admission_trips.insert_one(trip_doc)
+        trip_doc = {
+            "id": trip_id,
+            "campaign_id": campaign_id,
+            "name": f"Chuyến đi: {camp.get('name')}",
+            "trip_code": trip_code,
+            "status": "assigned",
+            "start_date": start_date,
+            "end_date": end_date,
+            "team": team_data,
+            "current_lat": origin_lat,
+            "current_lng": origin_lng,
+            "destinations": destinations,
+            "start_point": start_point,
+            "route_geometry": route_geom,
+            "polyline": poly,
+            "estimated_distance_km": dist_km,
+            "estimated_duration_minutes": dur_min,
+            "is_deleted": False,
+            "created_at": now,
+            "updated_at": now
+        }
+        await db.admission_trips.insert_one(trip_doc)
 
     # 2. Cập nhật Campaign (BẢNG CAMPAIGNS CHỈ LƯU THÔNG TIN CHIẾN DỊCH, KHÔNG LƯU TEAM HAY ASSIGNED_STAFF)
     camp_update = {

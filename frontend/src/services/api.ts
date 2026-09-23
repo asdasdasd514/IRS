@@ -529,7 +529,7 @@ export const campaignApi = {
     const { data } = await api.post(`/campaigns/${campaignId}/deploy`, null, { params });
     return data;
   },
-  allocate: async (campaignId: string, payload: { team: any; start_date?: string; end_date?: string; destinations?: any[]; start_point?: any }): Promise<any> => {
+  allocate: async (campaignId: string, payload: { team: any; start_date?: string; end_date?: string; destinations?: any[]; start_point?: any; trip_id?: string }): Promise<any> => {
     const { data } = await api.post(`/campaigns/${campaignId}/allocate`, payload);
     return data;
   },

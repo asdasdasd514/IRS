@@ -109,6 +109,7 @@ class CampaignUpdate(BaseModel):
 
 
 class CampaignAllocationRequest(BaseModel):
+    trip_id: Optional[str] = None
     team: Optional[TripTeam] = None
     start_date: Optional[str] = None
     end_date: Optional[str] = None

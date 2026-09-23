@@ -305,6 +305,7 @@ export function AdminCampaignsPage() {
 
   // Danh sách các chuyến đi đã phân bổ (mỗi chuyến lưu riêng biệt)
   const [allocatedTrips, setAllocatedTrips] = useState<any[]>([]);
+  const [editingTripId, setEditingTripId] = useState<string | null>(null);
 
   const handleSetViewMode = (mode: 'grid' | 'list') => {
     setViewMode(mode);
@@ -653,18 +654,60 @@ export function AdminCampaignsPage() {
 
   const openAllocationModal = (camp?: any) => {
     if (camp) {
-      setSelectedAllocationCampaignId(camp.id || camp._id);
-      setSelectedAllocationCampaign(camp);
+      const targetCampId = camp.campaign_id || camp.id || camp._id;
+      const targetCamp =
+        campaigns.find((c) => c.id === targetCampId || c._id === targetCampId) || camp;
+
+      setSelectedAllocationCampaignId(targetCamp.id || targetCamp._id);
+      setSelectedAllocationCampaign({
+        ...targetCamp,
+        start_point: camp.start_point || targetCamp.start_point,
+        destinations:
+          camp.destinations && camp.destinations.length > 0
+            ? camp.destinations
+            : targetCamp.destinations,
+      });
+
+      // Nếu là chuyến đi đã phân bổ (có trip_code hoặc id trong admission_trips)
+      const tripId = camp.trip_code ? camp.id : (camp.deployed_trip_id || null);
+      setEditingTripId(tripId);
+
+      // Điền lại các dữ liệu đã phân bổ trước đó
+      setAllocationStartDate(
+        camp.start_date
+          ? camp.start_date.split('T')[0]
+          : targetCamp.start_date
+          ? targetCamp.start_date.split('T')[0]
+          : ''
+      );
+      setAllocationEndDate(
+        camp.end_date
+          ? camp.end_date.split('T')[0]
+          : targetCamp.end_date
+          ? targetCamp.end_date.split('T')[0]
+          : ''
+      );
+      setVehiclePlate(camp.team?.vehicle_plate || targetCamp.team?.vehicle_plate || '');
+      setTeamNotes(camp.team?.notes || targetCamp.team?.notes || '');
+
+      // Trích xuất phân công các điểm dừng
+      let loadedAssignments = extractStopAssignments(camp);
+      if (Object.keys(loadedAssignments).length === 0) {
+        loadedAssignments = extractStopAssignments(targetCamp);
+      }
+      setStopAssignments(loadedAssignments);
     } else {
+      // Phân bổ MỚI: Bắt đầu hoàn toàn trống
       setSelectedAllocationCampaignId(null);
       setSelectedAllocationCampaign(null);
+      setEditingTripId(null);
+      setAllocationStartDate('');
+      setAllocationEndDate('');
+      setVehiclePlate('');
+      setTeamNotes('');
+      setStopAssignments({});
     }
-    // PHÂN BỔ MỚI: Luôn bắt đầu với dữ liệu trống, không giữ data cũ
-    setAllocationStartDate('');
-    setAllocationEndDate('');
-    setVehiclePlate('');
-    setTeamNotes('');
-    setStopAssignments({});
+
     setSelectedStopIdForAllocation('START');
     setIsAutoAllocating(false);
     setAutoAllocCounts({});
@@ -676,7 +719,8 @@ export function AdminCampaignsPage() {
   const handleSelectCampaignInAllocation = (camp: any) => {
     setSelectedAllocationCampaignId(camp.id || camp._id);
     setSelectedAllocationCampaign(camp);
-    // PHÂN BỔ MỚI: Bắt đầu mới hoàn toàn, không lấy lại ngày/xe/nhân sự đã phân trước đó
+    // Khi chọn chiến dịch trong luồng phân bổ mới -> bắt đầu mới
+    setEditingTripId(null);
     setAllocationStartDate('');
     setAllocationEndDate('');
     setVehiclePlate('');
@@ -695,11 +739,13 @@ export function AdminCampaignsPage() {
     }
     const initialCounts: Record<string, number | string> = {};
     if (selectedAllocationCampaign.start_point) {
-      initialCounts['START'] = 1;
+      const existing = (stopAssignments['START'] || []).length;
+      initialCounts['START'] = existing > 0 ? existing : 1;
     }
     (selectedAllocationCampaign.destinations || []).forEach((dest: any, idx: number) => {
       const key = dest.school_id || dest.id || `STOP_${idx}`;
-      initialCounts[key] = 1;
+      const existing = (stopAssignments[key] || []).length;
+      initialCounts[key] = existing > 0 ? existing : 1;
     });
     setAutoAllocCounts(initialCounts);
     setIsAutoAllocating(true);
@@ -752,21 +798,39 @@ export function AdminCampaignsPage() {
     };
 
     let poolQueue = shuffle(pool);
-    const newAssignments: Record<string, Array<{ id: string; name: string; email?: string; role?: string }>> = {
+    const newAssignments: Record<
+      string,
+      Array<{ id: string; name: string; email?: string; role?: string }>
+    > = {
       ...stopAssignments,
     };
 
     stopsList.forEach(({ key, count }) => {
+      const currentList = stopAssignments[key] || [];
+
       if (count <= 0) {
         newAssignments[key] = [];
         return;
       }
 
-      const assignedForThisStop: any[] = [];
-      const usedInThisStop = new Set<string>();
+      if (count === currentList.length) {
+        // Giữ nguyên toàn bộ nhân sự cũ
+        newAssignments[key] = [...currentList];
+        return;
+      }
+
+      if (count < currentList.length) {
+        // Giảm số lượng -> giữ lại đúng số lượng nhân sự cũ ở đầu danh sách
+        newAssignments[key] = currentList.slice(0, count);
+        return;
+      }
+
+      // Tăng số lượng -> giữ nguyên nhân sự cũ, thêm ngẫu nhiên nhân sự mới vào sau
+      const assignedForThisStop = [...currentList];
+      const usedInThisStop = new Set<string>(currentList.map((s) => String(s.id)));
 
       let attempts = 0;
-      while (assignedForThisStop.length < count && attempts < pool.length * 3) {
+      while (assignedForThisStop.length < count && attempts < pool.length * 4) {
         attempts++;
         if (poolQueue.length === 0) {
           poolQueue = shuffle(pool);
@@ -780,7 +844,10 @@ export function AdminCampaignsPage() {
             id: candidateId,
             name: candidate.full_name || candidate.username,
             email: candidate.email || '',
-            role: candidate.role === 'staff' ? 'Cán bộ tuyển sinh' : (candidate.role || 'Cán bộ tuyển sinh'),
+            role:
+              candidate.role === 'staff'
+                ? 'Cán bộ tuyển sinh'
+                : candidate.role || 'Cán bộ tuyển sinh',
           });
         }
       }
@@ -842,6 +909,7 @@ export function AdminCampaignsPage() {
 
       const cId = selectedAllocationCampaign.id || selectedAllocationCampaign._id;
       const res = await campaignApi.allocate(cId, {
+        trip_id: editingTripId || undefined,
         team: teamData,
         start_date: allocationStartDate || undefined,
         end_date: allocationEndDate || undefined,
@@ -901,6 +969,7 @@ export function AdminCampaignsPage() {
       setActionMessage(`Đã lưu và phân bổ nhân sự cho các điểm trên tuyến đường thành công!`);
       setIsAutoAllocating(false);
       setAutoAllocCounts({});
+      setEditingTripId(null);
       setIsAllocationModalOpen(false);
       await loadCampaigns();
       await loadAllocatedTrips();
@@ -3217,18 +3286,16 @@ export function AdminCampaignsPage() {
 
               <div className="flex items-center gap-2.5 flex-wrap justify-end w-full sm:w-auto">
                 {isAutoAllocating ? (
-                  <>
-                    {/* Các ô nhập số lượng cho từng điểm: S, 1, 2, ... */}
-                    <div className="flex items-center gap-1.5 overflow-x-auto max-w-[280px] sm:max-w-md p-1 rounded-[5px] border border-slate-200/90 bg-white shadow-2xs">
+                  <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+                    {/* Khung S 1 2: Nền trắng, viền xanh, kích thước nhỏ gọn tinh tế */}
+                    <div className="flex items-center gap-1.5 p-1 bg-white rounded-[5px] border border-blue-400 shadow-2xs overflow-x-auto max-w-[280px] sm:max-w-md">
                       {/* Điểm S */}
                       {selectedAllocationCampaign?.start_point && (
                         <div
-                          className="flex items-center border border-blue-200 rounded-[4px] overflow-hidden shrink-0"
+                          className="flex items-center bg-white border border-blue-500 rounded-[4px] px-1.5 py-0.5 shrink-0"
                           title={`Điểm xuất phát [S]: ${selectedAllocationCampaign.start_point.name || 'Điểm bắt đầu'}`}
                         >
-                          <span className="w-5 h-7 bg-[#0f3b7d] text-white flex items-center justify-center font-bold text-[11px] shrink-0">
-                            S
-                          </span>
+                          <span className="font-bold text-[11px] text-[#0f3b7d] mr-1 select-none">S:</span>
                           <input
                             type="number"
                             min="0"
@@ -3240,7 +3307,7 @@ export function AdminCampaignsPage() {
                                 START: e.target.value,
                               }))
                             }
-                            className="w-9 h-7 text-center text-xs font-bold text-slate-800 bg-slate-50 focus:bg-white focus:outline-none"
+                            className="w-7 h-5 text-center text-xs font-bold text-slate-800 bg-transparent focus:outline-none"
                             placeholder="0"
                           />
                         </div>
@@ -3252,12 +3319,10 @@ export function AdminCampaignsPage() {
                         return (
                           <div
                             key={stopKey}
-                            className="flex items-center border border-emerald-200 rounded-[4px] overflow-hidden shrink-0"
+                            className="flex items-center bg-white border border-blue-500 rounded-[4px] px-1.5 py-0.5 shrink-0"
                             title={`Điểm dừng [${idx + 1}]: ${dest.name || `Trường ${idx + 1}`}`}
                           >
-                            <span className="w-5 h-7 bg-emerald-600 text-white flex items-center justify-center font-bold text-[11px] shrink-0">
-                              {idx + 1}
-                            </span>
+                            <span className="font-bold text-[11px] text-[#0f3b7d] mr-1 select-none">{idx + 1}:</span>
                             <input
                               type="number"
                               min="0"
@@ -3269,7 +3334,7 @@ export function AdminCampaignsPage() {
                                   [stopKey]: e.target.value,
                                 }))
                               }
-                              className="w-9 h-7 text-center text-xs font-bold text-slate-800 bg-slate-50 focus:bg-white focus:outline-none"
+                              className="w-7 h-5 text-center text-xs font-bold text-slate-800 bg-transparent focus:outline-none"
                               placeholder="0"
                             />
                           </div>
@@ -3281,7 +3346,7 @@ export function AdminCampaignsPage() {
                     <button
                       type="button"
                       onClick={handleConfirmAutoAllocate}
-                      className="h-8.5 px-3 rounded-[5px] bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1.5 transition shadow-2xs cursor-pointer shrink-0"
+                      className="h-8 px-3 rounded-[5px] bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1 transition shadow-2xs cursor-pointer shrink-0"
                     >
                       <Check className="w-3.5 h-3.5" />
                       <span>Xác nhận</span>
@@ -3291,12 +3356,12 @@ export function AdminCampaignsPage() {
                     <button
                       type="button"
                       onClick={() => setIsAutoAllocating(false)}
-                      className="h-8.5 px-3 rounded-[5px] bg-red-600 hover:bg-red-700 text-white text-xs font-bold flex items-center gap-1.5 transition shadow-2xs cursor-pointer shrink-0"
+                      className="h-8 px-2.5 rounded-[5px] bg-red-600 hover:bg-red-700 text-white text-xs font-bold flex items-center gap-1 transition shadow-2xs cursor-pointer shrink-0"
                     >
                       <X className="w-3.5 h-3.5" />
                       <span>Hủy</span>
                     </button>
-                  </>
+                  </div>
                 ) : (
                   /* Nút Tự động (bên trái nút Lưu & Phân bổ) */
                   <button
