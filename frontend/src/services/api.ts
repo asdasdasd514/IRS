@@ -498,7 +498,16 @@ export const campaignApi = {
     return data;
   },
   previewRoute: async (payload: {
-    destinations: Array<{ school_id?: string; name: string; address?: string; lat: number; lng: number; priority?: number }>;
+    destinations: Array<{
+      school_id?: string;
+      name: string;
+      address?: string;
+      lat: number;
+      lng: number;
+      priority?: number;
+      preferred_visit_time?: string;
+      visit_duration_minutes?: number;
+    }>;
     start_point: { lat: number; lng: number; name: string };
   }): Promise<any> => {
     const { data } = await api.post('/campaigns/preview-route', payload);
@@ -520,7 +529,7 @@ export const campaignApi = {
     const { data } = await api.post(`/campaigns/${campaignId}/deploy`, null, { params });
     return data;
   },
-  allocate: async (campaignId: string, payload: { team: any; start_date?: string; end_date?: string }): Promise<any> => {
+  allocate: async (campaignId: string, payload: { team: any; start_date?: string; end_date?: string; destinations?: any[]; start_point?: any }): Promise<any> => {
     const { data } = await api.post(`/campaigns/${campaignId}/allocate`, payload);
     return data;
   },

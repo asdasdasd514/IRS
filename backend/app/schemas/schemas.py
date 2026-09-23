@@ -41,6 +41,8 @@ class CampaignDestination(BaseModel):
     duration_seconds: Optional[float] = None
     notes: Optional[str] = None
     preferred_time: Optional[str] = None
+    preferred_visit_time: Optional[str] = None
+    visit_duration_minutes: Optional[int] = None
 
 
 # Đoàn công tác / Phân công nhân sự
@@ -237,6 +239,8 @@ class CampaignWaypointBase(BaseModel):
     type: WaypointType = WaypointType.SCHOOL
     visit_order: int = 1
     priority: Optional[int] = None
+    preferred_visit_time: Optional[str] = None
+    visit_duration_minutes: Optional[int] = None
     is_visited: bool = False
     visited_at: Optional[datetime] = None
     notes: Optional[str] = None
@@ -249,6 +253,8 @@ class CampaignWaypointCreate(CampaignWaypointBase):
 class CampaignWaypointUpdate(BaseModel):
     visit_order: Optional[int] = None
     priority: Optional[int] = None
+    preferred_visit_time: Optional[str] = None
+    visit_duration_minutes: Optional[int] = None
     is_visited: Optional[bool] = None
     visited_at: Optional[datetime] = None
     notes: Optional[str] = None
@@ -280,6 +286,8 @@ class CampaignWaypointResponse(CampaignWaypointBase):
 class RoutePlanDestination(BaseModel):
     order: int
     priority: Optional[int] = None
+    preferred_visit_time: Optional[str] = None
+    visit_duration_minutes: Optional[int] = None
     school_id: Optional[str] = None
     waypoint_id: Optional[str] = None
     name: str

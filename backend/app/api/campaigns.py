@@ -278,6 +278,8 @@ async def preview_optimized_route(
             {
                 "order": idx + 1,
                 "priority": d.get("priority"),
+                "preferred_visit_time": d.get("preferred_visit_time") or d.get("preferred_time"),
+                "visit_duration_minutes": d.get("visit_duration_minutes", 60),
                 "school_id": d.get("school_id"),
                 "waypoint_id": d.get("waypoint_id") or d.get("id"),
                 "name": d.get("name"),
@@ -404,6 +406,22 @@ async def allocate_campaign(
             "updated_at": now
         }
         await db.admission_trips.update_one({"id": trip_id}, {"$set": update_trip})
+
+        # Cập nhật thông tin nhân sự phân bổ cho các điểm dừng campaign_waypoints
+        for i, dest in enumerate(destinations, 1):
+            s_id = dest.get("school_id") or dest.get("id")
+            await db.campaign_waypoints.update_one(
+                {
+                    "campaign_id": campaign_id,
+                    "$or": [{"school_id": s_id}, {"waypoint_id": s_id}, {"name": dest.get("name")}]
+                },
+                {"$set": {
+                    "assigned_staff": dest.get("assigned_staff", []),
+                    "preferred_visit_time": dest.get("preferred_visit_time") or dest.get("preferred_time"),
+                    "visit_duration_minutes": dest.get("visit_duration_minutes", 60),
+                    "updated_at": now
+                }}
+            )
     else:
         trip_id = str(uuid.uuid4())
         trip_doc = {
@@ -445,6 +463,9 @@ async def allocate_campaign(
                 "type": WaypointType.SCHOOL.value,
                 "visit_order": i,
                 "priority": dest.get("priority"),
+                "preferred_visit_time": dest.get("preferred_visit_time") or dest.get("preferred_time"),
+                "visit_duration_minutes": dest.get("visit_duration_minutes", 60),
+                "assigned_staff": dest.get("assigned_staff", []),
                 "is_visited": False,
                 "visited_at": None,
                 "notes": dest.get("notes"),
@@ -591,6 +612,8 @@ async def deploy_campaign_route(
             "type": WaypointType.SCHOOL.value,
             "visit_order": i,
             "priority": dest.get("priority"),
+            "preferred_visit_time": dest.get("preferred_visit_time") or dest.get("preferred_time"),
+            "visit_duration_minutes": dest.get("visit_duration_minutes", 60),
             "is_visited": False,
             "visited_at": None,
             "notes": dest.get("notes"),
@@ -625,6 +648,8 @@ async def deploy_campaign_route(
             {
                 "order": idx + 1,
                 "priority": d.get("priority"),
+                "preferred_visit_time": d.get("preferred_visit_time") or d.get("preferred_time"),
+                "visit_duration_minutes": d.get("visit_duration_minutes", 60),
                 "school_id": d.get("school_id"),
                 "waypoint_id": d.get("waypoint_id") or d.get("id"),
                 "name": d.get("name"),

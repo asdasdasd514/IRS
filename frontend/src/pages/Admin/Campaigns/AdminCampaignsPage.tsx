@@ -31,9 +31,9 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronDown,
-  Star,
   Calendar,
   Edit,
+  GripVertical,
 } from 'lucide-react';
 import { campaignApi, schoolApi, authApi } from '../../../services/api';
 
@@ -80,6 +80,19 @@ function MapController({
   }, [center, zoom, bounds, map]);
   return null;
 }
+
+const calculateDepartureTime = (visitTime?: string, durationMinutes: number = 60): string => {
+  if (!visitTime) return '';
+  const parts = visitTime.split(':');
+  if (parts.length < 2) return '';
+  const h = parseInt(parts[0], 10);
+  const m = parseInt(parts[1], 10);
+  if (isNaN(h) || isNaN(m)) return '';
+  const totalM = h * 60 + m + (durationMinutes || 60);
+  const endH = Math.floor(totalM / 60) % 24;
+  const endM = totalM % 60;
+  return `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}`;
+};
 
 function CampaignRouteMap({
   startPoint,
@@ -256,11 +269,8 @@ export function AdminCampaignsPage() {
   const [systemUsers, setSystemUsers] = useState<any[]>([]);
 
   // Thông tin phân công đoàn công tác
-  const [teamLeaderName, setTeamLeaderName] = useState('');
-  const [teamLeaderPhone, setTeamLeaderPhone] = useState('');
   const [vehiclePlate, setVehiclePlate] = useState('');
   const [teamNotes, setTeamNotes] = useState('');
-  const [teamMembers, setTeamMembers] = useState<Array<{ name: string; role: string; phone?: string }>>([]);
   const [savingAssignment, setSavingAssignment] = useState(false);
   const [campaignSearch, setCampaignSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'draft' | 'assigned' | 'unassigned' | 'deployed'>('all');
@@ -284,7 +294,12 @@ export function AdminCampaignsPage() {
   const [isCampaignDropdownOpen, setIsCampaignDropdownOpen] = useState(false);
   const [campaignDropdownSearch, setCampaignDropdownSearch] = useState('');
   const [staffSearch, setStaffSearch] = useState('');
-  const [activeSchoolInAllocation, setActiveSchoolInAllocation] = useState<any | null>(null);
+  const [selectedStopIdForAllocation, setSelectedStopIdForAllocation] = useState<string>('START');
+  const [stopAssignments, setStopAssignments] = useState<
+    Record<string, Array<{ id: string; name: string; phone?: string; email?: string; role?: string }>>
+  >({});
+  const [, setDraggedStaff] = useState<any | null>(null);
+  const [dragOverStopId, setDragOverStopId] = useState<string | null>(null);
 
   const handleSetViewMode = (mode: 'grid' | 'list') => {
     setViewMode(mode);
@@ -388,20 +403,27 @@ export function AdminCampaignsPage() {
           lng: Number(school.lng),
           notes: school.notes || '',
           priority: undefined,
+          preferred_visit_time: undefined,
+          visit_duration_minutes: 60,
         },
       ];
     });
   };
 
-  const updateDestinationPriority = (schoolId: string, priority?: number) => {
+  const updateDestinationVisitTime = (schoolId: string, time?: string, duration?: number) => {
     setSelectedDestinations((prev) =>
       prev.map((item) =>
         item.school_id === schoolId || item.id === schoolId
-          ? { ...item, priority: priority && priority > 0 ? priority : undefined }
+          ? {
+              ...item,
+              preferred_visit_time: time && time.trim() ? time.trim() : undefined,
+              visit_duration_minutes: duration !== undefined ? duration : (item.visit_duration_minutes || 60),
+            }
           : item
       )
     );
   };
+
 
   const nextStep = async () => {
     if (wizardStep === 1 && !campaignName.trim()) {
@@ -525,6 +547,96 @@ export function AdminCampaignsPage() {
     }
   };
 
+  const extractStopAssignments = (camp: any) => {
+    const map: Record<string, Array<{ id: string; name: string; phone?: string; email?: string; role?: string }>> = {};
+    if (!camp) return map;
+
+    // 1. Start point
+    if (camp.start_point?.assigned_staff && Array.isArray(camp.start_point.assigned_staff)) {
+      map['START'] = camp.start_point.assigned_staff;
+    }
+
+    // 2. Destinations
+    if (Array.isArray(camp.destinations)) {
+      camp.destinations.forEach((dest: any, idx: number) => {
+        const key = dest.school_id || dest.id || `STOP_${idx}`;
+        if (dest.assigned_staff && Array.isArray(dest.assigned_staff)) {
+          map[key] = dest.assigned_staff;
+        }
+      });
+    }
+
+    // 3. Fallback team.stop_assignments
+    if (camp.team?.stop_assignments && typeof camp.team.stop_assignments === 'object') {
+      Object.entries(camp.team.stop_assignments).forEach(([k, v]) => {
+        if (Array.isArray(v) && (!map[k] || map[k].length === 0)) {
+          map[k] = v as any;
+        }
+      });
+    }
+
+    return map;
+  };
+
+  const assignStaffToStop = (stopKey: string, user: any) => {
+    const staffObj = {
+      id: String(user.id || user._id || user.username),
+      name: user.full_name || user.username,
+      phone: user.phone || '',
+      email: user.email || '',
+      role: user.role === 'staff' ? 'Cán bộ tuyển sinh' : (user.role || 'Cán bộ tuyển sinh'),
+    };
+
+    setStopAssignments((prev) => {
+      const current = prev[stopKey] || [];
+      if (current.some((s) => s.id === staffObj.id || s.name === staffObj.name)) {
+        return prev;
+      }
+      return {
+        ...prev,
+        [stopKey]: [...current, staffObj],
+      };
+    });
+  };
+
+  const toggleStaffOnStop = (stopKey: string, user: any) => {
+    const staffId = String(user.id || user._id || user.username);
+    const staffName = user.full_name || user.username;
+
+    setStopAssignments((prev) => {
+      const current = prev[stopKey] || [];
+      const exists = current.some((s) => s.id === staffId || s.name === staffName);
+      if (exists) {
+        return {
+          ...prev,
+          [stopKey]: current.filter((s) => s.id !== staffId && s.name !== staffName),
+        };
+      } else {
+        const staffObj = {
+          id: staffId,
+          name: staffName,
+          phone: user.phone || '',
+          email: user.email || '',
+          role: user.role === 'staff' ? 'Cán bộ tuyển sinh' : (user.role || 'Cán bộ tuyển sinh'),
+        };
+        return {
+          ...prev,
+          [stopKey]: [...current, staffObj],
+        };
+      }
+    });
+  };
+
+  const removeStaffFromStop = (stopKey: string, staffIdOrName: string) => {
+    setStopAssignments((prev) => {
+      const current = prev[stopKey] || [];
+      return {
+        ...prev,
+        [stopKey]: current.filter((s) => s.id !== staffIdOrName && s.name !== staffIdOrName),
+      };
+    });
+  };
+
   const openAllocationModal = (camp?: any) => {
     if (camp) {
       setSelectedAllocationCampaignId(camp.id || camp._id);
@@ -532,29 +644,19 @@ export function AdminCampaignsPage() {
       setAllocationStartDate(camp.start_date ? String(camp.start_date).substring(0, 10) : '');
       setAllocationEndDate(camp.end_date ? String(camp.end_date).substring(0, 10) : '');
       const existingTeam = camp.team || {};
-      setTeamLeaderName(existingTeam.leader_name || '');
-      setTeamLeaderPhone(existingTeam.leader_phone || '');
       setVehiclePlate(existingTeam.vehicle_plate || '');
       setTeamNotes(existingTeam.notes || '');
-      setTeamMembers(
-        Array.isArray(existingTeam.members) && existingTeam.members.length > 0
-          ? existingTeam.members.map((m: any) => ({
-              name: m.name || '',
-              role: m.role || 'Cán bộ tư vấn',
-              phone: m.phone || '',
-            }))
-          : []
-      );
+      setStopAssignments(extractStopAssignments(camp));
+      setSelectedStopIdForAllocation('START');
     } else {
       setSelectedAllocationCampaignId(null);
       setSelectedAllocationCampaign(null);
       setAllocationStartDate('');
       setAllocationEndDate('');
-      setTeamLeaderName('');
-      setTeamLeaderPhone('');
       setVehiclePlate('');
       setTeamNotes('');
-      setTeamMembers([]);
+      setStopAssignments({});
+      setSelectedStopIdForAllocation('START');
     }
     setCampaignDropdownSearch('');
     setIsCampaignDropdownOpen(false);
@@ -567,51 +669,11 @@ export function AdminCampaignsPage() {
     setAllocationStartDate(camp.start_date ? String(camp.start_date).substring(0, 10) : '');
     setAllocationEndDate(camp.end_date ? String(camp.end_date).substring(0, 10) : '');
     const existingTeam = camp.team || {};
-    setTeamLeaderName(existingTeam.leader_name || '');
-    setTeamLeaderPhone(existingTeam.leader_phone || '');
     setVehiclePlate(existingTeam.vehicle_plate || '');
     setTeamNotes(existingTeam.notes || '');
-    setTeamMembers(
-      Array.isArray(existingTeam.members) && existingTeam.members.length > 0
-        ? existingTeam.members.map((m: any) => ({
-            name: m.name || '',
-            role: m.role || 'Cán bộ tư vấn',
-            phone: m.phone || '',
-          }))
-        : []
-    );
+    setStopAssignments(extractStopAssignments(camp));
+    setSelectedStopIdForAllocation('START');
     setIsCampaignDropdownOpen(false);
-  };
-
-  const toggleStaffMember = (user: any) => {
-    const userName = user.full_name || user.username;
-    if (teamLeaderName === userName) {
-      if (teamMembers.length > 0) {
-        const [nextLeader, ...rest] = teamMembers;
-        setTeamLeaderName(nextLeader.name);
-        setTeamLeaderPhone(nextLeader.phone || '');
-        setTeamMembers(rest);
-      } else {
-        setTeamLeaderName('');
-        setTeamLeaderPhone('');
-      }
-    } else if (teamMembers.some((m) => m.name === userName)) {
-      setTeamMembers((prev) => prev.filter((m) => m.name !== userName));
-    } else {
-      if (!teamLeaderName) {
-        setTeamLeaderName(userName);
-        setTeamLeaderPhone(user.phone || '');
-      } else {
-        setTeamMembers((prev) => [
-          ...prev,
-          {
-            name: userName,
-            role: user.role === 'staff' ? 'Cán bộ tư vấn' : (user.role || 'Cán bộ tư vấn'),
-            phone: user.phone || '',
-          },
-        ]);
-      }
-    }
   };
 
   const handleSaveAllocation = async () => {
@@ -622,15 +684,45 @@ export function AdminCampaignsPage() {
 
     setSavingAssignment(true);
     try {
-      const validMembers = teamMembers.filter((m) => m.name.trim());
-      const leaderName = teamLeaderName.trim() || (validMembers.length > 0 ? validMembers[0].name : 'Cán bộ phụ trách');
+      // Thu thập tất cả nhân sự đã phân bổ qua các điểm dừng (Điểm bắt đầu [S] + các điểm dừng [1], [2]...)
+      const uniqueStaffMap = new Map<string, any>();
+      Object.values(stopAssignments).forEach((list) => {
+        list.forEach((s) => {
+          const key = s.id || s.name;
+          if (!uniqueStaffMap.has(key)) {
+            uniqueStaffMap.set(key, s);
+          }
+        });
+      });
+      const allAssignedList = Array.from(uniqueStaffMap.values());
+
+      const updatedStartPoint = selectedAllocationCampaign.start_point
+        ? {
+            ...selectedAllocationCampaign.start_point,
+            assigned_staff: stopAssignments['START'] || [],
+          }
+        : undefined;
+
+      const updatedDestinations = (selectedAllocationCampaign.destinations || []).map((dest: any, idx: number) => {
+        const key = dest.school_id || dest.id || `STOP_${idx}`;
+        return {
+          ...dest,
+          assigned_staff: stopAssignments[key] || [],
+        };
+      });
+
       const teamData = {
-        leader_name: leaderName,
-        leader_phone: teamLeaderPhone.trim() || undefined,
+        leader_name: allAssignedList.length > 0 ? allAssignedList[0].name : undefined,
+        members_count: allAssignedList.length,
+        members: allAssignedList.map((s) => ({
+          name: s.name,
+          role: s.role || 'Cán bộ tuyển sinh',
+          phone: s.phone || '',
+          email: s.email || '',
+        })),
+        stop_assignments: stopAssignments,
         vehicle_plate: vehiclePlate.trim() || undefined,
         notes: teamNotes.trim() || undefined,
-        members_count: 1 + validMembers.length,
-        members: validMembers,
       };
 
       const cId = selectedAllocationCampaign.id || selectedAllocationCampaign._id;
@@ -638,6 +730,8 @@ export function AdminCampaignsPage() {
         team: teamData,
         start_date: allocationStartDate || undefined,
         end_date: allocationEndDate || undefined,
+        destinations: updatedDestinations,
+        start_point: updatedStartPoint,
       });
 
       setCampaigns((prev) =>
@@ -648,6 +742,8 @@ export function AdminCampaignsPage() {
                 team: teamData,
                 start_date: allocationStartDate || undefined,
                 end_date: allocationEndDate || undefined,
+                destinations: updatedDestinations,
+                start_point: updatedStartPoint,
                 status: 'assigned',
                 deployed_trip_id: res.trip_id || c.deployed_trip_id,
               }
@@ -663,6 +759,8 @@ export function AdminCampaignsPage() {
                 team: teamData,
                 start_date: allocationStartDate || undefined,
                 end_date: allocationEndDate || undefined,
+                destinations: updatedDestinations,
+                start_point: updatedStartPoint,
                 status: 'assigned',
               }
             : null
@@ -677,13 +775,15 @@ export function AdminCampaignsPage() {
                 team: teamData,
                 start_date: allocationStartDate || undefined,
                 end_date: allocationEndDate || undefined,
+                destinations: updatedDestinations,
+                start_point: updatedStartPoint,
                 status: 'assigned',
               }
             : null
         );
       }
 
-      setActionMessage(`Đã lưu và phân bổ chuyến đi cho chiến dịch "${selectedAllocationCampaign.name}" vào bảng chuyến đi thành công!`);
+      setActionMessage(`Đã lưu và phân bổ nhân sự cho các điểm trên tuyến đường thành công!`);
       setIsAllocationModalOpen(false);
     } catch (err: any) {
       alert(err.response?.data?.detail || 'Lỗi khi lưu phân bổ nhân sự');
@@ -861,10 +961,21 @@ export function AdminCampaignsPage() {
     campaignApi
       .getById(selectedAllocationCampaignId)
       .then((full) => {
-        if (full) setSelectedAllocationCampaign(full);
+        if (full) {
+          setSelectedAllocationCampaign(full);
+          setStopAssignments(extractStopAssignments(full));
+        }
       })
       .catch((err) => console.error('Error fetching full campaign for allocation:', err));
   }, [selectedAllocationCampaignId, campaigns]);
+
+  const totalAssignedStaffCount = useMemo(() => {
+    const all = new Set<string>();
+    Object.values(stopAssignments).forEach((list) => {
+      list.forEach((s) => all.add(s.id || s.name));
+    });
+    return all.size;
+  }, [stopAssignments]);
 
   const stepTitles = [
     'Thông tin chiến dịch',
@@ -1696,7 +1807,12 @@ export function AdminCampaignsPage() {
                                   <p className="font-bold text-slate-900 text-xs truncate">
                                     {dest.name}
                                   </p>
-                                  {dest.priority ? (
+                                  {(dest.preferred_visit_time || dest.preferred_time) ? (
+                                    <span className="text-[10px] font-bold bg-indigo-50 text-indigo-800 border border-indigo-200 px-1.5 py-0.5 rounded-[5px] shrink-0 flex items-center gap-1">
+                                      <Clock className="w-3 h-3 text-indigo-600" />
+                                      {dest.preferred_visit_time || dest.preferred_time} ({dest.visit_duration_minutes || 60}p)
+                                    </span>
+                                  ) : dest.priority ? (
                                     <span className="text-[10px] font-bold bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded-[5px] shrink-0">
                                       Ưu tiên {dest.priority}
                                     </span>
@@ -1939,102 +2055,136 @@ export function AdminCampaignsPage() {
                           <div
                             key={school.id}
                             onClick={() => toggleDestination(school)}
-                            className={`cursor-pointer rounded-[5px] border p-3 flex items-center justify-between gap-3 transition ${
+                            className={`cursor-pointer rounded-[5px] border p-3 transition ${
                               isSelected
                                 ? 'border-[#0f3b7d] bg-blue-50/70 shadow-2xs'
                                 : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50/80'
                             }`}
                           >
-                            <div className="flex items-center gap-3 min-w-0">
-                              <div
-                                className={`w-5 h-5 rounded-[5px] border flex items-center justify-center shrink-0 transition ${
-                                  isSelected
-                                    ? 'bg-[#0f3b7d] border-[#0f3b7d] text-white'
-                                    : 'border-slate-300 bg-white'
-                                }`}
-                              >
-                                {isSelected && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+                            <div className="flex items-center justify-between gap-3">
+                              <div className="flex items-center gap-3 min-w-0">
+                                <div
+                                  className={`w-5 h-5 rounded-[5px] border flex items-center justify-center shrink-0 transition ${
+                                    isSelected
+                                      ? 'bg-[#0f3b7d] border-[#0f3b7d] text-white'
+                                      : 'border-slate-300 bg-white'
+                                  }`}
+                                >
+                                  {isSelected && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+                                </div>
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-2">
+                                    <p className="font-semibold text-slate-900 text-sm truncate">{school.name}</p>
+                                    {school.code && (
+                                      <span className="text-[10px] font-bold bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded-[5px] shrink-0">
+                                        {school.code}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <p className="text-xs text-slate-500 mt-0.5 flex items-center gap-1.5 truncate">
+                                    <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                                    <span className="truncate">{school.address || 'Chưa có địa chỉ'}</span>
+                                  </p>
+                                </div>
                               </div>
-                              <div className="min-w-0">
-                                <div className="flex items-center gap-2">
-                                  <p className="font-semibold text-slate-900 text-sm truncate">{school.name}</p>
-                                  {school.code && (
-                                    <span className="text-[10px] font-bold bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded-[5px] shrink-0">
-                                      {school.code}
+
+                              {isSelected && (() => {
+                                const destItem = selectedDestinations.find((item) => item.school_id === school.id);
+                                const vTime = destItem?.preferred_visit_time;
+                                const vDur = destItem?.visit_duration_minutes || 60;
+                                return (
+                                  <div className="shrink-0">
+                                    {vTime ? (
+                                      <span className="text-xs font-bold bg-indigo-50 border border-indigo-200 text-indigo-700 px-2.5 py-1 rounded-[5px] flex items-center gap-1.5 shadow-2xs">
+                                        <Clock className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                                        <span>{vTime} - {calculateDepartureTime(vTime, vDur)}</span>
+                                      </span>
+                                    ) : (
+                                      <span className="text-xs font-medium bg-white border border-slate-200 text-slate-500 px-2.5 py-1 rounded-[5px] flex items-center gap-1.5">
+                                        <Clock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                                        <span>Giờ tự động</span>
+                                      </span>
+                                    )}
+                                  </div>
+                                );
+                              })()}
+                            </div>
+
+                            {/* Khung nhập giờ ghé thăm khi trường được chọn */}
+                            {isSelected && (() => {
+                              const destItem = selectedDestinations.find((item) => item.school_id === school.id);
+                              const vTime = destItem?.preferred_visit_time || '';
+                              const vDur = destItem?.visit_duration_minutes || 60;
+                              return (
+                                <div
+                                  className="mt-2.5 pt-2.5 border-t border-blue-200/60 flex flex-wrap items-center justify-between gap-2.5"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <div className="flex flex-wrap items-center gap-2 text-xs">
+                                    <span className="font-bold text-slate-800 flex items-center gap-1.5">
+                                      <Clock className="w-3.5 h-3.5 text-[#0f3b7d]" />
+                                      Khung giờ ghé thăm:
                                     </span>
+
+                                    {/* Giờ đến */}
+                                    <div className="flex items-center gap-1.5 bg-white border border-slate-300 rounded-[5px] px-2 py-1 shadow-2xs">
+                                      <span className="text-[11px] text-slate-500 font-medium">Giờ đến:</span>
+                                      <input
+                                        type="time"
+                                        value={vTime}
+                                        onChange={(e) => updateDestinationVisitTime(school.id, e.target.value, vDur)}
+                                        className="text-xs font-bold text-slate-800 bg-transparent outline-none cursor-pointer"
+                                        title="Nhập hoặc chọn giờ muốn ghé thăm trường"
+                                      />
+                                    </div>
+
+                                    {/* Thời lượng ở lại */}
+                                    <div className="flex items-center gap-1.5 bg-white border border-slate-300 rounded-[5px] px-2 py-1 shadow-2xs">
+                                      <span className="text-[11px] text-slate-500 font-medium">Ở lại:</span>
+                                      <select
+                                        value={vDur}
+                                        onChange={(e) => updateDestinationVisitTime(school.id, vTime, parseInt(e.target.value, 10))}
+                                        className="text-xs font-semibold text-slate-800 bg-transparent outline-none cursor-pointer"
+                                        title="Thời gian làm việc / tư vấn tại trường"
+                                      >
+                                        <option value={30}>30 phút</option>
+                                        <option value={45}>45 phút</option>
+                                        <option value={60}>60 phút (1 giờ)</option>
+                                        <option value={90}>90 phút (1.5 giờ)</option>
+                                        <option value={120}>120 phút (2 giờ)</option>
+                                        <option value={150}>150 phút (2.5 giờ)</option>
+                                        <option value={180}>180 phút (3 giờ)</option>
+                                      </select>
+                                    </div>
+
+                                    {/* Dự kiến giờ rời */}
+                                    {vTime ? (
+                                      <div className="flex items-center gap-1 px-2.5 py-1 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-[5px] text-xs font-semibold">
+                                        <span>Rời lúc:</span>
+                                        <span className="font-bold text-emerald-900">~{calculateDepartureTime(vTime, vDur)}</span>
+                                      </div>
+                                    ) : (
+                                      <span className="text-[11px] text-slate-400 italic">
+                                        (Chưa đặt giờ: Tự động sắp xếp tối ưu theo đường đi)
+                                      </span>
+                                    )}
+                                  </div>
+
+                                  {/* Nút xóa giờ hẹn */}
+                                  {vTime && (
+                                    <button
+                                      type="button"
+                                      onClick={() => updateDestinationVisitTime(school.id, '', vDur)}
+                                      className="text-xs text-red-600 hover:text-red-700 hover:bg-red-50 px-2 py-1 rounded-[5px] transition flex items-center gap-1 font-semibold ml-auto"
+                                      title="Xóa giờ hẹn (trở về Tự động tối ưu)"
+                                    >
+                                      <X className="w-3.5 h-3.5" />
+                                      Xóa giờ
+                                    </button>
                                   )}
                                 </div>
-                                <p className="text-xs text-slate-500 mt-0.5 flex items-center gap-1.5 truncate">
-                                  <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                                  <span className="truncate">{school.address || 'Chưa có địa chỉ'}</span>
-                                </p>
-                              </div>
-                            </div>
-                            {isSelected && (
-                              <div
-                                className="flex items-center gap-1.5 shrink-0"
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                {(() => {
-                                  const destPriority = selectedDestinations.find(
-                                    (item) => item.school_id === school.id
-                                  )?.priority;
-                                  return (
-                                    <div className="flex items-center gap-1.5">
-                                      <div className="relative inline-flex items-center">
-                                        <div
-                                          className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-[5px] border text-xs select-none transition ${
-                                            destPriority
-                                              ? 'bg-amber-50 border-amber-300 text-amber-900 font-bold shadow-2xs'
-                                              : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-50 font-medium'
-                                          }`}
-                                        >
-                                          {destPriority ? (
-                                            <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-400 shrink-0" />
-                                          ) : (
-                                            <Route className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                                          )}
-                                          <span>{destPriority ? `Ưu tiên ${destPriority}` : 'Tự động'}</span>
-                                          <ChevronDown
-                                            className={`w-3 h-3 shrink-0 ml-0.5 ${
-                                              destPriority ? 'text-amber-600' : 'text-slate-400'
-                                            }`}
-                                          />
-                                        </div>
-
-                                        <select
-                                          value={destPriority || ''}
-                                          onChange={(e) => {
-                                            const val = e.target.value ? parseInt(e.target.value, 10) : undefined;
-                                            updateDestinationPriority(school.id, val);
-                                          }}
-                                          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                                          title="Bấm để thay đổi độ ưu tiên ghé thăm"
-                                        >
-                                          <option value="">Tự động (theo khoảng cách)</option>
-                                          <option value="1">Ưu tiên 1 (Đi đầu tiên)</option>
-                                          <option value="2">Ưu tiên 2</option>
-                                          <option value="3">Ưu tiên 3</option>
-                                          <option value="4">Ưu tiên 4</option>
-                                          <option value="5">Ưu tiên 5</option>
-                                        </select>
-                                      </div>
-
-                                      {destPriority && (
-                                        <button
-                                          type="button"
-                                          onClick={() => updateDestinationPriority(school.id, undefined)}
-                                          title="Xóa ưu tiên (trở về Tự động)"
-                                          className="w-6 h-6 flex items-center justify-center rounded-[5px] text-slate-400 hover:text-red-600 hover:bg-red-50 transition"
-                                        >
-                                          <X className="w-3.5 h-3.5" />
-                                        </button>
-                                      )}
-                                    </div>
-                                  );
-                                })()}
-                              </div>
-                            )}
+                              );
+                            })()}
                           </div>
                         );
                       })
@@ -2206,11 +2356,20 @@ export function AdminCampaignsPage() {
                                     <div className="min-w-0">
                                       <div className="flex items-center gap-2">
                                         <p className="font-semibold text-slate-900 text-xs truncate">{dest.name}</p>
-                                        {dest.priority ? (
+                                        {(dest.preferred_visit_time || dest.preferred_time) ? (
+                                          <span className="text-[10px] font-bold bg-indigo-50 text-indigo-800 border border-indigo-200 px-1.5 py-0.5 rounded-[5px] shrink-0 flex items-center gap-1">
+                                            <Clock className="w-3 h-3 text-indigo-600" />
+                                            {dest.preferred_visit_time || dest.preferred_time} - {calculateDepartureTime(dest.preferred_visit_time || dest.preferred_time, dest.visit_duration_minutes || 60)} ({dest.visit_duration_minutes || 60}p)
+                                          </span>
+                                        ) : dest.priority ? (
                                           <span className="text-[10px] font-bold bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded-[5px] shrink-0">
                                             Ưu tiên {dest.priority}
                                           </span>
-                                        ) : null}
+                                        ) : (
+                                          <span className="text-[10px] text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded-[5px] shrink-0">
+                                            Linh hoạt
+                                          </span>
+                                        )}
                                       </div>
                                       <p className="text-[11px] text-slate-500 line-clamp-1">{dest.address}</p>
                                     </div>
@@ -2517,10 +2676,10 @@ export function AdminCampaignsPage() {
                           )}
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
-                          {selectedAllocationCampaign.team?.leader_name ? (
+                          {totalAssignedStaffCount > 0 ? (
                             <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-[5px] text-xs font-bold bg-emerald-100 text-emerald-800">
                               <UserCheck className="w-3.5 h-3.5 text-emerald-600" />
-                              <span>Đã có đoàn công tác</span>
+                              <span>Đã phân bổ ({totalAssignedStaffCount} nhân sự)</span>
                             </span>
                           ) : (
                             <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-[5px] text-xs font-bold bg-amber-50 text-amber-800 border border-amber-200/80">
@@ -2531,8 +2690,8 @@ export function AdminCampaignsPage() {
                         </div>
                       </div>
 
-                      {/* Thống kê nhanh */}
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-3">
+                      {/* Thống kê nhanh: 3 cột (Bỏ phần hiển thị Trưởng đoàn) */}
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-3">
                         <div className="p-2.5 rounded-[5px] bg-slate-50 border border-slate-100 text-center">
                           <span className="text-[10px] font-bold uppercase text-slate-400">Số trường</span>
                           <p className="text-base font-black text-slate-900 mt-0.5">
@@ -2551,116 +2710,256 @@ export function AdminCampaignsPage() {
                             {selectedAllocationCampaign.estimated_duration_text || (selectedAllocationCampaign.estimated_duration_minutes ? `${selectedAllocationCampaign.estimated_duration_minutes} phút` : '--')}
                           </p>
                         </div>
-                        <div className="p-2.5 rounded-[5px] bg-slate-50 border border-slate-100 text-center">
-                          <span className="text-[10px] font-bold uppercase text-slate-400">Trưởng đoàn</span>
-                          <p className="text-sm font-black text-slate-900 mt-0.5 truncate" title={teamLeaderName || selectedAllocationCampaign.team?.leader_name || 'Chưa có'}>
-                            {teamLeaderName || selectedAllocationCampaign.team?.leader_name || 'Chưa có'}
-                          </p>
-                        </div>
                       </div>
                     </div>
 
-                    {/* 3. Lộ trình từ đầu đến cuối */}
+                    {/* 3. Lộ trình từ đầu đến cuối (Điểm xuất phát & Danh sách các trường) */}
                     <div className="bg-white rounded-[5px] border border-slate-200/80 p-5 shadow-xs space-y-3">
                       <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-                        <h4 className="text-sm font-bold text-slate-900">Lộ trình các điểm dừng</h4>
-                        <span className="text-xs text-slate-400 font-semibold">
+                        <div>
+                          <h4 className="text-sm font-bold text-slate-900">Lộ trình các điểm dừng</h4>
+                        </div>
+                        <span className="text-xs text-slate-400 font-semibold shrink-0">
                           {(selectedAllocationCampaign.destinations?.length || 0) + (selectedAllocationCampaign.start_point ? 1 : 0)} điểm
                         </span>
                       </div>
 
-                      {/* Điểm bắt đầu */}
+                      {/* Điểm bắt đầu [S] */}
                       {selectedAllocationCampaign.start_point && (() => {
                         const spInfo = getStartPointInfo(selectedAllocationCampaign.start_point);
+                        const isSelectedForAssign = selectedStopIdForAllocation === 'START';
+                        const isDragOver = dragOverStopId === 'START';
+                        const assignedList = stopAssignments['START'] || [];
+
                         return (
-                          <div className="p-3 rounded-[5px] bg-blue-50/70 border border-blue-100 flex items-center justify-between gap-3 shadow-2xs">
-                            <div className="flex items-center gap-3 min-w-0">
-                              <span
-                                className="w-7 h-7 rounded-[5px] bg-[#0f3b7d] text-white flex items-center justify-center text-xs font-bold shrink-0 shadow-2xs"
-                                title="Điểm bắt đầu"
-                              >
-                                S
-                              </span>
-                              <div className="min-w-0">
-                                <p className="font-bold text-slate-900 text-xs truncate">
-                                  {spInfo?.name || 'Điểm xuất phát'}
-                                </p>
-                                {spInfo?.address && (
-                                  <p className="text-[11px] text-slate-500 truncate mt-0.5 flex items-center gap-1.5">
-                                    <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                                    <span>{spInfo.address}</span>
-                                  </p>
-                                )}
+                          <div
+                            onClick={() => setSelectedStopIdForAllocation('START')}
+                            onDragOver={(e) => {
+                              e.preventDefault();
+                              e.dataTransfer.dropEffect = 'copy';
+                              if (dragOverStopId !== 'START') setDragOverStopId('START');
+                            }}
+                            onDragLeave={() => {
+                              if (dragOverStopId === 'START') setDragOverStopId(null);
+                            }}
+                            onDrop={(e) => {
+                              e.preventDefault();
+                              setDragOverStopId(null);
+                              try {
+                                const raw = e.dataTransfer.getData('text/plain');
+                                if (raw) {
+                                  const u = JSON.parse(raw);
+                                  assignStaffToStop('START', u);
+                                }
+                              } catch (err) {}
+                            }}
+                            className={`p-3 rounded-[5px] border transition cursor-pointer shadow-2xs ${
+                              isDragOver
+                                ? 'border-dashed border-2 border-blue-600 bg-blue-100/80 ring-4 ring-blue-300'
+                                : isSelectedForAssign
+                                ? 'border-[#0f3b7d] bg-blue-50/90 ring-2 ring-[#0f3b7d]/30 shadow-xs'
+                                : 'border-blue-100 bg-blue-50/50 hover:border-blue-300 hover:bg-blue-50/80'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between gap-3">
+                              <div className="flex items-center gap-3 min-w-0">
+                                <span
+                                  className="w-7 h-7 rounded-[5px] bg-[#0f3b7d] text-white flex items-center justify-center text-xs font-bold shrink-0 shadow-2xs"
+                                  title="Điểm xuất phát"
+                                >
+                                  S
+                                </span>
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <p className="font-bold text-slate-900 text-xs truncate">
+                                      {spInfo?.name || 'Điểm xuất phát'}
+                                    </p>
+                                    <span className="text-[10px] font-bold bg-blue-100 text-[#0f3b7d] px-1.5 py-0.2 rounded-[5px] shrink-0">
+                                      Xuất phát
+                                    </span>
+                                  </div>
+                                  {spInfo?.address && (
+                                    <p className="text-[11px] text-slate-500 truncate mt-0.5 flex items-center gap-1.5">
+                                      <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                                      <span>{spInfo.address}</span>
+                                    </p>
+                                  )}
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-2 shrink-0">
                               </div>
                             </div>
-                          </div>
-                        );
-                      })()}
 
-                      {/* Danh sách các trường */}
-                      <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
-                        {selectedAllocationCampaign.destinations && selectedAllocationCampaign.destinations.length > 0 ? (
-                          selectedAllocationCampaign.destinations.map((dest: any, idx: number) => {
-                            const isFocused = activeSchoolInAllocation?.school_id === dest.school_id || activeSchoolInAllocation?.id === dest.id;
-                            return (
-                              <div
-                                key={dest.school_id || dest.id || idx}
-                                onClick={() => setActiveSchoolInAllocation(dest)}
-                                className={`p-2.5 rounded-[5px] border transition cursor-pointer flex items-center justify-between gap-3 ${
-                                  isFocused
-                                    ? 'border-[#0f3b7d] bg-blue-50/60 shadow-2xs'
-                                    : 'border-slate-200/80 bg-white hover:border-slate-300 hover:bg-slate-50/80'
-                                }`}
-                              >
-                                <div className="flex items-center gap-2.5 min-w-0">
-                                  <span className={`w-6 h-6 rounded-[5px] flex items-center justify-center text-xs font-bold shrink-0 ${
-                                    isFocused ? 'bg-[#0f3b7d] text-white' : 'bg-emerald-100 text-emerald-800'
-                                  }`}>
-                                    {idx + 1}
+                            {/* Danh sách nhân sự được phân công cho Điểm xuất phát */}
+                            {(assignedList.length > 0 || isDragOver) && (
+                              <div className="mt-2.5 pt-2 border-t border-blue-200/60 flex flex-wrap items-center gap-1.5">
+                                <span className="text-[11px] font-bold text-slate-700 flex items-center gap-1">
+                                  <UserCheck className="w-3.5 h-3.5 text-[#0f3b7d]" />
+                                  Nhân sự phụ trách:
+                                </span>
+                                {isDragOver && assignedList.length === 0 && (
+                                  <span className="text-[11px] text-blue-600 font-semibold italic">
+                                    ⬇ Thả nhân sự vào đây
                                   </span>
-                                  <div className="min-w-0">
-                                    <div className="flex items-center gap-1.5">
-                                      <p className="font-bold text-slate-900 text-xs truncate">
-                                        {dest.name}
-                                      </p>
-                                      {dest.priority && (
-                                        <span className="text-[10px] font-bold bg-amber-100 text-amber-800 px-1.5 py-0.2 rounded-[5px] shrink-0">
-                                          Ưu tiên {dest.priority}
-                                        </span>
-                                      )}
-                                      {dest.code && (
-                                        <span className="text-[10px] font-mono font-bold bg-slate-100 text-slate-600 px-1.5 py-0.2 rounded-[5px] shrink-0">
-                                          {dest.code}
-                                        </span>
-                                      )}
-                                    </div>
-                                    <p className="text-[11px] text-slate-500 truncate mt-0.5">
-                                      {dest.address || 'Chưa có địa chỉ'}
-                                    </p>
-                                  </div>
-                                </div>
-
-                                <div className="flex items-center gap-2 shrink-0">
-                                  {(dest.distance_text || dest.duration_text) && (
-                                    <div className="text-right">
-                                      <span className="text-[11px] font-bold text-blue-700 block">{dest.distance_text}</span>
-                                      <span className="text-[10px] text-slate-400 block">~ {dest.duration_text}</span>
-                                    </div>
-                                  )}
-                                  {(dest.school_id || dest.id) && (
+                                )}
+                                {assignedList.map((st) => (
+                                  <span
+                                    key={st.id || st.name}
+                                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-[5px] bg-white border border-blue-200 text-[#0f3b7d] text-xs font-semibold shadow-2xs"
+                                  >
+                                    <span>{st.name}</span>
                                     <button
                                       type="button"
                                       onClick={(e) => {
                                         e.stopPropagation();
-                                        navigate(`/admin/schools/${dest.school_id || dest.id}`);
+                                        removeStaffFromStop('START', st.id || st.name);
                                       }}
-                                      className="p-1 text-blue-700 hover:text-blue-900 hover:bg-blue-100/60 rounded-[5px] transition"
-                                      title="Xem hồ sơ trường"
+                                      className="text-slate-400 hover:text-red-600 hover:bg-red-50 p-0.5 rounded-[3px] transition cursor-pointer"
+                                      title="Xóa nhân sự khỏi điểm này"
                                     >
-                                      <ExternalLink className="w-3 h-3" />
+                                      <X className="w-3 h-3" />
                                     </button>
-                                  )}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
+
+                      {/* Danh sách các trường [1], [2], ... */}
+                      <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+                        {selectedAllocationCampaign.destinations && selectedAllocationCampaign.destinations.length > 0 ? (
+                          selectedAllocationCampaign.destinations.map((dest: any, idx: number) => {
+                            const stopKey = dest.school_id || dest.id || `STOP_${idx}`;
+                            const isSelectedForAssign = selectedStopIdForAllocation === stopKey;
+                            const isDragOver = dragOverStopId === stopKey;
+                            const assignedList = stopAssignments[stopKey] || [];
+
+                            return (
+                              <div
+                                key={stopKey}
+                                onClick={() => setSelectedStopIdForAllocation(stopKey)}
+                                onDragOver={(e) => {
+                                  e.preventDefault();
+                                  e.dataTransfer.dropEffect = 'copy';
+                                  if (dragOverStopId !== stopKey) setDragOverStopId(stopKey);
+                                }}
+                                onDragLeave={() => {
+                                  if (dragOverStopId === stopKey) setDragOverStopId(null);
+                                }}
+                                onDrop={(e) => {
+                                  e.preventDefault();
+                                  setDragOverStopId(null);
+                                  try {
+                                    const raw = e.dataTransfer.getData('text/plain');
+                                    if (raw) {
+                                      const u = JSON.parse(raw);
+                                      assignStaffToStop(stopKey, u);
+                                    }
+                                  } catch (err) {}
+                                }}
+                                className={`p-2.5 rounded-[5px] border transition cursor-pointer ${
+                                  isDragOver
+                                    ? 'border-dashed border-2 border-blue-600 bg-blue-100/80 ring-4 ring-blue-300'
+                                    : isSelectedForAssign
+                                    ? 'border-[#0f3b7d] bg-blue-50/80 ring-2 ring-[#0f3b7d]/30 shadow-xs'
+                                    : 'border-slate-200/80 bg-white hover:border-slate-300 hover:bg-slate-50/80 shadow-2xs'
+                                }`}
+                              >
+                                <div className="flex items-center justify-between gap-3">
+                                  <div className="flex items-center gap-2.5 min-w-0">
+                                    <span
+                                      className={`w-6 h-6 rounded-[5px] flex items-center justify-center text-xs font-bold shrink-0 ${
+                                        isSelectedForAssign ? 'bg-[#0f3b7d] text-white' : 'bg-emerald-100 text-emerald-800'
+                                      }`}
+                                    >
+                                      {idx + 1}
+                                    </span>
+                                    <div className="min-w-0">
+                                      <div className="flex items-center gap-1.5 flex-wrap">
+                                        <p className="font-bold text-slate-900 text-xs truncate">
+                                          {dest.name}
+                                        </p>
+                                        {(dest.preferred_visit_time || dest.preferred_time) ? (
+                                          <span className="text-[10px] font-bold bg-indigo-50 text-indigo-800 border border-indigo-200 px-1.5 py-0.2 rounded-[5px] shrink-0 flex items-center gap-1">
+                                            <Clock className="w-3 h-3 text-indigo-600" />
+                                            {dest.preferred_visit_time || dest.preferred_time} ({dest.visit_duration_minutes || 60}p)
+                                          </span>
+                                        ) : dest.priority ? (
+                                          <span className="text-[10px] font-bold bg-amber-100 text-amber-800 px-1.5 py-0.2 rounded-[5px] shrink-0">
+                                            Ưu tiên {dest.priority}
+                                          </span>
+                                        ) : null}
+                                        {dest.code && (
+                                          <span className="text-[10px] font-mono font-bold bg-slate-100 text-slate-600 px-1.5 py-0.2 rounded-[5px] shrink-0">
+                                            {dest.code}
+                                          </span>
+                                        )}
+                                      </div>
+                                      <p className="text-[11px] text-slate-500 truncate mt-0.5">
+                                        {dest.address || 'Chưa có địa chỉ'}
+                                      </p>
+                                    </div>
+                                  </div>
+
+                                  <div className="flex items-center gap-2 shrink-0">
+                                    {(dest.distance_text || dest.duration_text) && (
+                                      <div className="text-right">
+                                        <span className="text-[11px] font-bold text-blue-700 block">{dest.distance_text}</span>
+                                        <span className="text-[10px] text-slate-400 block">~ {dest.duration_text}</span>
+                                      </div>
+                                    )}
+                                    {(dest.school_id || dest.id) && (
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          navigate(`/admin/schools/${dest.school_id || dest.id}`);
+                                        }}
+                                        className="p-1 text-blue-700 hover:text-blue-900 hover:bg-blue-100/60 rounded-[5px] transition"
+                                        title="Xem hồ sơ trường"
+                                      >
+                                        <ExternalLink className="w-3 h-3" />
+                                      </button>
+                                    )}
+                                  </div>
                                 </div>
+
+                                {/* Nhân sự phụ trách cho chặng này */}
+                                {(assignedList.length > 0 || isDragOver) && (
+                                  <div className="mt-2 pt-2 border-t border-slate-100 flex flex-wrap items-center gap-1.5">
+                                    <span className="text-[11px] font-bold text-slate-600 flex items-center gap-1">
+                                      <UserCheck className="w-3.5 h-3.5 text-blue-700" />
+                                      Nhân sự phụ trách:
+                                    </span>
+                                    {isDragOver && assignedList.length === 0 && (
+                                      <span className="text-[11px] text-blue-600 font-semibold italic">
+                                        ⬇ Thả nhân sự vào đây
+                                      </span>
+                                    )}
+                                    {assignedList.map((st) => (
+                                      <span
+                                        key={st.id || st.name}
+                                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-[5px] bg-blue-50 text-[#0f3b7d] border border-blue-200 text-xs font-semibold shadow-2xs"
+                                      >
+                                        <span>{st.name}</span>
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            removeStaffFromStop(stopKey, st.id || st.name);
+                                          }}
+                                          className="text-slate-400 hover:text-red-600 hover:bg-red-50 p-0.5 rounded-[3px] transition cursor-pointer"
+                                          title="Xóa nhân sự khỏi điểm này"
+                                        >
+                                          <X className="w-3 h-3" />
+                                        </button>
+                                      </span>
+                                    ))}
+                                  </div>
+                                )}
                               </div>
                             );
                           })
@@ -2672,15 +2971,15 @@ export function AdminCampaignsPage() {
                       </div>
                     </div>
 
-                    {/* 4. Bản đồ trực quan tuyến đường */}
+                    {/* 4. Bản đồ trực quan tuyến đường (Không tele khi bấm điểm dừng) */}
                     <div className="bg-white rounded-[5px] border border-slate-200/80 p-3 shadow-xs">
                       <div className="h-[380px] w-full rounded-[5px] overflow-hidden border border-slate-100">
                         <CampaignRouteMap
                           startPoint={selectedAllocationCampaign.start_point}
                           destinations={selectedAllocationCampaign.destinations || []}
                           routeGeometry={selectedAllocationCampaign.route_geometry}
-                          activeSchool={activeSchoolInAllocation}
-                          onSelectSchool={(s) => setActiveSchoolInAllocation(s)}
+                          activeSchool={undefined}
+                          onSelectSchool={undefined}
                         />
                       </div>
                     </div>
@@ -2719,8 +3018,8 @@ export function AdminCampaignsPage() {
                       )}
                     </div>
 
-                    {/* Danh sách staff */}
-                    <div className="space-y-2 max-h-[520px] overflow-y-auto pr-1">
+                    {/* Danh sách staff hỗ trợ kéo thả và click gán */}
+                    <div className="space-y-2 max-h-[500px] overflow-y-auto pr-1">
                       {staffList.length === 0 ? (
                         <div className="p-6 text-center text-xs text-slate-400">
                           Không tìm thấy nhân sự
@@ -2728,34 +3027,47 @@ export function AdminCampaignsPage() {
                       ) : (
                         staffList.map((user) => {
                           const userName = user.full_name || user.username;
-                          const isLeader = teamLeaderName === userName;
-                          const isMember = teamMembers.some((m) => m.name === userName);
+                          const userId = String(user.id || user._id || user.username);
+                          const currentStopList = stopAssignments[selectedStopIdForAllocation] || [];
+                          const isAssignedToCurrent = currentStopList.some((s) => s.id === userId || s.name === userName);
+
+                          // Đếm xem nhân sự này được phân công vào bao nhiêu điểm trên toàn lộ trình
+                          let assignedStopsCount = 0;
+                          Object.values(stopAssignments).forEach((list) => {
+                            if (list.some((s) => s.id === userId || s.name === userName)) {
+                              assignedStopsCount += 1;
+                            }
+                          });
 
                           return (
                             <div
                               key={user.id}
-                              onClick={() => toggleStaffMember(user)}
-                              className={`p-2.5 rounded-[5px] border transition cursor-pointer flex items-center justify-between gap-2 ${
-                                isLeader
-                                  ? 'bg-blue-50/80 border-blue-300 shadow-2xs'
-                                  : isMember
-                                  ? 'bg-emerald-50/70 border-emerald-300 shadow-2xs'
+                              draggable={true}
+                              onDragStart={(e) => {
+                                e.dataTransfer.setData('text/plain', JSON.stringify(user));
+                                setDraggedStaff(user);
+                              }}
+                              onDragEnd={() => {
+                                setDraggedStaff(null);
+                                setDragOverStopId(null);
+                              }}
+                              onClick={() => toggleStaffOnStop(selectedStopIdForAllocation, user)}
+                              className={`p-2.5 rounded-[5px] border transition cursor-grab active:cursor-grabbing flex items-center justify-between gap-2 select-none ${
+                                isAssignedToCurrent
+                                  ? 'bg-blue-50/90 border-[#0f3b7d] ring-1 ring-[#0f3b7d]/30 shadow-2xs'
+                                  : assignedStopsCount > 0
+                                  ? 'bg-emerald-50/60 border-emerald-300 shadow-2xs'
                                   : 'bg-slate-50/60 border-slate-100 hover:bg-white hover:border-slate-300 hover:shadow-2xs'
                               }`}
-                              title={
-                                isLeader
-                                  ? 'Đang là Trưởng đoàn (Bấm để bỏ chọn)'
-                                  : isMember
-                                  ? 'Đang là Thành viên (Bấm để bỏ chọn)'
-                                  : 'Bấm để thêm vào đoàn công tác'
-                              }
+                              title="Kéo thả vào điểm dừng hoặc bấm để phân công"
                             >
                               <div className="flex items-center gap-2.5 min-w-0">
+                                <GripVertical className="w-4 h-4 text-slate-400 shrink-0 cursor-grab" />
                                 <div
                                   className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0 uppercase ${
-                                    isLeader
+                                    isAssignedToCurrent
                                       ? 'bg-[#0f3b7d] text-white'
-                                      : isMember
+                                      : assignedStopsCount > 0
                                       ? 'bg-emerald-700 text-white'
                                       : 'bg-slate-700 text-white'
                                   }`}
@@ -2772,19 +3084,21 @@ export function AdminCampaignsPage() {
                                 </div>
                               </div>
 
-                              {isLeader ? (
-                                <span className="text-[10px] font-bold bg-blue-100 text-[#0f3b7d] px-2 py-0.5 rounded-[5px] shrink-0">
-                                  Trưởng đoàn
-                                </span>
-                              ) : isMember ? (
-                                <span className="text-[10px] font-bold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-[5px] shrink-0">
-                                  Thành viên
-                                </span>
-                              ) : (
-                                <span className="text-[10px] font-medium bg-slate-100 text-slate-500 px-2 py-0.5 rounded-[5px] shrink-0">
-                                  {user.role || 'staff'}
-                                </span>
-                              )}
+                              <div className="shrink-0 flex items-center gap-1">
+                                {isAssignedToCurrent ? (
+                                  <span className="text-[10px] font-bold bg-[#0f3b7d] text-white px-2 py-0.5 rounded-[5px]">
+                                    ✓ Đang gán
+                                  </span>
+                                ) : assignedStopsCount > 0 ? (
+                                  <span className="text-[10px] font-bold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-[5px]">
+                                    Đã gán ({assignedStopsCount} điểm)
+                                  </span>
+                                ) : (
+                                  <span className="text-[10px] font-medium bg-slate-100 text-slate-500 px-2 py-0.5 rounded-[5px]">
+                                    {user.role || 'staff'}
+                                  </span>
+                                )}
+                              </div>
                             </div>
                           );
                         })

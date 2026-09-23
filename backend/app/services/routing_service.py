@@ -461,37 +461,121 @@ class RoutingService:
                     pass
             return 999999
 
-        # 1. Áp dụng thuật toán Priority-Aware Dynamic Next-Hop để xác định thứ tự ghé thăm tối ưu
-        # Trường có độ ưu tiên nhỏ hơn (1 > 2 > 3...) sẽ được ưu tiên đi trước tiên, sau đó tới các trường tự động
-        while unvisited:
-            min_priority = min(get_dest_priority(d) for d in unvisited)
-            priority_pool = [d for d in unvisited if get_dest_priority(d) == min_priority]
+        def get_dest_time_minutes(dest_dict: Dict[str, Any]) -> Optional[int]:
+            t = dest_dict.get("preferred_visit_time") or dest_dict.get("preferred_time")
+            if t and isinstance(t, str):
+                parts = t.strip().split(":")
+                if len(parts) >= 2:
+                    try:
+                        return int(parts[0]) * 60 + int(parts[1])
+                    except (ValueError, TypeError):
+                        pass
+            return None
 
-            candidates = []
-            for dest in priority_pool:
-                d_lat = dest.get("lat", 0.0)
-                d_lng = dest.get("lng", 0.0)
-                dist_m = self._haversine(curr_lat, curr_lng, d_lat, d_lng)
-                dur_s = int(dist_m / (25.5 * 1000 / 3600))
-                candidates.append({
-                    "dest": dest,
-                    "distance_meters": dist_m,
-                    "duration_seconds": dur_s
-                })
+        # 1. Áp dụng thuật toán Time-Window / Priority-Aware Dynamic Next-Hop
+        timed_dests = [d for d in destinations if get_dest_time_minutes(d) is not None]
+        flexible_dests = [d for d in destinations if get_dest_time_minutes(d) is None]
 
-            candidates.sort(key=lambda x: x["duration_seconds"])
+        if timed_dests:
+            # Sắp xếp các điểm có khung giờ cố định theo thứ tự thời gian trong ngày
+            # Nếu 2 trường cùng giờ, ưu tiên trường gần điểm hiện tại hơn
+            timed_unvisited = list(timed_dests)
+            timed_ordered = []
+            c_lat, c_lng = curr_lat, curr_lng
 
-            # Ra quyết định Next-Hop
-            best = candidates[0]
-            for cand in candidates[1:]:
-                time_diff = cand["duration_seconds"] - best["duration_seconds"]
-                if time_diff <= TIME_THRESHOLD_SECONDS and cand["distance_meters"] < best["distance_meters"]:
-                    best = cand
+            while timed_unvisited:
+                min_time = min(get_dest_time_minutes(d) for d in timed_unvisited)
+                same_time_pool = [d for d in timed_unvisited if get_dest_time_minutes(d) == min_time]
 
-            chosen_dest = dict(best["dest"])
-            unvisited.remove(best["dest"])
-            ordered.append(chosen_dest)
-            curr_lat, curr_lng = chosen_dest["lat"], chosen_dest["lng"]
+                # Chọn trường gần nhất trong cùng khung giờ
+                best_cand = min(
+                    same_time_pool,
+                    key=lambda d: self._haversine(c_lat, c_lng, d.get("lat", 0.0), d.get("lng", 0.0))
+                )
+                timed_ordered.append(dict(best_cand))
+                timed_unvisited.remove(best_cand)
+                c_lat, c_lng = best_cand.get("lat", 0.0), best_cand.get("lng", 0.0)
+
+            # Chèn các trường linh hoạt (không cố định giờ) vào vị trí tối ưu cự ly (Cheapest Insertion)
+            curr_route = timed_ordered
+            flex_unvisited = list(flexible_dests)
+
+            while flex_unvisited:
+                # Sắp xếp theo priority nếu có
+                min_p = min(get_dest_priority(d) for d in flex_unvisited)
+                flex_pool = [d for d in flex_unvisited if get_dest_priority(d) == min_p]
+
+                best_dest = None
+                best_insert_pos = 0
+                min_extra_dist = float("inf")
+
+                for flex_cand in flex_pool:
+                    f_lat, f_lng = flex_cand.get("lat", 0.0), flex_cand.get("lng", 0.0)
+
+                    # Thử chèn vào từng vị trí trong route:
+                    # Vị trí 0: start_point -> flex -> curr_route[0]
+                    # Vị trí i: curr_route[i-1] -> flex -> curr_route[i]
+                    # Vị trí cuối: curr_route[-1] -> flex
+                    for pos in range(len(curr_route) + 1):
+                        prev_lat = start_point["lat"] if pos == 0 else curr_route[pos - 1].get("lat", 0.0)
+                        prev_lng = start_point["lng"] if pos == 0 else curr_route[pos - 1].get("lng", 0.0)
+
+                        if pos == len(curr_route):
+                            # Thêm vào cuối
+                            extra_dist = self._haversine(prev_lat, prev_lng, f_lat, f_lng)
+                        else:
+                            next_lat = curr_route[pos].get("lat", 0.0)
+                            next_lng = curr_route[pos].get("lng", 0.0)
+                            dist_before = self._haversine(prev_lat, prev_lng, next_lat, next_lng)
+                            dist_after = (
+                                self._haversine(prev_lat, prev_lng, f_lat, f_lng)
+                                + self._haversine(f_lat, f_lng, next_lat, next_lng)
+                            )
+                            extra_dist = dist_after - dist_before
+
+                        if extra_dist < min_extra_dist:
+                            min_extra_dist = extra_dist
+                            best_dest = flex_cand
+                            best_insert_pos = pos
+
+                if best_dest:
+                    curr_route.insert(best_insert_pos, dict(best_dest))
+                    flex_unvisited.remove(best_dest)
+                else:
+                    break
+
+            ordered = curr_route
+        else:
+            # Nếu không có trường nào cài giờ cụ thể, áp dụng Dynamic Next-Hop theo độ ưu tiên & khoảng cách
+            while unvisited:
+                min_priority = min(get_dest_priority(d) for d in unvisited)
+                priority_pool = [d for d in unvisited if get_dest_priority(d) == min_priority]
+
+                candidates = []
+                for dest in priority_pool:
+                    d_lat = dest.get("lat", 0.0)
+                    d_lng = dest.get("lng", 0.0)
+                    dist_m = self._haversine(curr_lat, curr_lng, d_lat, d_lng)
+                    dur_s = int(dist_m / (25.5 * 1000 / 3600))
+                    candidates.append({
+                        "dest": dest,
+                        "distance_meters": dist_m,
+                        "duration_seconds": dur_s
+                    })
+
+                candidates.sort(key=lambda x: x["duration_seconds"])
+
+                # Ra quyết định Next-Hop
+                best = candidates[0]
+                for cand in candidates[1:]:
+                    time_diff = cand["duration_seconds"] - best["duration_seconds"]
+                    if time_diff <= TIME_THRESHOLD_SECONDS and cand["distance_meters"] < best["distance_meters"]:
+                        best = cand
+
+                chosen_dest = dict(best["dest"])
+                unvisited.remove(best["dest"])
+                ordered.append(chosen_dest)
+                curr_lat, curr_lng = chosen_dest["lat"], chosen_dest["lng"]
 
         # 2. Truy vấn định tuyến đường bộ thực tế qua OSRM (Google Maps-like actual roads)
         all_pts = [(start_point["lat"], start_point["lng"])] + [(d["lat"], d["lng"]) for d in ordered]
