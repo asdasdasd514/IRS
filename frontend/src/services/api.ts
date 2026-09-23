@@ -520,6 +520,14 @@ export const campaignApi = {
     const { data } = await api.post(`/campaigns/${campaignId}/deploy`, null, { params });
     return data;
   },
+  allocate: async (campaignId: string, payload: { team: any; start_date?: string; end_date?: string }): Promise<any> => {
+    const { data } = await api.post(`/campaigns/${campaignId}/allocate`, payload);
+    return data;
+  },
+  unallocate: async (campaignId: string): Promise<any> => {
+    const { data } = await api.delete(`/campaigns/${campaignId}/allocate`);
+    return data;
+  },
   delete: async (id: string): Promise<void> => {
     await api.delete(`/campaigns/${id}`);
   },

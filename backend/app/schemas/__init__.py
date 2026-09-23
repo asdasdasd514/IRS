@@ -27,6 +27,7 @@ from .schemas import (
     CampaignUpdate,
     CampaignResponse,
     CampaignDeployResponse,
+    CampaignAllocationRequest,
     SchoolBoard,
     SchoolBase,
     SchoolCreate,

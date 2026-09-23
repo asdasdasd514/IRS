@@ -88,6 +88,14 @@ class CampaignUpdate(BaseModel):
     start_point: Optional[dict] = None
 
 
+class CampaignAllocationRequest(BaseModel):
+    team: Optional[TripTeam] = None
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    destinations: Optional[List[dict]] = None
+    start_point: Optional[dict] = None
+
+
 class CampaignResponse(CampaignBase):
     id: str
     manager_id: Optional[str] = None
@@ -319,6 +327,13 @@ class TripBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
     campaign_id: Optional[str] = None
     trip_code: Optional[str] = None
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    team: Optional[TripTeam] = None
+    estimated_distance_km: Optional[float] = None
+    estimated_duration_minutes: Optional[int] = None
+    destinations: Optional[List[Any]] = None
+    start_point: Optional[dict] = None
 
 
 class TripCreate(TripBase):
@@ -334,6 +349,8 @@ class TripUpdate(BaseModel):
     current_lat: Optional[float] = None
     current_lng: Optional[float] = None
     team: Optional[TripTeam] = None
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
 
 
 class TripResponse(TripBase):

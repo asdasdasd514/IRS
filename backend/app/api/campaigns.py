@@ -16,7 +16,8 @@ from app.schemas import (
     CampaignResponse,
     CampaignDeployResponse,
     CampaignStatus,
-    WaypointType
+    WaypointType,
+    CampaignAllocationRequest
 )
 from app.services.auth_service import get_current_user
 from app.services.routing_service import routing_service
@@ -331,6 +332,193 @@ async def preview_optimized_route(
         "polyline": encoded_polyline,
         "route_geometry": route_geometry
     }
+
+
+@router.post("/{campaign_id}/allocate")
+async def allocate_campaign(
+    campaign_id: str,
+    payload: CampaignAllocationRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Phân bổ đoàn công tác và thời gian thực hiện cho chiến dịch:
+    - Lưu thông tin ngày bắt đầu, ngày kết thúc và đoàn công tác vào campaigns.
+    - Lưu / khởi tạo chuyến đi thực tế vào bảng admission_trips (addsiment_trip)
+      kèm đầy đủ ngày tháng, đoàn công tác, lộ trình các trường, và campaign_waypoints.
+    """
+    db = get_database()
+    now = datetime.now(timezone.utc)
+    camp = await db.campaigns.find_one({"id": campaign_id, "is_deleted": {"$ne": True}})
+    if not camp:
+        raise HTTPException(status_code=404, detail="Chiến dịch tuyển sinh không tồn tại")
+
+    destinations = camp.get("destinations", [])
+    start_point = camp.get("start_point")
+    origin_lat = start_point.get("lat") if start_point else (destinations[0]["lat"] if destinations else None)
+    origin_lng = start_point.get("lng") if start_point else (destinations[0]["lng"] if destinations else None)
+    
+    # Tính toán lại route geometry nếu chưa có
+    route_geom = camp.get("route_geometry")
+    poly = camp.get("polyline")
+    dist_km = camp.get("estimated_distance_km")
+    dur_min = camp.get("estimated_duration_minutes")
+    
+    if (not route_geom or not poly) and destinations and origin_lat is not None:
+        st_pt = {"lat": origin_lat, "lng": origin_lng, "name": start_point.get("name") if start_point else "Điểm xuất phát"}
+        ordered_dests, total_dist_meters, total_dur_seconds, route_geom, poly, duration_text = (
+            routing_service.plan_dynamic_next_hop_route(st_pt, destinations)
+        )
+        dist_km = round(total_dist_meters / 1000, 2)
+        dur_min = int(total_dur_seconds / 60)
+    if payload.destinations is not None:
+        destinations = payload.destinations
+    if payload.start_point is not None:
+        start_point = payload.start_point
+
+    team_data = payload.team.model_dump() if payload.team else {}
+    start_date = payload.start_date
+    end_date = payload.end_date
+
+    # 1. Kiểm tra chuyến đi đã tồn tại trong admission_trips chưa
+    existing_trip = await db.admission_trips.find_one({
+        "$or": [
+            {"campaign_id": campaign_id},
+            {"id": camp.get("deployed_trip_id")}
+        ],
+        "is_deleted": {"$ne": True}
+    })
+
+    if existing_trip:
+        trip_id = existing_trip["id"]
+        update_trip = {
+            "name": f"Chuyến đi: {camp.get('name')}",
+            "start_date": start_date,
+            "end_date": end_date,
+            "team": team_data,
+            "destinations": destinations,
+            "start_point": start_point,
+            "route_geometry": route_geom,
+            "polyline": poly,
+            "estimated_distance_km": dist_km,
+            "estimated_duration_minutes": dur_min,
+            "updated_at": now
+        }
+        await db.admission_trips.update_one({"id": trip_id}, {"$set": update_trip})
+    else:
+        trip_id = str(uuid.uuid4())
+        trip_doc = {
+            "id": trip_id,
+            "campaign_id": campaign_id,
+            "name": f"Chuyến đi: {camp.get('name')}",
+            "trip_code": f"TRIP-{campaign_id[:6].upper()}",
+            "status": "active",
+            "start_date": start_date,
+            "end_date": end_date,
+            "team": team_data,
+            "current_lat": origin_lat,
+            "current_lng": origin_lng,
+            "destinations": destinations,
+            "start_point": start_point,
+            "route_geometry": route_geom,
+            "polyline": poly,
+            "estimated_distance_km": dist_km,
+            "estimated_duration_minutes": dur_min,
+            "is_deleted": False,
+            "created_at": now,
+            "updated_at": now
+        }
+        await db.admission_trips.insert_one(trip_doc)
+
+        # Tạo campaign_waypoints cho chuyến đi nếu chưa có
+        for i, dest in enumerate(destinations, 1):
+            cw_id = str(uuid.uuid4())
+            cw_doc = {
+                "id": cw_id,
+                "campaign_id": campaign_id,
+                "trip_id": trip_id,
+                "school_id": dest.get("school_id") or dest.get("id"),
+                "waypoint_id": dest.get("waypoint_id") or dest.get("id"),
+                "name": dest.get("name"),
+                "address": dest.get("address"),
+                "lat": dest.get("lat"),
+                "lng": dest.get("lng"),
+                "type": WaypointType.SCHOOL.value,
+                "visit_order": i,
+                "priority": dest.get("priority"),
+                "is_visited": False,
+                "visited_at": None,
+                "notes": dest.get("notes"),
+                "visit_logs": [],
+                "tickets": [],
+                "is_deleted": False,
+                "created_at": now,
+                "updated_at": now
+            }
+            await db.campaign_waypoints.insert_one(cw_doc)
+
+    # 2. Cập nhật Campaign
+    camp_update = {
+        "team": team_data,
+        "start_date": start_date,
+        "end_date": end_date,
+        "status": "assigned",
+        "deployed_trip_id": trip_id,
+        "updated_at": now
+    }
+    if dist_km is not None:
+        camp_update["estimated_distance_km"] = dist_km
+    if dur_min is not None:
+        camp_update["estimated_duration_minutes"] = dur_min
+    if payload.destinations is not None:
+        camp_update["destinations"] = destinations
+    if payload.start_point is not None:
+        camp_update["start_point"] = start_point
+
+    await db.campaigns.update_one({"id": campaign_id}, {"$set": camp_update})
+
+    updated_camp = await db.campaigns.find_one({"id": campaign_id})
+    return {
+        "success": True,
+        "message": "Đã phân bổ nhân sự và lưu chuyến đi vào admission_trips thành công!",
+        "campaign": format_campaign_response(updated_camp),
+        "trip_id": trip_id
+    }
+
+
+@router.delete("/{campaign_id}/allocate")
+async def unallocate_campaign(
+    campaign_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Hủy phân bổ chiến dịch:
+    - Xóa thông tin team, start_date, end_date khỏi campaign và chuyển về planning.
+    - Xóa mềm chuyến đi tương ứng trong admission_trips.
+    """
+    db = get_database()
+    now = datetime.now(timezone.utc)
+    camp = await db.campaigns.find_one({"id": campaign_id, "is_deleted": {"$ne": True}})
+    if not camp:
+        raise HTTPException(status_code=404, detail="Chiến dịch tuyển sinh không tồn tại")
+
+    await db.campaigns.update_one(
+        {"id": campaign_id},
+        {"$set": {
+            "team": None,
+            "start_date": None,
+            "end_date": None,
+            "status": "planning",
+            "deployed_trip_id": None,
+            "updated_at": now
+        }}
+    )
+
+    await db.admission_trips.update_many(
+        {"campaign_id": campaign_id, "is_deleted": {"$ne": True}},
+        {"$set": {"is_deleted": True, "deleted_at": now, "updated_at": now}}
+    )
+
+    return {"success": True, "message": "Đã hủy phân bổ chiến dịch thành công"}
 
 
 @router.post("/{campaign_id}/deploy", response_model=CampaignDeployResponse)
