@@ -13,7 +13,6 @@ export function RegisterPage() {
     fullName: '',
     username: '',
     email: '',
-    phone: '',
     role: 'staff' as UserRole,
     password: '',
     confirmPassword: '',
@@ -55,7 +54,6 @@ export function RegisterPage() {
         password: formData.password,
         email: formData.email.trim() || undefined,
         full_name: formData.fullName.trim() || undefined,
-        phone: formData.phone.trim() || undefined,
         role: formData.role,
       });
 

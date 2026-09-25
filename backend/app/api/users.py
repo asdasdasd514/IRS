@@ -48,8 +48,7 @@ async def list_users(
         query["$or"] = [
             {"username": search_regex},
             {"full_name": search_regex},
-            {"email": search_regex},
-            {"phone": search_regex}
+            {"email": search_regex}
         ]
 
     cursor = db.users.find(query).sort("created_at", -1).skip(skip).limit(limit)
@@ -108,7 +107,6 @@ async def create_user(
         "username": user_data.username,
         "email": user_data.email,
         "full_name": user_data.full_name,
-        "phone": user_data.phone,
         "avatar_url": user_data.avatar_url,
         "role": user_data.role.value,
         "hashed_password": get_password_hash(user_data.password),
@@ -192,8 +190,6 @@ async def update_user(
     update_dict = {}
     if user_update.full_name is not None:
         update_dict["full_name"] = user_update.full_name
-    if user_update.phone is not None:
-        update_dict["phone"] = user_update.phone
     if user_update.avatar_url is not None:
         update_dict["avatar_url"] = user_update.avatar_url
     if user_update.is_active is not None:

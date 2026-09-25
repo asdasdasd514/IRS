@@ -20,6 +20,7 @@ export function Header({ onOpenMobileMenu, title, subtitle }: HeaderProps) {
 
   const getBreadcrumbTitle = () => {
     if (title) return title;
+    if (location.pathname.startsWith('/staff/campaigns')) return 'Chiến Dịch & Điểm Công Tác Của Cán Bộ';
     if (location.pathname.startsWith('/admin/campaigns')) return 'Quản Lý Chiến Dịch Tuyển Sinh';
     if (location.pathname.startsWith('/admin/locations')) return 'Quản Lý Địa Điểm Trường';
     if (location.pathname.startsWith('/admin/members')) return 'Quản Lý Tài Khoản Nhân Sự';

@@ -75,7 +75,6 @@ export const authApi = {
     password: string;
     email?: string;
     full_name?: string;
-    phone?: string;
     role?: 'admin' | 'staff';
   }): Promise<User> => {
     const token = localStorage.getItem('token');

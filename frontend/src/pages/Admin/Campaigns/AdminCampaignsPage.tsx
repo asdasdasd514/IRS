@@ -280,6 +280,14 @@ export function AdminCampaignsPage() {
       return 'grid';
     }
   });
+  const [allocationViewMode, setAllocationViewMode] = useState<'grid' | 'list'>(() => {
+    try {
+      const saved = localStorage.getItem('irs_allocation_view_mode');
+      return saved === 'grid' || saved === 'list' ? saved : 'grid';
+    } catch {
+      return 'grid';
+    }
+  });
 
   // Tab Phân bổ: Modal phân bổ & Quản lý danh sách đã phân bổ
   const [isAllocationModalOpen, setIsAllocationModalOpen] = useState(false);
@@ -311,6 +319,15 @@ export function AdminCampaignsPage() {
     setViewMode(mode);
     try {
       localStorage.setItem('irs_campaign_view_mode', mode);
+    } catch {
+      // ignore
+    }
+  };
+
+  const handleSetAllocationViewMode = (mode: 'grid' | 'list') => {
+    setAllocationViewMode(mode);
+    try {
+      localStorage.setItem('irs_allocation_view_mode', mode);
     } catch {
       // ignore
     }
@@ -1600,7 +1617,7 @@ export function AdminCampaignsPage() {
       {/* ========================================================================= */}
       {activeTab === 'assignment' && (
         <div className="space-y-6">
-          {/* Thanh tìm kiếm & nút Phân bổ (đồng bộ style như bên tab Chiến dịch) */}
+          {/* Thanh tìm kiếm & nút Chuyển đổi hiển thị (đồng bộ style như bên tab Chiến dịch) */}
           <div className="bg-white rounded-[5px] border border-slate-200/80 p-2.5 sm:px-4 sm:py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
             {/* Search box */}
             <div className="relative flex-1">
@@ -1621,6 +1638,37 @@ export function AdminCampaignsPage() {
                   <X className="w-3.5 h-3.5" />
                 </button>
               )}
+            </div>
+
+            {/* Right controls: View toggle */}
+            <div className="flex items-center justify-between sm:justify-end gap-3 shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100">
+              {/* View Switcher: Lưới / List (Chỉ icon) */}
+              <div className="flex items-center bg-slate-100 p-1 rounded-[5px] border border-slate-200/60">
+                <button
+                  type="button"
+                  onClick={() => handleSetAllocationViewMode('grid')}
+                  title="Hiển thị dạng lưới"
+                  className={`p-1.5 rounded-[5px] text-xs font-semibold transition cursor-pointer ${
+                    allocationViewMode === 'grid'
+                      ? 'bg-white text-[#0f3b7d] shadow-2xs'
+                      : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  <LayoutGrid className="w-4 h-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSetAllocationViewMode('list')}
+                  title="Hiển thị dạng danh sách"
+                  className={`p-1.5 rounded-[5px] text-xs font-semibold transition cursor-pointer ${
+                    allocationViewMode === 'list'
+                      ? 'bg-white text-[#0f3b7d] shadow-2xs'
+                      : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  <List className="w-4 h-4" />
+                </button>
+              </div>
             </div>
           </div>
 
@@ -1655,7 +1703,7 @@ export function AdminCampaignsPage() {
                 Xóa tìm kiếm
               </button>
             </div>
-          ) : (
+          ) : allocationViewMode === 'grid' ? (
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
               {filteredAllocatedCampaigns.map((camp) => {
                 const cId = camp.id || camp._id;
@@ -1798,6 +1846,117 @@ export function AdminCampaignsPage() {
                   </div>
                 );
               })}
+            </div>
+          ) : (
+            /* Hiển thị dạng List cho Phân bổ */
+            <div className="bg-white rounded-[5px] border border-slate-200/80 shadow-xs overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs text-slate-600">
+                  <thead className="bg-slate-50 border-b border-slate-200/80 text-slate-500 font-bold uppercase text-[11px] tracking-wider">
+                    <tr>
+                      <th className="py-3.5 px-5">Chiến dịch / Mã chuyến</th>
+                      <th className="py-3.5 px-4">Thời gian</th>
+                      <th className="py-3.5 px-4">Lộ trình & Cự ly</th>
+                      <th className="py-3.5 px-4">Đoàn công tác</th>
+                      <th className="py-3.5 px-5 text-right">Thao tác</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {filteredAllocatedCampaigns.map((camp) => {
+                      const cId = camp.id || camp._id;
+                      const members = Array.isArray(camp.team?.members) ? camp.team.members : [];
+                      return (
+                        <tr key={cId} className="hover:bg-slate-50/70 transition-colors">
+                          <td className="py-3.5 px-5">
+                            <div className="font-bold text-slate-900 text-sm">{camp.name}</div>
+                            {camp.deployed_trip_id && (
+                              <span className="inline-block mt-0.5 px-1.5 py-0.2 rounded-[5px] bg-slate-100 text-slate-600 font-mono font-bold text-[10px]">
+                                Mã: {camp.deployed_trip_id}
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-3.5 px-4 whitespace-nowrap">
+                            <div className="flex items-center gap-1.5 text-xs text-[#0f3b7d] font-bold">
+                              <Calendar className="w-3.5 h-3.5 shrink-0" />
+                              <span>{formatDateDisplay(camp.start_date) || 'Chưa đặt'}</span>
+                              <span className="text-slate-400 font-normal">→</span>
+                              <span>{formatDateDisplay(camp.end_date) || 'Chưa đặt'}</span>
+                            </div>
+                          </td>
+                          <td className="py-3.5 px-4 whitespace-nowrap">
+                            <div className="space-y-0.5">
+                              <div className="font-semibold text-slate-800 flex items-center gap-1.5">
+                                <Building2 className="w-3.5 h-3.5 text-slate-400" />
+                                <span>{camp.destinations?.length || 0} trường</span>
+                              </div>
+                              <div className="text-slate-500 text-[11px] flex items-center gap-2">
+                                <span className="font-bold text-blue-700">
+                                  {camp.estimated_distance_km ? `${camp.estimated_distance_km} km` : '--'}
+                                </span>
+                                {camp.estimated_duration_text && (
+                                  <span className="text-slate-400">
+                                    (~{camp.estimated_duration_text})
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </td>
+                          <td className="py-3.5 px-4">
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-1.5 text-slate-800 font-bold">
+                                <Shield className="w-3.5 h-3.5 text-[#0f3b7d] shrink-0" />
+                                <span className="truncate max-w-[150px]">{camp.team?.leader_name || 'Chưa chỉ định'}</span>
+                                {camp.team?.vehicle_plate && (
+                                  <span className="text-slate-400 font-normal text-[11px] flex items-center gap-1">
+                                    <Car className="w-3 h-3" /> {camp.team.vehicle_plate}
+                                  </span>
+                                )}
+                              </div>
+                              {members.length > 0 && (
+                                <div className="text-[11px] text-slate-500 flex items-center gap-1">
+                                  <Users className="w-3 h-3 text-slate-400 shrink-0" />
+                                  <span className="truncate max-w-[200px]">
+                                    {members.map((m: any) => m.name).join(', ')}
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                          </td>
+                          <td className="py-3.5 px-5 text-right whitespace-nowrap">
+                            <div className="flex items-center justify-end gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => handleViewAllocatedTrip(camp)}
+                                className="py-1.5 px-2.5 rounded-[5px] bg-blue-50 hover:bg-blue-100 text-[#0f3b7d] text-xs font-bold flex items-center gap-1 transition cursor-pointer"
+                                title="Xem lộ trình và bản đồ"
+                              >
+                                <Route className="w-3.5 h-3.5" />
+                                <span>Xem lộ trình</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => openAllocationModal(camp)}
+                                className="p-1.5 rounded-[5px] text-slate-600 hover:text-blue-700 hover:bg-blue-50 transition cursor-pointer"
+                                title="Chỉnh sửa phân bổ"
+                              >
+                                <Edit className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleUnallocate(camp)}
+                                className="p-1.5 rounded-[5px] text-slate-400 hover:text-red-600 hover:bg-red-50 transition cursor-pointer"
+                                title="Hủy phân bổ"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
         </div>
@@ -3590,10 +3749,10 @@ export function AdminCampaignsPage() {
                   setViewingAllocatedTrip(null);
                   openAllocationModal(camp);
                 }}
-                className="px-5 py-2 rounded-[5px] bg-[#0f3b7d] hover:bg-[#0c2f64] text-white text-xs font-bold transition shadow-xs flex items-center gap-2 cursor-pointer"
+                className="w-9 h-9 rounded-[5px] bg-[#0f3b7d] hover:bg-[#0c2f64] text-white transition shadow-xs flex items-center justify-center cursor-pointer"
+                title="Chỉnh sửa phân bổ"
               >
-                <Edit className="w-3.5 h-3.5" />
-                <span>Chỉnh sửa phân bổ này</span>
+                <Edit className="w-4 h-4" />
               </button>
             </div>
           </div>

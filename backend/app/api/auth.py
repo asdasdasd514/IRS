@@ -123,7 +123,6 @@ async def register(register_data: RegisterRequest):
         "username": raw_username,
         "email": clean_email,
         "full_name": register_data.full_name.strip() if register_data.full_name else raw_username,
-        "phone": register_data.phone.strip() if register_data.phone else None,
         "avatar_url": None,
         "role": register_data.role.value,
         "hashed_password": get_password_hash(register_data.password),

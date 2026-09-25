@@ -145,7 +145,6 @@ async def init_mongo_database():
         "full_name": "Quản Trị Viên Hệ Thống",
         "email": "admin@admissions.edu.vn",
         "role": "admin",
-        "phone": "0901234567",
         "avatar_url": None,
         "hashed_password": get_password_hash("admin123"),
         "is_admin": True,

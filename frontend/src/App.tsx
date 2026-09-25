@@ -14,6 +14,7 @@ import { AdminMembersPage } from './pages/Admin/Members/AdminMembersPage';
 import { AdminLogsPage } from './pages/Admin/Logs/AdminLogsPage';
 import { ReportPage } from './pages/Report/ReportPage';
 import { ReportsListPage } from './pages/ReportsList/ReportsListPage';
+import { StaffCampaignsPage } from './pages/Staff/StaffCampaignsPage';
 import { MainLayout } from './layouts/MainLayout';
 import { useAppStore } from './store/useAppStore';
 import { authApi } from './services/api';
@@ -48,15 +49,33 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
-// Route Guard phân quyền Quản trị viên (RBAC)
-function AdminRoute({ children }: { children: React.ReactNode }) {
+// Route Guard cho giao diện chính có Layout & Sidebar (Hỗ trợ cả Admin & Staff)
+function PortalLayoutRoute({ children }: { children: React.ReactNode }) {
   const { token, user, authChecked } = useAppStore();
 
   if (!token) {
     return <Navigate to="/login" replace />;
   }
 
-  // Nếu có token nhưng đang chờ load user
+  if (!user && !authChecked) {
+    return <AuthLoadingScreen />;
+  }
+
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  return <>{children}</>;
+}
+
+// Route Guard chỉ dành cho Quản trị viên (Admin RBAC)
+function AdminOnlyRoute({ children }: { children: React.ReactNode }) {
+  const { token, user, authChecked } = useAppStore();
+
+  if (!token) {
+    return <Navigate to="/login" replace />;
+  }
+
   if (!user && !authChecked) {
     return <AuthLoadingScreen />;
   }
@@ -67,7 +86,7 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
 
   const isAdmin = user?.role === 'admin' || user?.is_admin;
   if (!isAdmin) {
-    return <Navigate to="/" replace />;
+    return <Navigate to="/staff/campaigns" replace />;
   }
 
   return <>{children}</>;
@@ -79,7 +98,7 @@ function PublicAuthRoute({ children }: { children: React.ReactNode }) {
 
   if (token && user) {
     const isAdmin = user.role === 'admin' || user.is_admin;
-    return <Navigate to={isAdmin ? "/admin/map" : "/"} replace />;
+    return <Navigate to={isAdmin ? "/admin/map" : "/staff/campaigns"} replace />;
   }
 
   return <>{children}</>;
@@ -106,7 +125,8 @@ function RootRoute() {
     return <Navigate to="/admin/map" replace />;
   }
 
-  return <HomePage />;
+  // Cán bộ thực địa: chuyển thẳng tới trang Chiến dịch phân bổ của Staff!
+  return <Navigate to="/staff/campaigns" replace />;
 }
 
 function App() {
@@ -154,25 +174,67 @@ function App() {
       <Route
         path="/admin"
         element={
-          <AdminRoute>
+          <PortalLayoutRoute>
             <MainLayout />
-          </AdminRoute>
+          </PortalLayoutRoute>
         }
       >
         <Route index element={<Navigate to="/admin/map" replace />} />
         <Route path="map" element={<AdminMapPage />} />
-        <Route path="campaigns" element={<AdminCampaignsPage />} />
-        <Route path="locations" element={<AdminLocationsPage />} />
+        <Route
+          path="campaigns"
+          element={
+            <AdminOnlyRoute>
+              <AdminCampaignsPage />
+            </AdminOnlyRoute>
+          }
+        />
+        <Route
+          path="locations"
+          element={
+            <AdminOnlyRoute>
+              <AdminLocationsPage />
+            </AdminOnlyRoute>
+          }
+        />
         <Route path="locations/:schoolId" element={<AdminSchoolDetailPage />} />
-        <Route path="members" element={<AdminMembersPage />} />
+        <Route
+          path="members"
+          element={
+            <AdminOnlyRoute>
+              <AdminMembersPage />
+            </AdminOnlyRoute>
+          }
+        />
         <Route path="logs" element={<AdminLogsPage />} />
         <Route path="settings" element={<AdminMembersPage />} />
+      </Route>
+
+      {/* Staff Dedicated Module with shared Layout & Sidebar */}
+      <Route
+        path="/staff"
+        element={
+          <PortalLayoutRoute>
+            <MainLayout />
+          </PortalLayoutRoute>
+        }
+      >
+        <Route index element={<Navigate to="/staff/campaigns" replace />} />
+        <Route path="campaigns" element={<StaffCampaignsPage />} />
       </Route>
 
       {/* Root Route: Phân quyền điều hướng khi vào trang chủ / */}
       <Route path="/" element={<RootRoute />} />
 
       {/* Field / Staff Protected Routes */}
+      <Route
+        path="/trips"
+        element={
+          <ProtectedRoute>
+            <HomePage />
+          </ProtectedRoute>
+        }
+      />
       <Route
         path="/trips/new"
         element={

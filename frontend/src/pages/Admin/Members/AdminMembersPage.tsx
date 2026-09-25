@@ -9,8 +9,8 @@ import {
   Unlock,
   Trash2,
   Mail,
-  Phone,
-  CheckCircle2
+  CheckCircle2,
+  AlertCircle
 } from 'lucide-react';
 import { authApi } from '../../../services/api';
 import { User, UserRole } from '../../../types';
@@ -22,7 +22,9 @@ export function AdminMembersPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState<'all' | 'admin' | 'staff'>('all');
   const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [modalError, setModalError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   // New Member Form
@@ -31,7 +33,6 @@ export function AdminMembersPage() {
     password: '',
     full_name: '',
     email: '',
-    phone: '',
     role: 'staff' as UserRole,
   });
 
@@ -51,16 +52,49 @@ export function AdminMembersPage() {
     loadUsers();
   }, []);
 
+  const handleOpenCreateModal = () => {
+    setModalError(null);
+    setFormData({
+      username: '',
+      password: '',
+      full_name: '',
+      email: '',
+      role: 'staff',
+    });
+    setIsModalOpen(true);
+  };
+
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.username || !formData.password) return;
+    setModalError(null);
+
+    const username = formData.username.trim();
+    const password = formData.password;
+
+    if (!username) {
+      setModalError('Vui lòng nhập tên đăng nhập.');
+      return;
+    }
+    if (username.length < 3) {
+      setModalError('Tên đăng nhập phải có tối thiểu 3 ký tự.');
+      return;
+    }
+    if (!password) {
+      setModalError('Vui lòng nhập mật khẩu.');
+      return;
+    }
+    if (password.length < 6) {
+      setModalError('Mật khẩu phải có tối thiểu 6 ký tự.');
+      return;
+    }
+
     try {
+      setSubmitting(true);
       await authApi.createUser({
-        username: formData.username.trim(),
-        password: formData.password,
+        username,
+        password,
         full_name: formData.full_name.trim() || undefined,
         email: formData.email.trim() || undefined,
-        phone: formData.phone.trim() || undefined,
         role: formData.role,
       });
 
@@ -70,14 +104,31 @@ export function AdminMembersPage() {
         password: '',
         full_name: '',
         email: '',
-        phone: '',
         role: 'staff',
       });
       setSuccessMsg('Cấp tài khoản thành viên mới thành công!');
       setTimeout(() => setSuccessMsg(null), 3000);
       loadUsers();
     } catch (err: any) {
-      alert(err.response?.data?.detail || 'Không thể tạo tài khoản');
+      const detail = err.response?.data?.detail;
+      let msg = 'Không thể tạo tài khoản.';
+      if (typeof detail === 'string') {
+        msg = detail;
+      } else if (Array.isArray(detail)) {
+        msg = detail
+          .map((d: any) => {
+            const f = d.loc ? d.loc[d.loc.length - 1] : '';
+            if (f === 'password') return 'Mật khẩu phải có tối thiểu 6 ký tự.';
+            if (f === 'username') return 'Tên đăng nhập phải có tối thiểu 3 ký tự.';
+            return d.msg || 'Dữ liệu không hợp lệ.';
+          })
+          .join(' ');
+      } else if (err.message) {
+        msg = err.message;
+      }
+      setModalError(msg);
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -141,8 +192,8 @@ export function AdminMembersPage() {
         </div>
 
         <button
-          onClick={() => setIsModalOpen(true)}
-          className="bg-[#0f3b7d] hover:bg-[#0c2f64] text-white font-semibold py-2.5 px-4 rounded-[5px] transition duration-200 flex items-center justify-center gap-2 text-sm shadow-sm"
+          onClick={handleOpenCreateModal}
+          className="bg-[#0f3b7d] hover:bg-[#0c2f64] text-white font-semibold py-2.5 px-4 rounded-[5px] transition duration-200 flex items-center justify-center gap-2 text-sm shadow-sm cursor-pointer"
         >
           <Plus className="w-4 h-4" />
           <span>Thêm thành viên</span>
@@ -206,7 +257,7 @@ export function AdminMembersPage() {
               <thead className="bg-slate-50 text-xs font-semibold uppercase text-slate-500 border-b border-slate-200/80">
                 <tr>
                   <th className="px-6 py-3.5">Họ tên & Tài khoản</th>
-                  <th className="px-6 py-3.5">Email / Liên hệ</th>
+                  <th className="px-6 py-3.5">Địa chỉ Email</th>
                   <th className="px-6 py-3.5">Vai trò (RBAC)</th>
                   <th className="px-6 py-3.5">Trạng thái</th>
                   <th className="px-6 py-3.5 text-right">Thao tác</th>
@@ -243,23 +294,14 @@ export function AdminMembersPage() {
                       </td>
 
                       <td className="px-6 py-4 text-xs">
-                        <div className="space-y-1">
-                          {u.email && (
-                            <div className="flex items-center gap-1.5 text-slate-600">
-                              <Mail className="w-3.5 h-3.5 text-slate-400" />
-                              <span>{u.email}</span>
-                            </div>
-                          )}
-                          {u.phone && (
-                            <div className="flex items-center gap-1.5 text-slate-500">
-                              <Phone className="w-3.5 h-3.5 text-slate-400" />
-                              <span>{u.phone}</span>
-                            </div>
-                          )}
-                          {!u.email && !u.phone && (
-                            <span className="text-slate-400 italic">Chưa có liên hệ</span>
-                          )}
-                        </div>
+                        {u.email ? (
+                          <div className="flex items-center gap-1.5 text-slate-600">
+                            <Mail className="w-3.5 h-3.5 text-slate-400" />
+                            <span>{u.email}</span>
+                          </div>
+                        ) : (
+                          <span className="text-slate-400 italic">Chưa có email</span>
+                        )}
                       </td>
 
                       <td className="px-6 py-4">
@@ -340,9 +382,26 @@ export function AdminMembersPage() {
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs">
           <div className="bg-white rounded-[5px] max-w-md w-full p-6 shadow-xl border border-slate-200 animate-slide-up">
-            <h3 className="text-lg font-bold text-slate-900 mb-4">
-              Cấp Tài Khoản Thành Viên Mới
-            </h3>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-bold text-slate-900">
+                Cấp Tài Khoản Thành Viên Mới
+              </h3>
+              <button
+                type="button"
+                onClick={() => setIsModalOpen(false)}
+                className="text-slate-400 hover:text-slate-600 p-1 cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Thông báo lỗi nếu có */}
+            {modalError && (
+              <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded-[5px] flex items-start gap-2.5 animate-shake">
+                <AlertCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
+                <span className="font-semibold leading-relaxed">{modalError}</span>
+              </div>
+            )}
 
             <form onSubmit={handleCreateUser} className="space-y-4">
               <div>
@@ -354,7 +413,7 @@ export function AdminMembersPage() {
                   value={formData.full_name}
                   onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
                   placeholder="Ví dụ: Trần Văn Nam"
-                  className="w-full px-3.5 py-2 text-sm bg-slate-50 border border-slate-300 rounded-[5px] focus:bg-white outline-none"
+                  className="w-full px-3.5 py-2 text-sm bg-slate-50 border border-slate-300 rounded-[5px] focus:bg-white focus:border-blue-500 outline-none"
                 />
               </div>
 
@@ -366,11 +425,17 @@ export function AdminMembersPage() {
                   <input
                     type="text"
                     value={formData.username}
-                    onChange={(e) => setFormData({ ...formData, username: e.target.value })}
+                    onChange={(e) => {
+                      setFormData({ ...formData, username: e.target.value.toLowerCase().trim() });
+                      if (modalError) setModalError(null);
+                    }}
                     placeholder="namtv"
-                    className="w-full px-3.5 py-2 text-sm bg-slate-50 border border-slate-300 rounded-[5px] focus:bg-white outline-none"
+                    minLength={3}
+                    maxLength={50}
+                    className="w-full px-3.5 py-2 text-sm bg-slate-50 border border-slate-300 rounded-[5px] focus:bg-white focus:border-blue-500 outline-none"
                     required
                   />
+                  <p className="text-[10px] text-slate-400 mt-1">Tối thiểu 3 ký tự (viết liền)</p>
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">
@@ -379,11 +444,16 @@ export function AdminMembersPage() {
                   <input
                     type="password"
                     value={formData.password}
-                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                    placeholder="••••••••"
-                    className="w-full px-3.5 py-2 text-sm bg-slate-50 border border-slate-300 rounded-[5px] focus:bg-white outline-none"
+                    onChange={(e) => {
+                      setFormData({ ...formData, password: e.target.value });
+                      if (modalError) setModalError(null);
+                    }}
+                    placeholder="Tối thiểu 6 ký tự"
+                    minLength={6}
+                    className="w-full px-3.5 py-2 text-sm bg-slate-50 border border-slate-300 rounded-[5px] focus:bg-white focus:border-blue-500 outline-none"
                     required
                   />
+                  <p className="text-[10px] text-slate-400 mt-1">Tối thiểu 6 ký tự</p>
                 </div>
               </div>
 
@@ -395,8 +465,8 @@ export function AdminMembersPage() {
                   type="email"
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  placeholder="namtv@domain.com"
-                  className="w-full px-3.5 py-2 text-sm bg-slate-50 border border-slate-300 rounded-[5px] focus:bg-white outline-none"
+                  placeholder="namtv@gmail.com"
+                  className="w-full px-3.5 py-2 text-sm bg-slate-50 border border-slate-300 rounded-[5px] focus:bg-white focus:border-blue-500 outline-none"
                 />
               </div>
 
@@ -407,7 +477,7 @@ export function AdminMembersPage() {
                 <select
                   value={formData.role}
                   onChange={(e) => setFormData({ ...formData, role: e.target.value as UserRole })}
-                  className="w-full px-3.5 py-2 text-sm bg-slate-50 border border-slate-300 rounded-[5px] focus:bg-white outline-none"
+                  className="w-full px-3.5 py-2 text-sm bg-slate-50 border border-slate-300 rounded-[5px] focus:bg-white focus:border-blue-500 outline-none cursor-pointer"
                 >
                   <option value="staff">Cán bộ tuyển sinh (Staff)</option>
                   <option value="admin">Quản trị viên (Admin)</option>
@@ -418,15 +488,23 @@ export function AdminMembersPage() {
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="flex-1 py-2 px-4 rounded-[5px] border border-slate-300 text-slate-600 font-semibold text-xs hover:bg-slate-50"
+                  className="flex-1 py-2 px-4 rounded-[5px] border border-slate-300 text-slate-600 font-semibold text-xs hover:bg-slate-50 transition cursor-pointer"
                 >
                   Hủy bỏ
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 py-2 px-4 rounded-[5px] bg-[#0f3b7d] text-white font-semibold text-xs hover:bg-[#0c2f64]"
+                  disabled={submitting}
+                  className="flex-1 py-2 px-4 rounded-[5px] bg-[#0f3b7d] hover:bg-[#0c2f64] text-white font-semibold text-xs transition cursor-pointer disabled:opacity-60 flex items-center justify-center gap-1.5"
                 >
-                  Tạo tài khoản
+                  {submitting ? (
+                    <>
+                      <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      <span>Đang tạo...</span>
+                    </>
+                  ) : (
+                    <span>Tạo tài khoản</span>
+                  )}
                 </button>
               </div>
             </form>

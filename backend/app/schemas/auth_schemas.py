@@ -13,7 +13,6 @@ class UserBase(BaseModel):
     username: str = Field(..., min_length=3, max_length=50)
     email: Optional[str] = None
     full_name: Optional[str] = None
-    phone: Optional[str] = None
     avatar_url: Optional[str] = None
     role: UserRole = UserRole.STAFF
 
@@ -25,7 +24,6 @@ class UserCreate(UserBase):
 class UserUpdate(BaseModel):
     email: Optional[str] = None
     full_name: Optional[str] = None
-    phone: Optional[str] = None
     avatar_url: Optional[str] = None
     role: Optional[UserRole] = None
     is_active: Optional[bool] = None
@@ -37,7 +35,6 @@ class UserResponse(BaseModel):
     username: str
     email: Optional[str] = None
     full_name: Optional[str] = None
-    phone: Optional[str] = None
     avatar_url: Optional[str] = None
     role: UserRole = UserRole.STAFF
     is_admin: bool = False
@@ -60,7 +57,6 @@ class RegisterRequest(BaseModel):
     password: str = Field(..., min_length=6)
     email: Optional[str] = None
     full_name: Optional[str] = None
-    phone: Optional[str] = None
     role: UserRole = UserRole.STAFF
 
 

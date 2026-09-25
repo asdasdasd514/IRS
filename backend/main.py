@@ -5,8 +5,9 @@ Hệ thống Hỗ trợ Ra quyết định Lộ trình và Quản lý Chiến d�
 
 from pathlib import Path
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
-from fastapi.responses import RedirectResponse
+from fastapi import FastAPI, Request
+from fastapi.responses import RedirectResponse, JSONResponse
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 import uvicorn
@@ -40,6 +41,38 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    """Chuyển đổi lỗi Pydantic 422 thành thông báo tiếng Việt dễ hiểu cho giao diện"""
+    errors = exc.errors()
+    messages = []
+    for err in errors:
+        loc = err.get("loc", [])
+        field = loc[-1] if loc else "dữ liệu"
+        err_type = err.get("type", "")
+        msg = err.get("msg", "")
+
+        if field == "password" and "string_too_short" in err_type:
+            messages.append("Mật khẩu phải có tối thiểu 6 ký tự.")
+        elif field == "username" and "string_too_short" in err_type:
+            messages.append("Tên đăng nhập phải có tối thiểu 3 ký tự.")
+        elif field == "password" and "missing" in err_type:
+            messages.append("Vui lòng nhập mật khẩu.")
+        elif field == "username" and "missing" in err_type:
+            messages.append("Vui lòng nhập tên đăng nhập.")
+        elif "enum" in err_type:
+            messages.append(f"Vai trò không hợp lệ (chỉ chấp nhận admin hoặc staff).")
+        else:
+            messages.append(f"Trường '{field}': {msg}")
+
+    friendly_msg = " ".join(messages) if messages else "Dữ liệu gửi lên không đúng định dạng."
+    return JSONResponse(
+        status_code=422,
+        content={"detail": friendly_msg, "errors": errors}
+    )
+
 
 # Chỉ đăng ký qua api_router (prefix /api chuẩn RESTful)
 app.include_router(api_router)

@@ -294,7 +294,6 @@ export interface User {
   username: string;
   email?: string | null;
   full_name?: string | null;
-  phone?: string | null;
   avatar_url?: string | null;
   role: UserRole;
   is_admin: boolean;
@@ -308,7 +307,6 @@ export interface RegisterInput {
   password: string;
   email?: string;
   full_name?: string;
-  phone?: string;
   role?: UserRole;
 }
 
