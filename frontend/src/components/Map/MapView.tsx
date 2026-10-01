@@ -1,8 +1,9 @@
-import { useEffect } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet';
+import { useEffect, useRef, Fragment } from 'react';
+import { MapContainer, TileLayer, Marker, Popup, Polyline, Circle, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import type { Location, Waypoint, NextHopCandidate } from '../../types';
+import { calculateDistance } from '../../utils';
 
 // Fix Leaflet default icon issue with Vite
 import icon from 'leaflet/dist/images/marker-icon.png';
@@ -57,6 +58,7 @@ interface MapViewProps {
   waypoints: Waypoint[];
   recommended: NextHopCandidate | null;
   route?: { lat: number; lng: number }[];
+  tripRoute?: { lat: number; lng: number }[];
   onWaypointClick?: (waypoint: Waypoint) => void;
   nearbyPlaces?: Array<{
     place_id: string;
@@ -69,49 +71,47 @@ interface MapViewProps {
   }>;
 }
 
-// Component to auto-fit map bounds
+// Component to auto-fit map bounds ONCE on load to avoid jitter
 function AutoFitBounds({ locations }: { locations: Location[] }) {
   const map = useMap();
+  const hasFittedRef = useRef(false);
+  const prevCountRef = useRef(0);
 
   useEffect(() => {
-    if (locations.length > 0) {
-      // Use setTimeout to ensure map is fully initialized
+    // Chỉ tự động zoom vừa khung nhìn một lần đầu tiên hoặc khi số lượng điểm thay đổi đáng kể
+    if (locations.length > 0 && (!hasFittedRef.current || Math.abs(locations.length - prevCountRef.current) > 1)) {
       const timeoutId = setTimeout(() => {
         try {
           const bounds = L.latLngBounds(locations.map((loc) => [loc.lat, loc.lng]));
-          // Check if map container exists before fitting bounds
           if (map.getContainer()) {
             map.fitBounds(bounds, { 
-              padding: [50, 50], 
+              padding: [60, 60], 
               maxZoom: 13,
-              animate: false // Disable animation to prevent race conditions
+              animate: false
             });
+            hasFittedRef.current = true;
+            prevCountRef.current = locations.length;
           }
         } catch (error) {
           console.warn('Failed to fit bounds:', error);
         }
-      }, 100);
+      }, 150);
 
       return () => clearTimeout(timeoutId);
     }
-  }, [locations, map]);
+  }, [locations.length, map]);
 
   return null;
 }
 
-// Component to reset view when map remounts
-function MapInitializer({ center }: { center: [number, number] }) {
+// Điều hướng êm dịu khi người dùng chủ động bấm "Về vị trí của tôi"
+function PanToLocation({ location, trigger }: { location: Location | null; trigger?: number }) {
   const map = useMap();
-
   useEffect(() => {
-    try {
-      if (map.getContainer()) {
-        map.setView(center, 13, { animate: false });
-      }
-    } catch (error) {
-      console.warn('Failed to set view:', error);
+    if (trigger && location && map.getContainer()) {
+      map.flyTo([location.lat, location.lng], 15, { animate: true, duration: 0.8 });
     }
-  }, [center, map]);
+  }, [trigger, location, map]);
 
   return null;
 }
@@ -121,9 +121,11 @@ export function MapView({
   waypoints,
   recommended,
   route,
+  tripRoute,
   onWaypointClick,
+  centerTrigger,
   nearbyPlaces = [],
-}: MapViewProps) {
+}: MapViewProps & { centerTrigger?: number }) {
   const center: [number, number] = currentLocation
     ? [currentLocation.lat, currentLocation.lng]
     : [10.8231, 106.6297]; // Default: Ho Chi Minh City
@@ -146,8 +148,8 @@ export function MapView({
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
       />
 
-      <MapInitializer center={center} />
       <AutoFitBounds locations={allLocations} />
+      <PanToLocation location={currentLocation} trigger={centerTrigger} />
 
       {/* Current location */}
       {currentLocation && (
@@ -160,7 +162,7 @@ export function MapView({
         </Marker>
       )}
 
-      {/* Schools/Waypoints */}
+      {/* Schools/Waypoints & Bán kính Check-in 30m */}
       {waypoints.map((waypoint) => {
         const isRecommended = recommended?.waypoint.id === waypoint.id;
         
@@ -175,55 +177,105 @@ export function MapView({
           ? icons.recommended
           : baseIcon;
 
+        const distanceToMe = currentLocation
+          ? calculateDistance(currentLocation.lat, currentLocation.lng, waypoint.lat, waypoint.lng)
+          : null;
+        const isInsideCheckInRange = distanceToMe !== null && distanceToMe <= 30;
+
         return (
-          <Marker
-            key={waypoint.id}
-            position={[waypoint.lat, waypoint.lng]}
-            icon={markerIcon}
-            eventHandlers={{
-              click: () => onWaypointClick?.(waypoint),
-            }}
-          >
-            <Popup>
-              <div className="min-w-[200px]">
-                <h3 className="font-bold text-lg mb-1">{waypoint.name}</h3>
-                {waypoint.address && (
-                  <p className="text-sm text-gray-600 mb-2">{waypoint.address}</p>
-                )}
-                {isRecommended && (
-                  <div className="bg-red-100 text-red-700 px-2 py-1 rounded text-sm font-medium mb-2">
-                    ⭐ Trường gần nhất
-                  </div>
-                )}
-                {waypoint.is_visited && (
-                  <div className="bg-gray-100 text-gray-600 px-2 py-1 rounded text-sm mb-2">
-                    ✓ Đã thăm
-                  </div>
-                )}
-                {waypoint.contact_name && (
-                  <p className="text-sm mt-1">
-                    <strong>Liên hệ:</strong> {waypoint.contact_name}
-                  </p>
-                )}
-                {waypoint.contact_phone && (
-                  <p className="text-sm">
-                    <strong>SĐT:</strong> {waypoint.contact_phone}
-                  </p>
-                )}
-              </div>
-            </Popup>
-          </Marker>
+          <Fragment key={waypoint.id}>
+            {/* Vòng tròn bán kính check-in 30m */}
+            {!waypoint.is_visited && (
+              <Circle
+                center={[waypoint.lat, waypoint.lng]}
+                radius={30}
+                pathOptions={{
+                  color: isInsideCheckInRange ? '#10B981' : '#3B82F6',
+                  fillColor: isInsideCheckInRange ? '#10B981' : '#3B82F6',
+                  fillOpacity: isInsideCheckInRange ? 0.35 : 0.12,
+                  dashArray: isInsideCheckInRange ? undefined : '4, 4',
+                  weight: isInsideCheckInRange ? 3 : 1.5,
+                }}
+              />
+            )}
+
+            <Marker
+              position={[waypoint.lat, waypoint.lng]}
+              icon={markerIcon}
+              eventHandlers={{
+                click: () => onWaypointClick?.(waypoint),
+              }}
+            >
+              <Popup>
+                <div className="min-w-[210px]">
+                  <h3 className="font-bold text-base mb-1 text-slate-800">{waypoint.name}</h3>
+                  {waypoint.address && (
+                    <p className="text-xs text-slate-600 mb-2 leading-relaxed">{waypoint.address}</p>
+                  )}
+                  {isRecommended && (
+                    <div className="bg-red-50 text-red-700 px-2 py-1 rounded text-xs font-bold mb-1.5 flex items-center gap-1 border border-red-200">
+                      ⭐ Điểm đến ưu tiên tiếp theo
+                    </div>
+                  )}
+                  {waypoint.is_visited ? (
+                    <div className="bg-emerald-50 text-emerald-700 px-2 py-1 rounded text-xs font-bold mb-1.5 flex items-center gap-1 border border-emerald-200">
+                      ✓ Đã check-in hoàn tất
+                    </div>
+                  ) : (
+                    <div className={`px-2 py-1 rounded text-xs font-semibold mb-1.5 border ${
+                      isInsideCheckInRange
+                        ? 'bg-emerald-100 text-emerald-800 border-emerald-300 animate-pulse'
+                        : 'bg-blue-50 text-blue-700 border-blue-200'
+                    }`}>
+                      📍 Bán kính check-in: 30m {distanceToMe !== null ? `(Hiện tại: ~${Math.round(distanceToMe)}m)` : ''}
+                    </div>
+                  )}
+                  {waypoint.contact_name && (
+                    <p className="text-xs mt-1 text-slate-700">
+                      <strong>Liên hệ:</strong> {waypoint.contact_name}
+                    </p>
+                  )}
+                  {waypoint.contact_phone && (
+                    <p className="text-xs text-slate-700">
+                      <strong>SĐT:</strong> {waypoint.contact_phone}
+                    </p>
+                  )}
+                </div>
+              </Popup>
+            </Marker>
+          </Fragment>
         );
       })}
 
-      {/* Route line from backend */}
-      {route && route.length > 1 && (
+      {/* Tuyến đường tổng thể của chuyến đi (Làm nền định hướng) */}
+      {tripRoute && tripRoute.length > 1 && (
         <Polyline
-          positions={route.map((point) => [point.lat, point.lng])}
-          color="#3B82F6"
+          positions={tripRoute.map((p: any) => [p.lat, p.lng])}
+          color="#64748B"
           weight={4}
-          opacity={0.7}
+          opacity={0.4}
+          dashArray="6, 8"
         />
+      )}
+
+      {/* Tuyến đường dẫn đến điểm tiếp theo (Active Navigation Leg - Đường dẫn trực quan 2 lớp) */}
+      {route && route.length > 1 && (
+        <>
+          {/* Lớp viền phát sáng */}
+          <Polyline
+            positions={route.map((point) => [point.lat, point.lng])}
+            color="#60A5FA"
+            weight={9}
+            opacity={0.5}
+          />
+          {/* Lớp dẫn đường chính */}
+          <Polyline
+            positions={route.map((point) => [point.lat, point.lng])}
+            color="#1D4ED8"
+            weight={5}
+            opacity={1}
+          />
+        </>
       )}
 
       {/* Nearby places (temp markers) */}

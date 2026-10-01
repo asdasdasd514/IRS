@@ -1,4 +1,4 @@
-import React, { useEffect, useCallback, useState } from 'react';
+import React, { useEffect, useCallback, useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, RefreshCw, MapPin, Menu, Utensils } from 'lucide-react';
@@ -7,8 +7,8 @@ import polyline from '@mapbox/polyline';
 import { MapView, BottomSheet, VisitedBottomSheet, WaypointInfoModal } from '../../components';
 import { tripApi, ticketApi, reportApi } from '../../services/api';
 import { useAppStore } from '../../store/useAppStore';
-import { useGeolocation } from '../../hooks';
-import { calculateDistance, formatDistance, isWithinCheckInRange } from '../../utils';
+import { useWatchPosition } from '../../hooks';
+import { calculateDistance, formatDistance, buildGoogleMapsDirectionsUrl } from '../../utils';
 import type { Waypoint } from '../../types';
 
 export const TripMapPage: React.FC = () => {
@@ -16,7 +16,17 @@ export const TripMapPage: React.FC = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
-  const { location: geoLocation, error: geoError, refresh: refreshLocation } = useGeolocation();
+  // Tự động theo dõi GPS liên tục theo thời gian thực (Live Real-time GPS Tracking)
+  const {
+    location: geoLocation,
+    error: geoError,
+    accuracy: geoAccuracy,
+    refresh: refreshLocation
+  } = useWatchPosition({
+    enableHighAccuracy: true,
+    timeout: 10000,
+    maximumAge: 1000,
+  });
 
   const {
     currentLocation,
@@ -34,6 +44,7 @@ export const TripMapPage: React.FC = () => {
   const [route, setRoute] = useState<{ lat: number; lng: number }[] | null>(null);
   const [showVisitedSheet, setShowVisitedSheet] = useState(false);
   const [waypointTickets, setWaypointTickets] = useState<Record<string, number>>({});
+  const [centerTrigger, setCenterTrigger] = useState(0);
 
   // Nearby places (temp markers)
   const [nearbyPlaces, setNearbyPlaces] = useState<Array<{
@@ -62,24 +73,55 @@ export const TripMapPage: React.FC = () => {
     enabled: !!tripId,
   });
 
-  const displayWaypoints = (trip?.waypoints ?? [])
-    .map((waypoint, index) => {
-      const rawWaypoint = waypoint as Waypoint & {
-        latitude?: number | string;
-        longitude?: number | string;
-      };
-      const lat = Number(rawWaypoint.lat ?? rawWaypoint.latitude);
-      const lng = Number(rawWaypoint.lng ?? rawWaypoint.longitude);
+  // Hỗ trợ hiển thị điểm dừng từ cả waypoints lẫn fallback destinations
+  const rawWaypointsSource = useMemo(() => {
+    if (trip?.waypoints && trip.waypoints.length > 0) {
+      return trip.waypoints;
+    }
+    if ((trip as any)?.destinations && (trip as any).destinations.length > 0) {
+      return (trip as any).destinations;
+    }
+    return [];
+  }, [trip]);
 
-      return {
-        ...rawWaypoint,
-        id: rawWaypoint.id || `waypoint-${index}`,
-        name: rawWaypoint.name || `Điểm dừng ${index + 1}`,
-        lat,
-        lng,
-      };
-    })
-    .filter((waypoint) => Number.isFinite(waypoint.lat) && Number.isFinite(waypoint.lng));
+  const displayWaypoints = useMemo(() => {
+    return rawWaypointsSource
+      .map((waypoint: any, index: number) => {
+        const lat = Number(waypoint.lat ?? waypoint.latitude);
+        const lng = Number(waypoint.lng ?? waypoint.longitude);
+
+        return {
+          ...waypoint,
+          id: waypoint.id || `waypoint-${index}`,
+          name: waypoint.name || `Điểm dừng ${index + 1}`,
+          lat,
+          lng,
+          type: waypoint.type || 'SCHOOL',
+          visit_order: waypoint.visit_order || waypoint.order || (index + 1),
+        };
+      })
+      .filter((waypoint: any) => Number.isFinite(waypoint.lat) && Number.isFinite(waypoint.lng));
+  }, [rawWaypointsSource]);
+
+  // Giải mã toàn bộ tuyến đường tổng thể (Trip Route Polyline)
+  const tripRoute = useMemo(() => {
+    const t = trip as any;
+    if (t?.route_geometry && Array.isArray(t.route_geometry) && t.route_geometry.length > 1) {
+      return t.route_geometry.map((pt: any) => ({
+        lat: Number(pt[0]),
+        lng: Number(pt[1])
+      }));
+    }
+    if (t?.polyline) {
+      try {
+        const decoded = polyline.decode(t.polyline);
+        return decoded.map((pt: [number, number]) => ({ lat: pt[0], lng: pt[1] }));
+      } catch (e) {
+        console.error('Error decoding trip polyline:', e);
+      }
+    }
+    return undefined;
+  }, [trip]);
 
   const mapName = trip?.name || (trip as (typeof trip & { title?: string }) | undefined)?.title || 'Bản đồ chuyến đi';
 
@@ -89,12 +131,24 @@ export const TripMapPage: React.FC = () => {
     setNextHop(null, []);
   }, [tripId, setNextHop]);
 
-  // Update current location from geolocation
+  // Cập nhật vị trí GPS trực tiếp vào store khi có tín hiệu
   useEffect(() => {
     if (geoLocation) {
       setCurrentLocation(geoLocation);
     }
   }, [geoLocation, setCurrentLocation]);
+
+  // Khởi tạo vị trí mặc định nếu chưa bật GPS
+  useEffect(() => {
+    if (!currentLocation && trip) {
+      const t = trip as any;
+      if (t.current_lat && t.current_lng) {
+        setCurrentLocation({ lat: t.current_lat, lng: t.current_lng });
+      } else if (t.start_point?.lat && t.start_point?.lng) {
+        setCurrentLocation({ lat: t.start_point.lat, lng: t.start_point.lng });
+      }
+    }
+  }, [trip, currentLocation, setCurrentLocation]);
 
   // Fetch next hop when location changes
   const fetchNextHop = useCallback(async () => {
@@ -253,17 +307,34 @@ export const TripMapPage: React.FC = () => {
     },
   });
 
-  // Navigate to Google Maps
-  const handleNavigate = useCallback((waypoint: Waypoint) => {
-    const url = `https://www.google.com/maps/dir/?api=1&destination=${waypoint.lat},${waypoint.lng}&travelmode=driving`;
-    window.open(url, '_blank');
-  }, []);
+  // Navigate to Google Maps bám sát 100% tuyến đường đã định tuyến
+  const handleNavigate = useCallback(
+    (waypoint: Waypoint) => {
+      if (!currentLocation) {
+        const url = `https://www.google.com/maps/dir/?api=1&destination=${waypoint.lat},${waypoint.lng}&travelmode=driving`;
+        window.open(url, '_blank', 'noopener,noreferrer');
+        return;
+      }
 
-  // Check-in handler
+      // Nếu đang chỉ đường đến điểm khuyến nghị (nextHop) và đã có route geometry
+      const isNextHop = nextHop?.waypoint?.id === waypoint.id;
+      const activeGeometry = isNextHop && route && route.length >= 10 ? route : undefined;
+
+      const url = buildGoogleMapsDirectionsUrl(
+        currentLocation,
+        { lat: waypoint.lat, lng: waypoint.lng },
+        activeGeometry
+      );
+      window.open(url, '_blank', 'noopener,noreferrer');
+    },
+    [currentLocation, nextHop, route]
+  );
+
+  // Check-in handler với quy tắc bán kính 10m - 30m
   const handleCheckIn = useCallback(
     (waypoint: Waypoint) => {
       if (!currentLocation) {
-        alert('Không xác định được vị trí của bạn');
+        alert('Không xác định được vị trí GPS của bạn. Vui lòng bật định vị hoặc kiểm tra kết nối.');
         return;
       }
 
@@ -275,28 +346,22 @@ export const TripMapPage: React.FC = () => {
       );
 
       const distanceText = formatDistance(distance);
-      const isWithinRange = isWithinCheckInRange(
-        currentLocation.lat,
-        currentLocation.lng,
-        waypoint.lat,
-        waypoint.lng,
-        500 // 500m radius
-      );
+      const isWithinRange = distance <= 30; // Quy chuẩn bán kính check-in 10 - 30m
 
-      let confirmMessage = `Check-in tại ${waypoint.name}?\n\nKhoảng cách hiện tại: ${distanceText}`;
+      let confirmMessage = `Check-in tại: ${waypoint.name}\n\nKhoảng cách hiện tại: ${distanceText} (Quy định: ≤ 30m)`;
       let isRemoteCheckIn = false;
 
       if (!isWithinRange) {
-        confirmMessage += `\n\n⚠️ LƯU Ý: Bạn đang cách điểm check-in ${distanceText}.\n\n`;
-        confirmMessage += `Nếu bạn đã đi qua và quên check-in, bạn vẫn có thể check-in ngay bây giờ.\n\n`;
-        confirmMessage += `Tuy nhiên, nếu chưa đến, vui lòng đến gần hơn (trong vòng 500m) để check-in chính xác hơn.\n\n`;
-        confirmMessage += `Bạn có muốn check-in ngay không?`;
+        confirmMessage += `\n\n⚠️ CẢNH BÁO KHOẢNG CÁCH:\nBạn đang cách điểm đến ${distanceText}, vượt quá bán kính quy định (10m - 30m).\n\n`;
+        confirmMessage += `Vui lòng di chuyển đến gần trường (trong vòng 30m) để hệ thống tự động ghi nhận.\n\n`;
+        confirmMessage += `Nếu bạn đã có mặt thực tế tại trường (sai số GPS tòa nhà), bạn có muốn gửi yêu cầu Check-in ngay không?`;
         isRemoteCheckIn = true;
 
         if (!window.confirm(confirmMessage)) {
           return;
         }
       } else {
+        confirmMessage += `\n\n✅ Vị trí hợp lệ! Bạn đang có mặt trong bán kính 30m của trường.`;
         if (!window.confirm(confirmMessage)) {
           return;
         }
@@ -310,6 +375,7 @@ export const TripMapPage: React.FC = () => {
   // Center on current location
   const handleCenterLocation = useCallback(() => {
     refreshLocation();
+    setCenterTrigger((prev) => prev + 1);
   }, [refreshLocation]);
 
   // Find nearby restaurants/hotels
@@ -373,62 +439,147 @@ export const TripMapPage: React.FC = () => {
     );
   }
 
-  const unvisitedWaypoints = displayWaypoints.filter((w) => !w.is_visited);
+  const unvisitedWaypoints = displayWaypoints.filter((w: any) => !w.is_visited);
   const visitedWaypoints = displayWaypoints
-    .filter((w) => w.is_visited)
-    .sort((a, b) => new Date(b.visited_at!).getTime() - new Date(a.visited_at!).getTime());
+    .filter((w: any) => w.is_visited)
+    .sort((a: any, b: any) => new Date(b.visited_at!).getTime() - new Date(a.visited_at!).getTime());
   // Chỉ đếm trường chưa đi (SCHOOL), không tính các loại khác
-  const unvisitedSchools = unvisitedWaypoints.filter((w) => w.type === 'SCHOOL');
+  const unvisitedSchools = unvisitedWaypoints.filter((w: any) => w.type === 'SCHOOL');
+
+  const tripCode = (trip as any)?.trip_code;
 
   return (
     <div className="h-screen w-full flex flex-col overflow-hidden bg-gray-50">
-      {/* Header - Fixed */}
-      <div className="flex-shrink-0 bg-white shadow-sm z-30 px-4 py-3 relative">
+      {/* Header - Fixed & Smart HUD */}
+      <div className="flex-shrink-0 bg-white border-b border-slate-200 shadow-xs z-30 px-4 py-2.5 relative">
         <div className="flex items-center justify-between">
           <button
-            onClick={() => navigate('/')}
-            className="bg-gray-100 p-2 rounded-full hover:bg-gray-200"
+            onClick={() => navigate('/staff/campaigns')}
+            className="bg-slate-100 p-2 rounded-full hover:bg-slate-200 text-slate-700 transition cursor-pointer"
+            title="Quay lại danh sách chiến dịch"
           >
-            <ArrowLeft className="w-5 h-5 text-gray-700" />
+            <ArrowLeft className="w-4 h-4" />
           </button>
-          <div className="text-center flex-1 mx-4">
-            <h1 className="font-bold text-gray-800 truncate" title={mapName}>{mapName}</h1>
-            <p className="text-sm text-gray-500">
-              {trip.visited_count}/{trip.total_waypoints} đã hoàn thành
-            </p>
+
+          <div className="text-center flex-1 mx-3 min-w-0">
+            <div className="flex items-center justify-center gap-2">
+              <h1 className="font-bold text-slate-800 text-sm truncate" title={mapName}>
+                {mapName}
+              </h1>
+              {tripCode && (
+                <span className="hidden sm:inline-block px-1.5 py-0.5 rounded bg-blue-50 text-[#0f3b7d] text-[10px] font-bold border border-blue-200">
+                  {tripCode}
+                </span>
+              )}
+            </div>
+
+            <div className="flex items-center justify-center gap-2 mt-0.5">
+              <span className="text-[11px] font-medium text-slate-500">
+                Tiến độ: <strong className="text-[#0f3b7d]">{visitedWaypoints.length}/{Math.max(1, displayWaypoints.length)}</strong> điểm dừng ({Math.round((visitedWaypoints.length / Math.max(1, displayWaypoints.length)) * 100)}%)
+              </span>
+            </div>
+
+            {/* Mini Progress Bar */}
+            <div className="w-full max-w-xs mx-auto bg-slate-100 h-1.5 rounded-full mt-1.5 overflow-hidden">
+              <div
+                className="bg-blue-600 h-full transition-all duration-500 rounded-full"
+                style={{
+                  width: `${Math.round((visitedWaypoints.length / Math.max(1, displayWaypoints.length)) * 100)}%`,
+                }}
+              />
+            </div>
           </div>
+
           <button
             onClick={() => setMenuOpen(true)}
-            className="bg-gray-100 p-2 rounded-full hover:bg-gray-200"
+            className="bg-slate-100 p-2 rounded-full hover:bg-slate-200 text-slate-700 transition cursor-pointer"
+            title="Menu tùy chọn"
           >
-            <Menu className="w-5 h-5 text-gray-700" />
+            <Menu className="w-4 h-4" />
           </button>
         </div>
       </div>
 
       {/* Map Container - Flex grow to fill available space */}
-      <div className="flex-1 relative bg-gray-300">
+      <div className="flex-1 relative bg-slate-100">
         <MapView
           key={tripId}
           currentLocation={currentLocation}
           waypoints={displayWaypoints}
           recommended={nextHop}
           route={route || undefined}
+          tripRoute={tripRoute}
           onWaypointClick={handleWaypointClick}
+          centerTrigger={centerTrigger}
           nearbyPlaces={nearbyPlaces}
         />
 
-        {/* Floating Buttons - Inside map container but on top */}
+        {/* Floating GPS Status & Quick Test Tool (Top-Left) */}
+        <div className="absolute left-3 top-3 z-[1000] flex flex-col gap-2 pointer-events-auto items-start">
+          {/* GPS Live Status Pill */}
+          <div className="bg-white/95 backdrop-blur-md px-3 py-1.5 rounded-full shadow-md border border-slate-200 flex items-center gap-2 text-xs font-semibold text-slate-700">
+            <span
+              className={`w-2.5 h-2.5 rounded-full ${
+                geoLocation ? 'bg-emerald-500 animate-ping' : geoError ? 'bg-red-500' : 'bg-amber-400'
+              }`}
+            />
+            {geoLocation ? (
+              <span>GPS Trực tiếp {geoAccuracy ? `(±${geoAccuracy}m)` : ''}</span>
+            ) : geoError ? (
+              <span className="text-red-600 text-[11px] truncate max-w-[170px]" title={geoError}>
+                GPS: {geoError}
+              </span>
+            ) : (
+              <span className="text-amber-600">Đang tìm tín hiệu GPS...</span>
+            )}
+          </div>
+
+          {/* Quick Test Simulator Button (Để kiểm tra check-in 10-30m mà không cần đi ra ngoài) */}
+          {nextHop?.waypoint && (
+            <button
+              type="button"
+              onClick={() => {
+                const targetLat = nextHop.waypoint.lat + 0.00012;
+                const targetLng = nextHop.waypoint.lng + 0.00012;
+                setCurrentLocation({ lat: targetLat, lng: targetLng, accuracy: 5 });
+                alert(
+                  `🎯 [Mô phỏng GPS]:\nĐã đặt vị trí của bạn cách cổng trường "${nextHop.waypoint.name}" ~18 mét.\nKhoảng cách này nằm trong bán kính quy định (10m - 30m).\n\nBây giờ bạn có thể bấm nút "Check-in" ngay lập tức!`
+                );
+              }}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold px-3 py-1.5 rounded-full shadow-md transition flex items-center gap-1.5 cursor-pointer backdrop-blur-xs"
+              title="Đặt vị trí cách trường 18m để thử tính năng Check-in 10m - 30m"
+            >
+              <span>🎯 Thử GPS gần trường (18m)</span>
+            </button>
+          )}
+
+          {/* Nút khôi phục vị trí GPS thật nếu đang mô phỏng */}
+          {geoLocation && currentLocation && (currentLocation.lat !== geoLocation.lat || currentLocation.lng !== geoLocation.lng) && (
+            <button
+              type="button"
+              onClick={() => {
+                setCurrentLocation(geoLocation);
+                alert('📍 Đã chuyển lại vị trí GPS thực tế từ thiết bị.');
+              }}
+              className="bg-slate-800/90 hover:bg-slate-900 text-white text-[10px] font-bold px-2.5 py-1 rounded-full shadow-sm transition cursor-pointer"
+            >
+              ↩ Khôi phục GPS thật
+            </button>
+          )}
+        </div>
+
+        {/* Floating Buttons (Top-Right) */}
         <div className="absolute right-4 top-4 z-[1000] flex flex-col gap-3 pointer-events-auto">
           {/* Recalculate button */}
           <button
             onClick={fetchNextHop}
             disabled={isLoadingNextHop}
-            className={`bg-white p-3 rounded-full shadow-lg hover:bg-gray-50 active:bg-gray-100 ${isLoadingNextHop ? 'animate-spin' : ''
-              }`}
+            className={`bg-white p-3 rounded-full shadow-lg hover:bg-gray-50 active:bg-gray-100 ${
+              isLoadingNextHop ? 'animate-spin' : ''
+            }`}
             title="Tính lại lộ trình"
           >
-            <RefreshCw className={`w-6 h-6 text-primary-500`} />
+            <RefreshCw className="w-5 h-5 text-primary-600" />
           </button>
 
           {/* Center on location */}
@@ -437,28 +588,29 @@ export const TripMapPage: React.FC = () => {
             className="bg-white p-3 rounded-full shadow-lg hover:bg-gray-50 active:bg-gray-100"
             title="Về vị trí của tôi"
           >
-            <MapPin className="w-6 h-6 text-gray-700" />
+            <MapPin className="w-5 h-5 text-slate-700" />
           </button>
 
           {/* Find nearby places */}
           <button
             onClick={handleFindRestaurants}
             disabled={isSearchingPlaces}
-            className={`bg-orange-500 p-3 rounded-full shadow-lg hover:bg-orange-600 active:bg-orange-700 ${isSearchingPlaces ? 'opacity-50 cursor-not-allowed' : ''
-              }`}
+            className={`bg-orange-500 p-3 rounded-full shadow-lg hover:bg-orange-600 active:bg-orange-700 ${
+              isSearchingPlaces ? 'opacity-50 cursor-not-allowed' : ''
+            }`}
             title="Tìm quán ăn gần đây"
           >
-            <Utensils className={`w-6 h-6 text-white ${isSearchingPlaces ? 'animate-pulse' : ''}`} />
+            <Utensils className={`w-5 h-5 text-white ${isSearchingPlaces ? 'animate-pulse' : ''}`} />
           </button>
 
           {/* Clear nearby places if showing */}
           {nearbyPlaces.length > 0 && (
             <button
               onClick={() => setNearbyPlaces([])}
-              className="bg-red-500 p-3 rounded-full shadow-lg hover:bg-red-600 active:bg-red-700"
+              className="bg-red-500 p-3 rounded-full shadow-lg hover:bg-red-600 active:bg-red-700 text-white font-bold"
               title="Xóa địa điểm tìm được"
             >
-              <span className="text-white font-bold text-lg">×</span>
+              ×
             </button>
           )}
         </div>

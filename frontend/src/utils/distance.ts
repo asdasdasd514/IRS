@@ -48,13 +48,13 @@ export function formatDistance(meters: number): string {
 }
 
 /**
- * Kiểm tra xem có đủ gần để check-in không
+ * Kiểm tra xem có đủ gần để check-in không (chuẩn thực địa 10 - 30m)
  * 
  * @param currentLat Vĩ độ hiện tại
  * @param currentLng Kinh độ hiện tại
  * @param targetLat Vĩ độ đích
  * @param targetLng Kinh độ đích
- * @param maxDistance Khoảng cách tối đa cho phép (mặc định 500m)
+ * @param maxDistance Khoảng cách tối đa cho phép (mặc định 30m)
  * @returns true nếu đủ gần
  */
 export function isWithinCheckInRange(
@@ -62,7 +62,7 @@ export function isWithinCheckInRange(
   currentLng: number,
   targetLat: number,
   targetLng: number,
-  maxDistance: number = 500
+  maxDistance: number = 30
 ): boolean {
   const distance = calculateDistance(currentLat, currentLng, targetLat, targetLng);
   return distance <= maxDistance;

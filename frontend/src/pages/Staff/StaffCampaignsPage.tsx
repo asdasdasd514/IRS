@@ -25,6 +25,7 @@ import {
 
 import { useAppStore } from '../../store/useAppStore';
 import { campaignApi, authApi } from '../../services/api';
+import { buildGoogleMapsDirectionsUrl } from '../../utils';
 
 // Fix icon Leaflet mặc định
 // @ts-ignore
@@ -471,10 +472,25 @@ export function StaffCampaignsPage() {
     );
   };
 
-  // Mở Google Maps chỉ đường
+  // Mở Google Maps chỉ đường bám sát lộ trình định tuyến
   const handleOpenGoogleMapsDirection = (lat: number, lng: number) => {
-    const url = `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`;
-    window.open(url, '_blank', 'noopener,noreferrer');
+    const origin = myLocation
+      ? { lat: myLocation[0], lng: myLocation[1] }
+      : currentCampaign?.start_location?.lat && currentCampaign?.start_location?.lng
+      ? { lat: Number(currentCampaign.start_location.lat), lng: Number(currentCampaign.start_location.lng) }
+      : undefined;
+
+    const routeGeom = currentCampaign?.route_geometry && Array.isArray(currentCampaign.route_geometry)
+      ? currentCampaign.route_geometry.map((pt: any) => ({ lat: Number(pt[0]), lng: Number(pt[1]) }))
+      : undefined;
+
+    if (origin) {
+      const url = buildGoogleMapsDirectionsUrl(origin, { lat, lng }, routeGeom);
+      window.open(url, '_blank', 'noopener,noreferrer');
+    } else {
+      const url = `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=driving`;
+      window.open(url, '_blank', 'noopener,noreferrer');
+    }
   };
 
   const toggleExpand = (cId: string) => {
@@ -490,23 +506,12 @@ export function StaffCampaignsPage() {
       {/* 3. Bố cục chính: Cột trái Danh sách Chiến dịch & Cột phải Bản đồ tương tác */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
         {/* CỘT TRÁI: DANH SÁCH CHIẾN DỊCH & ĐỊA ĐIỂM (5 CỘT) */}
-        <div className={`${currentCampaign ? 'lg:col-span-5' : 'lg:col-span-12 max-w-4xl mx-auto w-full'} space-y-4`}>
+        <div className={`${currentCampaign ? 'lg:col-span-5' : 'lg:col-span-12 w-full'} space-y-4`}>
           {/* Thanh tìm kiếm & Dropdown chọn chiến dịch */}
           <div className="bg-white p-3.5 rounded-[5px] border border-slate-200/80 shadow-xs space-y-3">
             <div className="flex flex-col sm:flex-row gap-2.5 items-stretch sm:items-center">
-              <div className="relative flex-1">
-                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-                <input
-                  type="text"
-                  placeholder="Tìm tên chiến dịch, mã chuyến, tên trường..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-9 pr-3.5 py-2 text-xs rounded-[5px] bg-slate-50 border border-slate-200 focus:bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-hidden transition"
-                />
-              </div>
-
-              {/* Dropdown chọn chiến dịch */}
-              <div className="sm:w-72">
+              {/* Dropdown chọn chiến dịch (Bên trái) */}
+              <div className="sm:w-72 shrink-0">
                 <select
                   aria-label="Chọn chiến dịch"
                   value={selectedCampaignId || ''}
@@ -533,10 +538,22 @@ export function StaffCampaignsPage() {
                   })}
                 </select>
               </div>
+
+              {/* Thanh tìm kiếm (Bên phải) */}
+              <div className="relative flex-1">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <input
+                  type="text"
+                  placeholder="Tìm tên chiến dịch, mã chuyến, tên trường..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-9 pr-3.5 py-2 text-xs rounded-[5px] bg-slate-50 border border-slate-200 focus:bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-hidden transition"
+                />
+              </div>
             </div>
 
             {/* Thông báo trạng thái đang xem bản đồ */}
-            {currentCampaign ? (
+            {currentCampaign && (
               <div className="flex items-center justify-between px-3 py-2 bg-blue-50 border border-blue-200 rounded-[5px] text-xs">
                 <div className="flex items-center gap-2 truncate">
                   <Compass className="w-4 h-4 text-[#0f3b7d] shrink-0" />
@@ -556,12 +573,7 @@ export function StaffCampaignsPage() {
                   <span>Ẩn bản đồ</span>
                 </button>
               </div>
-            ) : filteredCampaigns.length > 0 ? (
-              <div className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-[5px] text-xs text-slate-500 flex items-center gap-2">
-                <Compass className="w-4 h-4 text-slate-400 shrink-0" />
-                <span>Bấm vào một chiến dịch bên dưới hoặc chọn từ menu thả xuống để mở bản đồ lộ trình chi tiết.</span>
-              </div>
-            ) : null}
+            )}
           </div>
 
           {/* Danh sách các chiến dịch */}

@@ -240,12 +240,21 @@ class WaypointUpdate(BaseModel):
 
 class WaypointResponse(WaypointBase):
     id: str
+    visit_order: Optional[int] = 1
+    priority: Optional[int] = None
+    preferred_visit_time: Optional[str] = None
+    visit_duration_minutes: Optional[int] = None
+    is_visited: bool = False
+    visited_at: Optional[datetime] = None
     school: Optional[SchoolResponse] = None # Thông tin chi tiết trường tham chiếu từ schools
+    contact_name: Optional[str] = None
+    contact_phone: Optional[str] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True
+        extra = "allow"
 
 
 # Campaign Waypoint Schemas (Các trường/điểm sẽ đi trong Chiến dịch / Chuyến đi)

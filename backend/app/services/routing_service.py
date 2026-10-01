@@ -32,34 +32,81 @@ class RoutingService:
     ) -> Tuple[Optional[NextHopCandidate], List[NextHopCandidate]]:
         if not unvisited_waypoints:
             return None, []
-        
-        if not self.serpapi_key:
-            return await self._find_next_hop_haversine(
-                current_lat, current_lng, unvisited_waypoints
-            )
-        
-        try:
-            candidates = await self._get_distance_matrix(
-                current_lat, current_lng, unvisited_waypoints
-            )
-            
-            if not candidates:
-                return None, []
-            
-            candidates.sort(key=lambda x: x.duration_seconds)
-            
-            recommended = self._apply_selection_logic(candidates)
-            recommended.is_recommended = True
-            
-            alternatives = [c for c in candidates if c.waypoint.id != recommended.waypoint.id]
-            
-            return recommended, alternatives
-            
-        except Exception as e:
-            logger.error(f"Error calling SerpAPI: {e}")
-            return await self._find_next_hop_haversine(
-                current_lat, current_lng, unvisited_waypoints
-            )
+
+        candidates = []
+        for wp in unvisited_waypoints:
+            try:
+                lat = float(wp.get("lat") if isinstance(wp, dict) else getattr(wp, "lat", 0.0))
+                lng = float(wp.get("lng") if isinstance(wp, dict) else getattr(wp, "lng", 0.0))
+
+                # Tính toán lộ trình thực tế từ vị trí hiện tại đến điểm dừng qua OSRM
+                single_leg = self.get_osrm_single_leg_optimized((current_lat, current_lng), (lat, lng))
+                if single_leg and single_leg.get("distance_meters"):
+                    dist_m = float(single_leg["distance_meters"])
+                    dur_s = int(single_leg["duration_seconds"])
+                    dist_txt = single_leg["distance_text"]
+                    dur_txt = single_leg["duration_text"]
+                else:
+                    dist_m = self._haversine(current_lat, current_lng, lat, lng) * 1.25
+                    speed_mps = 25.5 * 1000 / 3600
+                    dur_s = int(dist_m / speed_mps)
+                    dist_txt = f"{dist_m / 1000:.1f} km" if dist_m >= 1000 else f"{int(dist_m)} m"
+                    dur_txt = self._format_duration_text(dur_s)
+
+                wp_resp = WaypointResponse.model_validate(wp) if not isinstance(wp, WaypointResponse) else wp
+                candidate = NextHopCandidate(
+                    waypoint=wp_resp,
+                    duration_seconds=dur_s,
+                    duration_text=dur_txt,
+                    distance_meters=int(dist_m),
+                    distance_text=dist_txt,
+                    is_recommended=False
+                )
+                candidates.append(candidate)
+            except Exception as e:
+                logger.warning(f"Error computing candidate for waypoint {wp}: {e}")
+
+        if not candidates:
+            return None, []
+
+        # Tối ưu hóa thứ tự: Tôn trọng kế hoạch lộ trình đã định (visit_order hoặc preferred_visit_time)
+        def get_itinerary_priority(c: NextHopCandidate):
+            wp = c.waypoint
+            # 1. Giờ hẹn đến trường (preferred_visit_time)
+            time_mins = None
+            pref_time = getattr(wp, "preferred_visit_time", None) or (wp.model_dump().get("preferred_visit_time") if hasattr(wp, "model_dump") else None)
+            if pref_time and isinstance(pref_time, str) and ":" in pref_time:
+                try:
+                    parts = pref_time.strip().split(":")
+                    time_mins = int(parts[0]) * 60 + int(parts[1])
+                except Exception:
+                    time_mins = None
+
+            # 2. Thứ tự ghé thăm đã phân bổ (visit_order)
+            order = getattr(wp, "visit_order", None)
+            if order is None or order <= 0:
+                order = 9999
+
+            has_time = 0 if time_mins is not None else 1
+            time_val = time_mins if time_mins is not None else 9999
+
+            return (has_time, time_val, order, c.distance_meters)
+
+        has_planned_schedule = any(
+            (getattr(c.waypoint, "visit_order", 0) or 0) > 0 or getattr(c.waypoint, "preferred_visit_time", None)
+            for c in candidates
+        )
+
+        if has_planned_schedule:
+            candidates.sort(key=get_itinerary_priority)
+        else:
+            candidates.sort(key=lambda x: x.distance_meters + x.duration_seconds * 10)
+
+        recommended = candidates[0]
+        recommended.is_recommended = True
+        alternatives = candidates[1:]
+
+        return recommended, alternatives
     
     async def _get_distance_matrix(
         self,
@@ -636,7 +683,14 @@ class RoutingService:
             logger.info(f"⚡ [Cache Hit Directions]: {cache_key}")
             return cached_result
         
-        # 1. Thử SerpAPI nếu có cấu hình
+        # 1. Định tuyến đường bộ OSRM (độ chính xác cao với hàng trăm tọa độ uốn lượn theo đường phố thực tế)
+        osrm_res = self.get_osrm_multi_route([(origin_lat, origin_lng), (dest_lat, dest_lng)])
+        
+        # 2. Nếu có SerpAPI, lấy thêm các bước chỉ dẫn (steps) văn bản chi tiết
+        steps = []
+        duration_text = osrm_res["duration_text"] if osrm_res else None
+        distance_text = f"{osrm_res['distance_meters'] / 1000:.1f} km" if (osrm_res and osrm_res['distance_meters'] >= 1000) else (f"{int(osrm_res['distance_meters'])} m" if osrm_res else None)
+
         if self.serpapi_key:
             try:
                 params = {
@@ -647,25 +701,20 @@ class RoutingService:
                     "hl": "vi",
                     "gl": "vn"
                 }
-                
                 search = GoogleSearch(params)
                 results = search.get_dict()
-                
                 if "directions" in results and len(results["directions"]) > 0:
                     direction = results["directions"][0]
                     duration_text = (
                         direction.get("formatted_duration")
                         or direction.get("duration_text")
-                        or (f"{direction.get('duration')} giây" if isinstance(direction.get("duration"), (int, float)) else str(direction.get("duration", "")))
+                        or duration_text
                     )
                     distance_text = (
                         direction.get("formatted_distance")
                         or direction.get("distance_text")
-                        or (f"{direction.get('distance')} m" if isinstance(direction.get("distance"), (int, float)) else str(direction.get("distance", "")))
+                        or distance_text
                     )
-                    
-                    steps = []
-                    coords = [(origin_lat, origin_lng)]
                     for trip in direction.get("trips", []):
                         for step in trip.get("details", []):
                             steps.append({
@@ -673,39 +722,16 @@ class RoutingService:
                                 "distance": step.get("formatted_distance") or str(step.get("distance", "")),
                                 "duration": step.get("formatted_duration") or str(step.get("duration", ""))
                             })
-                            gps = step.get("gps_coordinates")
-                            if gps and isinstance(gps, dict) and "latitude" in gps and "longitude" in gps:
-                                coords.append((float(gps["latitude"]), float(gps["longitude"])))
-                    coords.append((dest_lat, dest_lng))
-                    
-                    encoded_polyline = results.get("overview_polyline", "")
-                    if not encoded_polyline and len(coords) >= 2:
-                        try:
-                            encoded_polyline = polyline.encode(coords)
-                        except Exception as enc_err:
-                            logger.warning(f"Error encoding polyline: {enc_err}")
-                    
-                    direction_result = {
-                        "polyline": encoded_polyline,
-                        "route_geometry": coords,
-                        "duration_text": duration_text,
-                        "distance_text": distance_text,
-                        "steps": steps
-                    }
-                    directions_cache.set(cache_key, direction_result, ttl=300)
-                    return direction_result
             except Exception as e:
-                logger.warning(f"SerpAPI directions failed, falling back to OSRM: {e}")
+                logger.warning(f"SerpAPI directions steps query skipped: {e}")
 
-        # 2. Định tuyến đường bộ OSRM (chính xác theo bản đồ thực tế)
-        osrm_res = self.get_osrm_multi_route([(origin_lat, origin_lng), (dest_lat, dest_lng)])
         if osrm_res:
             direction_result = {
                 "polyline": osrm_res["polyline"],
                 "route_geometry": osrm_res["route_geometry"],
-                "duration_text": osrm_res["duration_text"],
-                "distance_text": f"{osrm_res['distance_meters'] / 1000:.1f} km" if osrm_res['distance_meters'] >= 1000 else f"{int(osrm_res['distance_meters'])} m",
-                "steps": []
+                "duration_text": duration_text or osrm_res["duration_text"],
+                "distance_text": distance_text or (f"{osrm_res['distance_meters'] / 1000:.1f} km" if osrm_res['distance_meters'] >= 1000 else f"{int(osrm_res['distance_meters'])} m"),
+                "steps": steps
             }
             directions_cache.set(cache_key, direction_result, ttl=300)
             return direction_result

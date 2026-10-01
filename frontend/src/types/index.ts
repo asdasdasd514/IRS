@@ -263,6 +263,7 @@ export interface CheckInResponse {
 export interface Location {
   lat: number;
   lng: number;
+  accuracy?: number;
 }
 
 // Report Types

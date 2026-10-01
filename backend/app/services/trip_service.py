@@ -90,6 +90,7 @@ class TripService:
         await db.admission_trips.insert_one(trip_doc)
 
         waypoints_list = trip_data.waypoints or []
+        raw_wps = [wp.model_dump() for wp in waypoints_list]
         
         # Tối ưu hóa thứ tự các trường bằng Dynamic Next-Hop Routing ngay lúc tạo
         if len(waypoints_list) >= 2:
@@ -100,7 +101,7 @@ class TripService:
             route_res = routing_service.plan_dynamic_next_hop_route(start_pt, raw_wps)
             ordered_wps = route_res[0] if isinstance(route_res, (list, tuple)) else route_res
         else:
-            ordered_wps = [wp.model_dump() for wp in waypoints_list]
+            ordered_wps = raw_wps
 
         cw_docs = []
         for i, wp_dict in enumerate(ordered_wps):
@@ -117,6 +118,10 @@ class TripService:
                 "address": wp_dict.get("address"),
                 "type": wp_dict.get("type", "SCHOOL"),
                 "visit_order": i + 1,
+                "preferred_visit_time": wp_dict.get("preferred_visit_time") or wp_dict.get("preferred_time"),
+                "visit_duration_minutes": wp_dict.get("visit_duration_minutes", 60),
+                "contact_name": wp_dict.get("contact_name"),
+                "contact_phone": wp_dict.get("contact_phone"),
                 "is_visited": False,
                 "visited_at": None,
                 "notes": wp_dict.get("notes"),
@@ -147,6 +152,45 @@ class TripService:
         if not waypoints:
             cursor_legacy = db.waypoints.find({"trip_id": trip_id, "is_deleted": {"$ne": True}}).sort("visit_order", 1)
             waypoints = await cursor_legacy.to_list(length=1000)
+
+        # Fallback từ trip.destinations nếu chuyến đi được triển khai từ chiến dịch nhưng chưa tạo waypoints
+        if not waypoints and trip.get("destinations"):
+            destinations = trip.get("destinations", [])
+            now = datetime.now(timezone.utc)
+            cw_docs = []
+            for i, dest in enumerate(destinations):
+                cw_id = str(dest.get("id") or uuid.uuid4())
+                cw_doc = {
+                    "id": cw_id,
+                    "trip_id": trip_id,
+                    "campaign_id": trip.get("campaign_id") or trip_id,
+                    "school_id": dest.get("school_id") or dest.get("id"),
+                    "name": dest.get("name") or f"Điểm dừng {i + 1}",
+                    "lat": float(dest.get("lat", 0.0)),
+                    "lng": float(dest.get("lng", 0.0)),
+                    "address": dest.get("address") or "",
+                    "type": "SCHOOL",
+                    "visit_order": int(dest.get("order") or (i + 1)),
+                    "is_visited": bool(dest.get("is_visited", False)),
+                    "visited_at": dest.get("visited_at"),
+                    "preferred_visit_time": dest.get("preferred_visit_time"),
+                    "visit_duration_minutes": dest.get("visit_duration_minutes") or 60,
+                    "notes": dest.get("notes") or "",
+                    "visit_logs": [],
+                    "tickets": [],
+                    "assigned_staff": dest.get("assigned_staff") or [],
+                    "contact_name": dest.get("contact_name") or dest.get("representative_name"),
+                    "contact_phone": dest.get("contact_phone") or dest.get("representative_phone"),
+                    "is_deleted": False,
+                    "created_at": now,
+                    "updated_at": now
+                }
+                cw_docs.append(cw_doc)
+
+            if cw_docs:
+                await db.campaign_waypoints.insert_many(cw_docs)
+                cursor = db.campaign_waypoints.find({"trip_id": trip_id, "is_deleted": {"$ne": True}}).sort("visit_order", 1)
+                waypoints = await cursor.to_list(length=1000)
 
         # Tham chiếu thông tin trường học từ schools nếu có school_id
         for w in waypoints:
@@ -318,7 +362,7 @@ class TripService:
             )
         return res.modified_count > 0
 
-    async def check_in(self, trip_id: str, checkin_data: CheckInRequest, max_distance: float = 500.0) -> CheckInResponse:
+    async def check_in(self, trip_id: str, checkin_data: CheckInRequest, max_distance: float = 30.0) -> CheckInResponse:
         db = get_database()
         waypoint = await db.campaign_waypoints.find_one({
             "id": checkin_data.waypoint_id,
@@ -350,7 +394,7 @@ class TripService:
                 return CheckInResponse(
                     success=False,
                     waypoint=waypoint,
-                    message=f"Bạn đang cách điểm check-in {int(dist)}m. Vui lòng đến gần hơn (trong vòng {int(max_distance)}m)"
+                    message=f"Bạn đang cách điểm đến {int(dist)}m. Vui lòng di chuyển đến gần trường (trong bán kính {int(max_distance)}m) để check-in!"
                 )
 
         now = datetime.now(timezone.utc)

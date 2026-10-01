@@ -81,41 +81,81 @@ export const BottomSheet: React.FC<BottomSheetProps> = ({
           </div>
 
           <div className="flex items-center gap-4 text-sm text-gray-600 mb-2">
-            <span className="flex items-center gap-1">
-              <Clock className="w-4 h-4" />
+            <span className="flex items-center gap-1 font-medium">
+              <Clock className="w-4 h-4 text-blue-600" />
               {recommended.duration_text}
             </span>
-            <span className="flex items-center gap-1">
-              <MapPin className="w-4 h-4" />
+            <span className="flex items-center gap-1 font-medium">
+              <MapPin className="w-4 h-4 text-emerald-600" />
               {recommended.distance_text}
             </span>
           </div>
-          {currentLocation && (
-            <p className="text-xs text-gray-500 mb-4">
-              Khoảng cách thực tế: {formatDistance(calculateDistance(
-                currentLocation.lat,
-                currentLocation.lng,
-                recommended.waypoint.lat,
-                recommended.waypoint.lng
-              ))}
-            </p>
-          )}
 
-          <div className="flex gap-3">
+          {currentLocation && (() => {
+            const dist = calculateDistance(
+              currentLocation.lat,
+              currentLocation.lng,
+              recommended.waypoint.lat,
+              recommended.waypoint.lng
+            );
+            const inRange = dist <= 30;
+            return (
+              <div
+                className={`text-xs px-2.5 py-1.5 rounded-lg mb-3 flex items-center justify-between border ${
+                  inRange
+                    ? 'bg-emerald-50 text-emerald-800 border-emerald-300 font-semibold'
+                    : 'bg-slate-50 text-slate-600 border-slate-200'
+                }`}
+              >
+                <span>
+                  Khoảng cách GPS: <strong>{formatDistance(dist)}</strong>
+                </span>
+                {inRange ? (
+                  <span className="text-emerald-700 font-bold flex items-center gap-1">
+                    ✓ Trong bán kính check-in (≤ 30m)
+                  </span>
+                ) : (
+                  <span className="text-amber-700 text-[11px] font-medium">
+                    (Yêu cầu khoảng cách 10m - 30m)
+                  </span>
+                )}
+              </div>
+            );
+          })()}
+
+          <div className="flex gap-2.5">
             <button
               onClick={() => onNavigate(recommended.waypoint)}
-              className="flex-1 bg-primary-500 text-white py-3 px-4 rounded-xl font-semibold flex items-center justify-center gap-2 hover:bg-primary-600 active:bg-primary-700 transition-colors"
+              className="flex-1 bg-primary-600 text-white py-2.5 px-3.5 rounded-xl font-semibold flex items-center justify-center gap-1.5 hover:bg-primary-700 active:bg-primary-800 transition text-xs shadow-xs"
             >
-              <Navigation className="w-5 h-5" />
-              Đi ngay
+              <Navigation className="w-4 h-4" />
+              Chỉ đường
             </button>
-            <button
-              onClick={() => onCheckIn(recommended.waypoint)}
-              className="flex-1 bg-green-500 text-white py-3 px-4 rounded-xl font-semibold flex items-center justify-center gap-2 hover:bg-green-600 active:bg-green-700 transition-colors"
-            >
-              <CheckCircle className="w-5 h-5" />
-              Check-in
-            </button>
+            {(() => {
+              const dist = currentLocation
+                ? calculateDistance(
+                    currentLocation.lat,
+                    currentLocation.lng,
+                    recommended.waypoint.lat,
+                    recommended.waypoint.lng
+                  )
+                : 999;
+              const inRange = dist <= 30;
+
+              return (
+                <button
+                  onClick={() => onCheckIn(recommended.waypoint)}
+                  className={`flex-1 py-2.5 px-3.5 rounded-xl font-bold flex items-center justify-center gap-1.5 transition text-xs shadow-xs ${
+                    inRange
+                      ? 'bg-emerald-600 hover:bg-emerald-700 text-white ring-2 ring-emerald-300 animate-pulse'
+                      : 'bg-emerald-500 hover:bg-emerald-600 text-white'
+                  }`}
+                >
+                  <CheckCircle className="w-4 h-4" />
+                  {inRange ? 'Check-in (Đã tới nơi)' : 'Check-in điểm này'}
+                </button>
+              );
+            })()}
           </div>
         </div>
       )}
@@ -226,12 +266,16 @@ const WaypointCard: React.FC<WaypointCardProps> = ({
         </span>
       </div>
       {actualDistance !== null && (
-        <p className="text-xs text-gray-500 mb-3">
-          Khoảng cách thực tế: {formatDistance(actualDistance)}
-          {actualDistance > 500 && (
-            <span className="text-orange-600 ml-1">(Quá xa để check-in)</span>
+        <div className="text-xs text-gray-500 mb-3 flex items-center justify-between">
+          <span>
+            Khoảng cách GPS: <strong>{formatDistance(actualDistance)}</strong>
+          </span>
+          {actualDistance <= 30 ? (
+            <span className="text-emerald-700 font-bold">✓ Trong bán kính check-in (≤ 30m)</span>
+          ) : (
+            <span className="text-amber-700 text-[11px] font-medium">Bán kính check-in: 10 - 30m</span>
           )}
-        </p>
+        </div>
       )}
       {actualDistance === null && <div className="mb-3" />}
 
