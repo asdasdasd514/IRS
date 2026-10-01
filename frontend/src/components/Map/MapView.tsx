@@ -68,6 +68,8 @@ interface MapViewProps {
     lng: number;
     rating?: number;
     type?: string;
+    dist_to_route_m?: number;
+    dist_to_route_text?: string;
   }>;
 }
 
@@ -301,17 +303,23 @@ export function MapView({
                   {place.type}
                 </p>
               )}
-              <div className="bg-orange-100 text-orange-700 px-2 py-1 rounded text-xs font-medium">
-                🍽️ Tìm kiếm gần đây
-              </div>
+              {place.dist_to_route_text ? (
+                <div className="bg-emerald-50 text-emerald-800 border border-emerald-200 px-2 py-1 rounded text-xs font-semibold mb-2 flex items-center gap-1">
+                  🚗 {place.dist_to_route_text}
+                </div>
+              ) : (
+                <div className="bg-orange-100 text-orange-700 px-2 py-1 rounded text-xs font-medium mb-2">
+                  🍽️ Điểm bán đồ ăn gần đây
+                </div>
+              )}
               <button
                 onClick={() => {
-                  const url = `https://www.google.com/maps/search/?api=1&query=${place.lat},${place.lng}`;
+                  const url = `https://www.google.com/maps/dir/?api=1&destination=${place.lat},${place.lng}&travelmode=driving`;
                   window.open(url, '_blank');
                 }}
-                className="mt-2 w-full bg-blue-500 text-white px-3 py-1.5 rounded text-sm hover:bg-blue-600"
+                className="mt-1 w-full bg-blue-600 text-white px-3 py-1.5 rounded text-xs font-semibold hover:bg-blue-700 flex items-center justify-center gap-1 transition"
               >
-                Mở Google Maps
+                Chỉ đường tới quán
               </button>
             </div>
           </Popup>

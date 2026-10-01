@@ -1,7 +1,7 @@
 import React, { useEffect, useCallback, useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, RefreshCw, MapPin, Menu, Utensils } from 'lucide-react';
+import { ArrowLeft, RefreshCw, MapPin, Menu, Utensils, Search, X } from 'lucide-react';
 import polyline from '@mapbox/polyline';
 
 import { MapView, BottomSheet, VisitedBottomSheet, WaypointInfoModal } from '../../components';
@@ -20,7 +20,6 @@ export const TripMapPage: React.FC = () => {
   const {
     location: geoLocation,
     error: geoError,
-    accuracy: geoAccuracy,
     refresh: refreshLocation
   } = useWatchPosition({
     enableHighAccuracy: true,
@@ -54,9 +53,14 @@ export const TripMapPage: React.FC = () => {
     lat: number;
     lng: number;
     rating?: number;
+    reviews?: number;
     type?: string;
+    dist_to_route_m?: number;
+    dist_to_route_text?: string;
   }>>([]);
   const [isSearchingPlaces, setIsSearchingPlaces] = useState(false);
+  const [showFoodSearch, setShowFoodSearch] = useState(false);
+  const [foodQuery, setFoodQuery] = useState('');
 
   // Waypoint info modal
   const [selectedWaypoint, setSelectedWaypoint] = useState<Waypoint | null>(null);
@@ -378,36 +382,60 @@ export const TripMapPage: React.FC = () => {
     setCenterTrigger((prev) => prev + 1);
   }, [refreshLocation]);
 
-  // Find nearby restaurants/hotels
-  const handleFindRestaurants = useCallback(async () => {
-    if (!currentLocation) {
-      alert('Không xác định được vị trí hiện tại');
+  // Tìm kiếm quán/chỗ bán đồ ăn theo từ khóa bám sát dọc theo tuyến đường (cách đường <= 250m)
+  const handleFindFood = useCallback(async (customQuery?: string) => {
+    const rawQ = customQuery !== undefined ? customQuery : foodQuery;
+    const q = rawQ.trim() || 'đồ ăn';
+
+    const activeRouteGeometry = route && route.length >= 2
+      ? route
+      : (tripRoute && tripRoute.length >= 2 ? tripRoute : null);
+
+    if (!activeRouteGeometry && !currentLocation) {
+      alert('Không xác định được vị trí hoặc lộ trình di chuyển.');
       return;
     }
 
     setIsSearchingPlaces(true);
     try {
-      const result = await tripApi.searchNearbyPlaces(
-        currentLocation.lat,
-        currentLocation.lng,
-        'quán ăn nhà hàng khách sạn',
-        5000 // 5km radius
-      );
+      if (activeRouteGeometry && activeRouteGeometry.length >= 2) {
+        // Tìm quán bán đồ ăn theo từ khóa q SÁT LỀ ĐƯỜNG dọc theo tuyến đường (cách đường <= 250m)
+        const result = await tripApi.searchPlacesAlongRoute(
+          activeRouteGeometry,
+          q,
+          250,
+          tripId
+        );
 
-      if (result.success && result.places.length > 0) {
-        setNearbyPlaces(result.places);
-        alert(`Tìm thấy ${result.total} địa điểm gần bạn!`);
-      } else {
-        alert('Không tìm thấy địa điểm nào gần bạn');
-        setNearbyPlaces([]);
+        if (result.success && result.places.length > 0) {
+          setNearbyPlaces(result.places);
+        } else {
+          alert(`Không tìm thấy quán/chỗ bán "${q}" nào nằm sát trục đường này trong phạm vi 250m. Bạn có thể thử từ khóa khác.`);
+          setNearbyPlaces([]);
+        }
+      } else if (currentLocation) {
+        // Fallback: Tìm quanh vị trí nếu chưa có đường đi
+        const result = await tripApi.searchNearbyPlaces(
+          currentLocation.lat,
+          currentLocation.lng,
+          q,
+          1500
+        );
+
+        if (result.success && result.places.length > 0) {
+          setNearbyPlaces(result.places);
+        } else {
+          alert(`Không tìm thấy điểm bán "${q}" nào gần bạn.`);
+          setNearbyPlaces([]);
+        }
       }
     } catch (error) {
-      console.error('Error searching places:', error);
-      alert('Lỗi khi tìm kiếm địa điểm');
+      console.error('Error searching food places along route:', error);
+      alert('Lỗi khi tìm kiếm quán bán đồ ăn dọc đường.');
     } finally {
       setIsSearchingPlaces(false);
     }
-  }, [currentLocation]);
+  }, [foodQuery, route, tripRoute, currentLocation, tripId]);
 
   // Handle waypoint marker click
   const handleWaypointClick = useCallback((waypoint: Waypoint) => {
@@ -514,59 +542,123 @@ export const TripMapPage: React.FC = () => {
           nearbyPlaces={nearbyPlaces}
         />
 
-        {/* Floating GPS Status & Quick Test Tool (Top-Left) */}
-        <div className="absolute left-3 top-3 z-[1000] flex flex-col gap-2 pointer-events-auto items-start">
-          {/* GPS Live Status Pill */}
-          <div className="bg-white/95 backdrop-blur-md px-3 py-1.5 rounded-full shadow-md border border-slate-200 flex items-center gap-2 text-xs font-semibold text-slate-700">
-            <span
-              className={`w-2.5 h-2.5 rounded-full ${
-                geoLocation ? 'bg-emerald-500 animate-ping' : geoError ? 'bg-red-500' : 'bg-amber-400'
-              }`}
-            />
-            {geoLocation ? (
-              <span>GPS Trực tiếp {geoAccuracy ? `(±${geoAccuracy}m)` : ''}</span>
-            ) : geoError ? (
-              <span className="text-red-600 text-[11px] truncate max-w-[170px]" title={geoError}>
-                GPS: {geoError}
-              </span>
-            ) : (
-              <span className="text-amber-600">Đang tìm tín hiệu GPS...</span>
+
+        {/* Floating Food Search Card */}
+        {showFoodSearch && (
+          <div className="absolute top-4 left-4 right-16 md:left-auto md:right-20 md:w-96 z-[1000] bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl border border-orange-200 p-3.5 pointer-events-auto transition-all">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 bg-orange-100 text-orange-600 rounded-lg">
+                  <Utensils className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-800 text-sm">Tìm món ăn dọc lộ trình</h3>
+                  <p className="text-[11px] text-slate-500">Tìm quán sát mép đường xe chạy (≤ 250m)</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowFoodSearch(false)}
+                className="p-1.5 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+                title="Đóng bảng tìm kiếm"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Search Input Form */}
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleFindFood(foodQuery);
+              }}
+              className="flex gap-2 my-2"
+            >
+              <div className="relative flex-1">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  value={foodQuery}
+                  onChange={(e) => setFoodQuery(e.target.value)}
+                  placeholder="Gõ món: quán phở, quán cơm, bánh mì..."
+                  className="w-full pl-9 pr-7 py-2 text-xs md:text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent bg-slate-50 focus:bg-white"
+                  autoFocus
+                />
+                {foodQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setFoodQuery('')}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs font-bold"
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
+              <button
+                type="submit"
+                disabled={isSearchingPlaces || !foodQuery.trim()}
+                className="px-3.5 py-2 bg-orange-500 hover:bg-orange-600 active:bg-orange-700 disabled:opacity-50 text-white text-xs font-semibold rounded-xl shadow-sm transition-colors flex items-center justify-center min-w-[60px]"
+              >
+                {isSearchingPlaces ? (
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  'Tìm'
+                )}
+              </button>
+            </form>
+
+            {/* Quick suggestions chips */}
+            <div>
+              <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Gợi ý nhanh:</div>
+              <div className="flex flex-wrap gap-1.5">
+                {[
+                  { label: 'Quán phở', icon: '🍲' },
+                  { label: 'Quán cơm', icon: '🍚' },
+                  { label: 'Bánh mì', icon: '🥖' },
+                  { label: 'Bún bò', icon: '🍜' },
+                  { label: 'Cà phê', icon: '☕' },
+                  { label: 'Đồ ăn vặt', icon: '🍢' },
+                  { label: 'Quán chay', icon: '🥗' },
+                ].map((item) => (
+                  <button
+                    key={item.label}
+                    type="button"
+                    onClick={() => {
+                      setFoodQuery(item.label);
+                      handleFindFood(item.label);
+                    }}
+                    disabled={isSearchingPlaces}
+                    className={`text-xs px-2.5 py-1 rounded-lg border transition-all flex items-center gap-1 ${
+                      foodQuery.toLowerCase() === item.label.toLowerCase()
+                        ? 'bg-orange-500 text-white border-orange-500 shadow-sm font-medium'
+                        : 'bg-slate-50 hover:bg-orange-50 text-slate-700 border-slate-200 hover:border-orange-200'
+                    }`}
+                  >
+                    <span>{item.icon}</span>
+                    <span>{item.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Search Results Summary */}
+            {nearbyPlaces.length > 0 && (
+              <div className="mt-2.5 pt-2.5 border-t border-slate-100 flex items-center justify-between text-xs">
+                <span className="text-emerald-700 font-semibold flex items-center gap-1">
+                  ✅ Tìm thấy {nearbyPlaces.length} điểm bán sát đường
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setNearbyPlaces([]);
+                  }}
+                  className="text-red-500 hover:text-red-600 font-medium hover:underline"
+                >
+                  Xóa ghim
+                </button>
+              </div>
             )}
           </div>
-
-          {/* Quick Test Simulator Button (Để kiểm tra check-in 10-30m mà không cần đi ra ngoài) */}
-          {nextHop?.waypoint && (
-            <button
-              type="button"
-              onClick={() => {
-                const targetLat = nextHop.waypoint.lat + 0.00012;
-                const targetLng = nextHop.waypoint.lng + 0.00012;
-                setCurrentLocation({ lat: targetLat, lng: targetLng, accuracy: 5 });
-                alert(
-                  `🎯 [Mô phỏng GPS]:\nĐã đặt vị trí của bạn cách cổng trường "${nextHop.waypoint.name}" ~18 mét.\nKhoảng cách này nằm trong bán kính quy định (10m - 30m).\n\nBây giờ bạn có thể bấm nút "Check-in" ngay lập tức!`
-                );
-              }}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold px-3 py-1.5 rounded-full shadow-md transition flex items-center gap-1.5 cursor-pointer backdrop-blur-xs"
-              title="Đặt vị trí cách trường 18m để thử tính năng Check-in 10m - 30m"
-            >
-              <span>🎯 Thử GPS gần trường (18m)</span>
-            </button>
-          )}
-
-          {/* Nút khôi phục vị trí GPS thật nếu đang mô phỏng */}
-          {geoLocation && currentLocation && (currentLocation.lat !== geoLocation.lat || currentLocation.lng !== geoLocation.lng) && (
-            <button
-              type="button"
-              onClick={() => {
-                setCurrentLocation(geoLocation);
-                alert('📍 Đã chuyển lại vị trí GPS thực tế từ thiết bị.');
-              }}
-              className="bg-slate-800/90 hover:bg-slate-900 text-white text-[10px] font-bold px-2.5 py-1 rounded-full shadow-sm transition cursor-pointer"
-            >
-              ↩ Khôi phục GPS thật
-            </button>
-          )}
-        </div>
+        )}
 
         {/* Floating Buttons (Top-Right) */}
         <div className="absolute right-4 top-4 z-[1000] flex flex-col gap-3 pointer-events-auto">
@@ -591,22 +683,33 @@ export const TripMapPage: React.FC = () => {
             <MapPin className="w-5 h-5 text-slate-700" />
           </button>
 
-          {/* Find nearby places */}
-          <button
-            onClick={handleFindRestaurants}
-            disabled={isSearchingPlaces}
-            className={`bg-orange-500 p-3 rounded-full shadow-lg hover:bg-orange-600 active:bg-orange-700 ${
-              isSearchingPlaces ? 'opacity-50 cursor-not-allowed' : ''
-            }`}
-            title="Tìm quán ăn gần đây"
-          >
-            <Utensils className={`w-5 h-5 text-white ${isSearchingPlaces ? 'animate-pulse' : ''}`} />
-          </button>
+          {/* Find nearby places button with active state & badge */}
+          <div className="relative">
+            <button
+              onClick={() => setShowFoodSearch((prev) => !prev)}
+              className={`p-3 rounded-full shadow-lg transition-all ${
+                showFoodSearch || nearbyPlaces.length > 0
+                  ? 'bg-orange-600 text-white ring-4 ring-orange-200 shadow-orange-300'
+                  : 'bg-orange-500 hover:bg-orange-600 active:bg-orange-700 text-white'
+              }`}
+              title="Tìm quán / chỗ bán đồ ăn dọc tuyến đường"
+            >
+              <Utensils className={`w-5 h-5 ${isSearchingPlaces ? 'animate-pulse' : ''}`} />
+            </button>
+            {nearbyPlaces.length > 0 && (
+              <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold w-5 h-5 flex items-center justify-center rounded-full border-2 border-white shadow">
+                {nearbyPlaces.length}
+              </span>
+            )}
+          </div>
 
           {/* Clear nearby places if showing */}
           {nearbyPlaces.length > 0 && (
             <button
-              onClick={() => setNearbyPlaces([])}
+              onClick={() => {
+                setNearbyPlaces([]);
+                setShowFoodSearch(false);
+              }}
               className="bg-red-500 p-3 rounded-full shadow-lg hover:bg-red-600 active:bg-red-700 text-white font-bold"
               title="Xóa địa điểm tìm được"
             >

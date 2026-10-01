@@ -1,9 +1,14 @@
 """
-Places Service - Tìm kiếm quán ăn, nhà hàng, khách sạn gần vị trí
-Uses SerpAPI Google Local Search
+Places Service - Tìm kiếm quán ăn, nhà hàng, khách sạn
+Hỗ trợ 2 chế độ:
+1. Tìm kiếm quán ăn dọc theo tuyến đường di chuyển (Search Along Route) kèm bộ lọc cự ly sát đường.
+2. Tìm kiếm quanh 1 tọa độ đơn lẻ (Nearby search).
+Uses SerpAPI Google Local Search with caching and geometric corridor filtering.
 """
 import logging
-from typing import List, Dict, Optional
+import math
+from concurrent.futures import ThreadPoolExecutor
+from typing import List, Dict, Optional, Tuple
 from serpapi import GoogleSearch
 from app.core.config import settings
 from app.core.cache import places_cache
@@ -15,6 +20,195 @@ class PlacesService:
     def __init__(self):
         self.serpapi_key = settings.SERPAPI_KEY
 
+    def distance_point_to_segment(
+        self,
+        p: Tuple[float, float],
+        a: Tuple[float, float],
+        b: Tuple[float, float]
+    ) -> float:
+        """
+        Tính khoảng cách mét từ điểm p(lat, lng) đến đoạn thẳng a-b(lat, lng)
+        dùng phép chiếu tọa độ phẳng cục bộ UTM/WGS84.
+        """
+        lat_p, lng_p = p
+        lat_a, lng_a = a
+        lat_b, lng_b = b
+
+        mean_lat_rad = math.radians((lat_a + lat_b) / 2.0)
+        kx = 111320.0 * math.cos(mean_lat_rad)
+        ky = 111320.0
+
+        px = lng_p * kx
+        py = lat_p * ky
+        ax = lng_a * kx
+        ay = lat_a * ky
+        bx = lng_b * kx
+        by = lat_b * ky
+
+        dx = bx - ax
+        dy = by - ay
+        seg_len_sq = dx * dx + dy * dy
+        if seg_len_sq <= 1e-6:
+            return math.sqrt((px - ax) ** 2 + (py - ay) ** 2)
+
+        t = ((px - ax) * dx + (py - ay) * dy) / seg_len_sq
+        t = max(0.0, min(1.0, t))
+
+        proj_x = ax + t * dx
+        proj_y = ay + t * dy
+        return math.sqrt((px - proj_x) ** 2 + (py - proj_y) ** 2)
+
+    def min_distance_to_route(
+        self,
+        p: Tuple[float, float],
+        route_coords: List[List[float]]
+    ) -> float:
+        """
+        Tính khoảng cách mét ngắn nhất từ vị trí quán p(lat, lng)
+        đến toàn bộ polyline của tuyến đường đang đi.
+        """
+        if not route_coords:
+            return 999999.0
+        if len(route_coords) == 1:
+            lat_diff = (p[0] - route_coords[0][0]) * 111320.0
+            lng_diff = (p[1] - route_coords[0][1]) * 111320.0 * math.cos(math.radians(p[0]))
+            return math.sqrt(lat_diff ** 2 + lng_diff ** 2)
+
+        min_dist = float('inf')
+        for i in range(len(route_coords) - 1):
+            d = self.distance_point_to_segment(p, route_coords[i], route_coords[i + 1])
+            if d < min_dist:
+                min_dist = d
+                if min_dist < 20.0:  # Quán nằm sát mép đường <= 20m thì dừng sớm
+                    break
+        return min_dist
+
+    def search_places_along_route(
+        self,
+        route_geometry: List[List[float]],
+        query: str = "đồ ăn",
+        max_distance_from_route_meters: float = 250.0,
+        limit: int = 15
+    ) -> List[Dict]:
+        """
+        Tìm kiếm các điểm bán đồ ăn/quán cơm/quán ăn nằm SÁT LỀ ĐƯỜNG dọc theo lộ trình di chuyển:
+        - Lấy mẫu các điểm nút phân bổ đều trên hành trình (15%, 35%, 55%, 75%, 90%).
+        - Tìm kiếm rộng: bao gồm quán bán đồ ăn bình dân, quán cơm, bún phở, đồ ăn vặt, tiệm ăn.
+        - LỌC NGHIÊM NGẶT: Chỉ giữ lại các địa điểm có khoảng cách vuông góc đến tim đường <= max_distance_from_route_meters
+          (mặc định <= 250m), loại bỏ hoàn toàn các quán nằm sâu trong ngõ hẻm/khu dân cư.
+        - Chạy đa luồng song song để tốc độ phản hồi nhanh tức thì.
+        """
+        if not route_geometry or len(route_geometry) < 2:
+            return []
+
+        # Tạo cache key dựa trên điểm đầu, điểm cuối và cự ly
+        start_pt = route_geometry[0]
+        end_pt = route_geometry[-1]
+        cache_key = f"along_route:{round(start_pt[0], 3)},{round(start_pt[1], 3)}->{round(end_pt[0], 3)},{round(end_pt[1], 3)}:{query.strip().lower()}:{max_distance_from_route_meters}"
+        cached = places_cache.get(cache_key)
+        if cached is not None:
+            logger.info(f"⚡ [Cache Hit Places Along Route]: {cache_key} ({len(cached)} quán ăn)")
+            return cached
+
+        if not self.serpapi_key:
+            logger.warning("SerpAPI key not configured - cannot search places along route")
+            return []
+
+        total_pts = len(route_geometry)
+        if total_pts >= 30:
+            sample_indices = [
+                int(total_pts * 0.15),
+                int(total_pts * 0.35),
+                int(total_pts * 0.55),
+                int(total_pts * 0.75),
+                int(total_pts * 0.90)
+            ]
+        elif total_pts >= 10:
+            sample_indices = [int(total_pts * 0.25), int(total_pts * 0.50), int(total_pts * 0.75)]
+        else:
+            sample_indices = [int(total_pts * 0.5)]
+
+        # Nếu tìm kiếm đồ ăn chung, mở rộng thành các từ khóa phổ biến để tìm quán cơm, bún phở, đồ ăn bình dân
+        normalized_q = query.strip().lower()
+        if normalized_q in ["đồ ăn", "quán ăn", "quán ăn nhà hàng", "do an", "quan an", "food"]:
+            sub_queries = ["đồ ăn", "quán cơm", "quán ăn bình dân"]
+        else:
+            sub_queries = [query]
+
+        tasks = []
+        for s_idx in sample_indices:
+            pt = route_geometry[s_idx]
+            for sq in sub_queries:
+                tasks.append((pt, sq))
+
+        def _fetch_local_results(task_args: Tuple[List[float], str]) -> List[Dict]:
+            pt_coord, q_str = task_args
+            try:
+                params = {
+                    "engine": "google_maps",
+                    "type": "search",
+                    "q": q_str,
+                    "ll": f"@{pt_coord[0]},{pt_coord[1]},14z",
+                    "api_key": self.serpapi_key,
+                    "hl": "vi",
+                    "gl": "vn",
+                }
+                search = GoogleSearch(params)
+                res = search.get_dict()
+                return res.get("local_results", [])
+            except Exception as e:
+                logger.warning(f"Error querying SerpAPI for {q_str} at {pt_coord}: {e}")
+                return []
+
+        # Chạy đa luồng song song qua ThreadPoolExecutor
+        raw_places_map: Dict[str, Dict] = {}
+        with ThreadPoolExecutor(max_workers=min(len(tasks), 10)) as executor:
+            batch_results = list(executor.map(_fetch_local_results, tasks))
+
+        for local_items in batch_results:
+            for item in local_items:
+                gps = item.get("gps_coordinates")
+                if gps and gps.get("latitude") and gps.get("longitude"):
+                    place_lat = float(gps["latitude"])
+                    place_lng = float(gps["longitude"])
+                    pid = item.get("place_id") or f"{place_lat},{place_lng}"
+                    name = (item.get("title") or "").strip()
+                    if len(name) < 2:
+                        continue
+                    if pid not in raw_places_map:
+                        raw_places_map[pid] = {
+                            "place_id": pid,
+                            "name": name,
+                            "address": item.get("address") or "",
+                            "lat": place_lat,
+                            "lng": place_lng,
+                            "rating": item.get("rating"),
+                            "reviews": item.get("reviews"),
+                            "type": item.get("type") or "Quán ăn",
+                            "price": item.get("price"),
+                            "thumbnail": item.get("thumbnail"),
+                        }
+
+        # Lọc chỉ giữ lại quán nằm SÁT ĐƯỜNG (cự ly vuông góc <= max_distance_from_route_meters)
+        filtered_places = []
+        for p in raw_places_map.values():
+            dist_to_route = self.min_distance_to_route((p["lat"], p["lng"]), route_geometry)
+            if dist_to_route <= max_distance_from_route_meters:
+                p["dist_to_route_m"] = round(dist_to_route)
+                if dist_to_route <= 35:
+                    p["dist_to_route_text"] = f"Mặt tiền đường (cách ~{round(dist_to_route)}m)"
+                else:
+                    p["dist_to_route_text"] = f"Sát lề đường (cách ~{round(dist_to_route)}m)"
+                filtered_places.append(p)
+
+        # Sắp xếp ưu tiên các quán gần trục lộ chính nhất
+        filtered_places.sort(key=lambda x: x.get("dist_to_route_m", 999999))
+        result = filtered_places[:limit]
+
+        logger.info(f"🛣️ [Search Along Route]: Tìm thấy {len(result)} quán bán đồ ăn sát đường (<= {max_distance_from_route_meters}m)")
+        places_cache.set(cache_key, result, ttl=300)
+        return result
+
     def search_nearby_places(
         self, 
         lat: float, 
@@ -22,7 +216,7 @@ class PlacesService:
         query: str = "quán ăn nhà hàng khách sạn",
         radius_meters: int = 5000
     ) -> List[Dict]:
-        # Kiểm tra Cache 5 phút (làm tròn tọa độ 3 số thập phân ~110m phù hợp với tìm kiếm tiện ích theo vùng)
+        """Tìm kiếm quán ăn quanh 1 tọa độ cụ thể"""
         cache_key = f"{round(lat, 3)},{round(lng, 3)}:{query.strip().lower()}:{radius_meters}"
         cached_places = places_cache.get(cache_key)
         if cached_places is not None:

@@ -280,6 +280,40 @@ export const tripApi = {
     });
     return data;
   },
+
+  // Search places along route corridor (quán bán đồ ăn, quán cơm sát lộ trình di chuyển)
+  searchPlacesAlongRoute: async (
+    routeGeometry: Array<{ lat: number; lng: number }>,
+    query: string = 'đồ ăn',
+    maxDistanceMeters: number = 250,
+    tripId?: string
+  ): Promise<{
+    success: boolean;
+    total: number;
+    places: Array<{
+      place_id: string;
+      name: string;
+      address: string;
+      lat: number;
+      lng: number;
+      rating?: number;
+      reviews?: number;
+      type?: string;
+      price?: string;
+      thumbnail?: string;
+      dist_to_route_m?: number;
+      dist_to_route_text?: string;
+    }>;
+  }> => {
+    const coords = routeGeometry.map((p) => [p.lat, p.lng]);
+    const { data } = await api.post('/trips/search-places-along-route', {
+      route_geometry: coords,
+      query,
+      max_distance_meters: maxDistanceMeters,
+      trip_id: tripId,
+    });
+    return data;
+  },
 };
 
 // ==================== 3 PHẦN THÔNG TIN WAYPOINT MỚI ====================

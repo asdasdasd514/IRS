@@ -4,6 +4,7 @@ Trip API Endpoints - Quản lý chuyến đi tuyển sinh (MongoDB IRS)
 
 import logging
 from typing import List, Optional
+from pydantic import BaseModel
 from fastapi import APIRouter, Depends, HTTPException, Query, status, BackgroundTasks
 
 logger = logging.getLogger(__name__)
@@ -24,6 +25,54 @@ from app.services import report_service
 from app.core.cache import api_response_cache
 
 router = APIRouter(prefix="/trips", tags=["Trips"])
+
+
+class PlacesAlongRouteRequest(BaseModel):
+    route_geometry: List[List[float]] = []
+    query: str = "đồ ăn"
+    max_distance_meters: float = 250.0
+    limit: int = 15
+    trip_id: Optional[str] = None
+
+
+@router.post("/search-places-along-route")
+async def search_places_along_route(
+    request: PlacesAlongRouteRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    try:
+        route_geom = request.route_geometry
+        if (not route_geom or len(route_geom) < 2) and request.trip_id:
+            trip = await trip_service.get_trip(request.trip_id)
+            if trip and trip.get("route_geometry"):
+                route_geom = trip["route_geometry"]
+
+        if not route_geom or len(route_geom) < 2:
+            return {
+                "success": False,
+                "total": 0,
+                "places": [],
+                "message": "Cần cung cấp dữ liệu hình học tuyến đường (route_geometry) để tìm quán ăn dọc đường."
+            }
+
+        places = places_service.search_places_along_route(
+            route_geometry=route_geom,
+            query=request.query,
+            max_distance_from_route_meters=request.max_distance_meters,
+            limit=request.limit
+        )
+
+        return {
+            "success": True,
+            "total": len(places),
+            "places": places
+        }
+    except Exception as e:
+        logger.error(f"Error in search_places_along_route: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Lỗi khi tìm kiếm quán ăn dọc lộ trình: {str(e)}"
+        )
 
 
 @router.get("/search-nearby-places")

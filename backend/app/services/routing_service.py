@@ -343,15 +343,14 @@ class RoutingService:
             coords = [[c[1], c[0]] for c in route.get("geometry", {}).get("coordinates", [])]
             encoded = polyline.encode(coords) if coords else ""
             
-            # Vận tốc lái xe trung bình thực tế: ~25.5 km/h (giao thông đô thị và liên tỉnh tại VN)
-            speed_mps = 25.5 * 1000 / 3600
-            total_dur_s = int(dist_m / speed_mps) if speed_mps > 0 else int(route.get("duration", 0))
+            # Vận tốc lái xe thực tế theo mô hình giao thông Việt Nam
+            total_dur_s = self.calculate_vietnam_travel_duration_seconds(dist_m)
             
             # Xử lý từng chặng (legs) với tọa độ chi tiết của từng chặng
             processed_legs = []
             for leg_idx, leg in enumerate(route.get("legs", [])):
                 leg_dist = float(leg.get("distance", 0.0))
-                leg_dur = int(leg_dist / speed_mps) if speed_mps > 0 else int(leg.get("duration", 0))
+                leg_dur = self.calculate_vietnam_travel_duration_seconds(leg_dist)
                 
                 # Trích xuất tọa độ chi tiết của chặng từ steps
                 leg_coords = []
@@ -598,6 +597,31 @@ class RoutingService:
 
         return None
 
+    def calculate_vietnam_travel_duration_seconds(self, distance_meters: float) -> int:
+        """
+        Tính toán thời gian di chuyển thực tế theo điều kiện giao thông đường bộ Việt Nam.
+        Đặc thù giao thông tại VN (Biên Hòa, Bình Dương, TP.HCM và các tỉnh lân cận):
+        Mật độ xe máy cao, nhiều nút giao/vòng xoay, đèn tín hiệu giao thông, xe tải container:
+        - Cự ly ngắn <= 5km (nội thị, qua nhiều ngã tư đèn đỏ): Vận tốc thực tế ~22 km/h
+        - Cự ly 5 - 20km (trục giao thông chính đô thị): Vận tốc thực tế ~26 km/h
+        - Cự ly 20 - 50km (quốc lộ, đại lộ liên tỉnh như ĐT.743, QL13, Mỹ Phước - Tân Vạn): Vận tốc thực tế ~30 km/h
+        - Cự ly > 50km (quốc lộ, cao tốc ngoài đô thị): Vận tốc thực tế ~38 km/h
+        """
+        if distance_meters <= 0:
+            return 0
+        dist_km = distance_meters / 1000.0
+        if dist_km <= 5.0:
+            speed_kmh = 22.0
+        elif dist_km <= 20.0:
+            speed_kmh = 26.0
+        elif dist_km <= 50.0:
+            speed_kmh = 30.0
+        else:
+            speed_kmh = 38.0
+
+        speed_mps = speed_kmh * 1000.0 / 3600.0
+        return max(60, int(distance_meters / speed_mps))
+
     def _format_duration_text(self, duration_seconds: int) -> str:
         if duration_seconds < 60:
             return "1 phút"
@@ -620,11 +644,12 @@ class RoutingService:
         Áp dụng tổng quát cho mọi cặp tọa độ trên toàn quốc:
         - Gọi OSRM routing với alternatives=true để lấy các phương án đường đi thực tế.
         - Tối ưu hóa lựa chọn tuyến đường chính (đại lộ/quốc lộ lớn) có thời gian và quãng đường ngắn nhất.
+        - Hiệu chỉnh thời gian di chuyển chuẩn xác theo vận tốc giao thông Việt Nam (~30 km/h thay vì vận tốc châu Âu 62 km/h của OSRM demo).
         """
         lat1, lng1 = p1
         lat2, lng2 = p2
 
-        cache_key = f"single_leg_v3:{round(lat1, 4)},{round(lng1, 4)}->{round(lat2, 4)},{round(lng2, 4)}"
+        cache_key = f"single_leg_v4:{round(lat1, 4)},{round(lng1, 4)}->{round(lat2, 4)},{round(lng2, 4)}"
         cached = directions_cache.get(cache_key)
         if cached is not None:
             return cached
@@ -648,10 +673,9 @@ class RoutingService:
                 )
                 dist_m = float(best_route.get("distance", 0.0))
                 coords = [[c[1], c[0]] for c in best_route.get("geometry", {}).get("coordinates", [])]
-                dur_s = int(best_route.get("duration", 0))
-                if dur_s <= 0:
-                    speed_mps = 28.0 * 1000 / 3600
-                    dur_s = int(dist_m / speed_mps)
+                
+                # Tính thời gian thực tế theo mô hình giao thông Việt Nam (tránh 34km mà 34 phút do OSRM mặc định vận tốc châu Âu)
+                dur_s = self.calculate_vietnam_travel_duration_seconds(dist_m)
 
                 best_res = {
                     "distance_meters": dist_m,

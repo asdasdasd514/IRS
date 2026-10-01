@@ -99,24 +99,28 @@ export const BottomSheet: React.FC<BottomSheetProps> = ({
               recommended.waypoint.lng
             );
             const inRange = dist <= 30;
+
+            // Khi ở xa (> 100m), chỉ hiển thị duy nhất khoảng cách đường bộ (34.6 km) ở trên để tránh gây nhầm lẫn
+            if (dist > 100) return null;
+
             return (
               <div
                 className={`text-xs px-2.5 py-1.5 rounded-lg mb-3 flex items-center justify-between border ${
                   inRange
                     ? 'bg-emerald-50 text-emerald-800 border-emerald-300 font-semibold'
-                    : 'bg-slate-50 text-slate-600 border-slate-200'
+                    : 'bg-amber-50 text-amber-800 border-amber-300'
                 }`}
               >
                 <span>
-                  Khoảng cách GPS: <strong>{formatDistance(dist)}</strong>
+                  Khoảng cách tới cổng trường: <strong>{Math.round(dist)}m</strong>
                 </span>
                 {inRange ? (
                   <span className="text-emerald-700 font-bold flex items-center gap-1">
-                    ✓ Trong bán kính check-in (≤ 30m)
+                    ✓ Đủ điều kiện check-in (≤ 30m)
                   </span>
                 ) : (
                   <span className="text-amber-700 text-[11px] font-medium">
-                    (Yêu cầu khoảng cách 10m - 30m)
+                    (Cần di chuyển lại gần ≤ 30m)
                   </span>
                 )}
               </div>
