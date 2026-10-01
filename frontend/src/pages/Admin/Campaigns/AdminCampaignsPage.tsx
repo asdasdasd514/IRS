@@ -122,6 +122,39 @@ function CampaignRouteMap({
     );
   }
 
+  const LEG_COLORS = [
+    '#2563eb', // Chặng 1: Xanh dương đậm
+    '#059669', // Chặng 2: Xanh ngọc
+    '#7c3aed', // Chặng 3: Tím hoàng gia
+    '#ea580c', // Chặng 4: Cam hổ phách
+    '#db2777', // Chặng 5: Hồng ruby
+    '#0891b2', // Chặng 6: Xanh mòng két
+  ];
+
+  const individualLegs = useMemo(() => {
+    if (!destinations || destinations.length === 0) return [];
+    return destinations.map((dest: any, idx: number) => {
+      const prevName = idx === 0
+        ? (startPoint?.name || 'Điểm xuất phát')
+        : (destinations[idx - 1]?.name || `Điểm dừng ${idx}`);
+      const geom = (dest.leg_geometry && Array.isArray(dest.leg_geometry) && dest.leg_geometry.length > 1)
+        ? dest.leg_geometry
+        : [];
+      return {
+        index: idx + 1,
+        fromName: prevName,
+        toName: dest.name || `Điểm dừng ${idx + 1}`,
+        distanceText: dest.distance_text || '',
+        durationText: dest.duration_text || '',
+        geometry: geom,
+        color: LEG_COLORS[idx % LEG_COLORS.length],
+        dest,
+      };
+    });
+  }, [destinations, startPoint]);
+
+  const hasLegGeometries = individualLegs.length > 0 && individualLegs.some((l) => l.geometry.length > 1);
+
   const polylinePositions: [number, number][] =
     routeGeometry && routeGeometry.length > 1
       ? (routeGeometry as [number, number][])
@@ -134,8 +167,28 @@ function CampaignRouteMap({
       ? [Number(activeSchool.lat), Number(activeSchool.lng)]
       : undefined;
 
+  // Hàm tạo độ lệch nhẹ để các chặng song hành/ngược chiều không bị đè mất nhau
+  const getOffsetGeometry = (coords: [number, number][], legIdx: number): [number, number][] => {
+    if (!coords || coords.length < 2 || legIdx === 0) return coords;
+    const offset = (legIdx % 2 === 1 ? 1 : -1) * Math.ceil(legIdx / 2) * 0.00008;
+    return coords.map(([lat, lng]) => [lat + offset, lng + offset]);
+  };
+
   return (
     <div className="h-full min-h-[380px] w-full overflow-hidden rounded-[5px] border border-slate-200 shadow-2xs relative">
+      {/* Floating Legend hiển thị các chặng độc lập */}
+      {hasLegGeometries && individualLegs.length > 0 && (
+        <div className="absolute top-2.5 right-2.5 z-[1000] bg-white/95 backdrop-blur-xs px-3 py-1.5 rounded-[5px] border border-slate-200 shadow-md flex items-center gap-3 text-[11px] pointer-events-auto">
+          {individualLegs.map((leg, lIdx) => (
+            <div key={lIdx} className="flex items-center gap-1.5">
+              <span className="w-3 h-3 rounded-full shrink-0 shadow-xs" style={{ backgroundColor: leg.color }}></span>
+              <span className="font-bold text-slate-800">Chặng {leg.index}:</span>
+              <span className="text-slate-600 font-medium">{leg.distanceText || '...'}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
       <MapContainer
         bounds={bounds}
         boundsOptions={{ padding: [35, 35] }}
@@ -150,13 +203,57 @@ function CampaignRouteMap({
 
         <MapController center={activeCenter} zoom={15} bounds={!activeCenter ? bounds : undefined} />
 
-        {polylinePositions.length > 1 && (
-          <Polyline
-            positions={polylinePositions}
-            color="#2563eb"
-            weight={5}
-            opacity={0.85}
-          />
+        {/* Vẽ từng chặng với màu sắc riêng biệt hoặc đường polyline fallback */}
+        {hasLegGeometries ? (
+          individualLegs.map((leg, idx) => {
+            if (leg.geometry.length < 2) return null;
+            const isLegActive = activeSchool && (
+              activeSchool.order === leg.index || 
+              activeSchool.id === leg.dest.id || 
+              activeSchool.school_id === leg.dest.school_id
+            );
+            const displayGeom = getOffsetGeometry(leg.geometry, idx);
+            return (
+              <Polyline
+                key={`adm-leg-${idx}`}
+                positions={displayGeom}
+                color={leg.color}
+                weight={isLegActive ? 7 : 5}
+                opacity={isLegActive ? 1 : 0.88}
+                eventHandlers={{
+                  click: () => onSelectSchool && onSelectSchool(leg.dest),
+                }}
+              >
+                <Popup>
+                  <div className="p-1 min-w-[190px] text-xs">
+                    <span 
+                      className="inline-block px-1.5 py-0.5 rounded font-bold text-[10px] text-white uppercase mb-1"
+                      style={{ backgroundColor: leg.color }}
+                    >
+                      Chặng {leg.index}
+                    </span>
+                    <h4 className="font-bold text-slate-800 text-xs">
+                      {leg.fromName} ➔ {leg.toName}
+                    </h4>
+                    <div className="flex items-center gap-2 text-slate-600 text-[11px] mt-1">
+                      <span>Khoảng cách: <strong>{leg.distanceText || 'N/A'}</strong></span>
+                      <span>•</span>
+                      <span>Thời gian: <strong>{leg.durationText || 'N/A'}</strong></span>
+                    </div>
+                  </div>
+                </Popup>
+              </Polyline>
+            );
+          })
+        ) : (
+          polylinePositions.length > 1 && (
+            <Polyline
+              positions={polylinePositions}
+              color="#2563eb"
+              weight={5}
+              opacity={0.85}
+            />
+          )
         )}
 
         {/* Điểm xuất phát nếu có */}
@@ -528,6 +625,12 @@ export function AdminCampaignsPage() {
         description: campaignNotes.trim() || undefined,
         notes: campaignNotes.trim() || undefined,
         destinations: routePreview?.destinations || selectedDestinations,
+        start_point: startPoint ? {
+          lat: Number(startPoint.lat),
+          lng: Number(startPoint.lng),
+          name: startPoint.name,
+          address: startPoint.address,
+        } : undefined,
       });
 
       // Lưu kết quả định tuyến vào route_plans

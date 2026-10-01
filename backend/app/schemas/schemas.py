@@ -46,6 +46,7 @@ class CampaignDestination(BaseModel):
     preferred_visit_time: Optional[str] = None
     visit_duration_minutes: Optional[int] = None
     assigned_staff: Optional[List[dict]] = None
+    leg_geometry: Optional[List[List[float]]] = None
 
     class Config:
         extra = "ignore"
@@ -128,6 +129,7 @@ class CampaignResponse(CampaignBase):
     start_point: Optional[dict] = None
     route_geometry: Optional[List[List[float]]] = None
     polyline: Optional[str] = None
+    route_legs: Optional[List[dict]] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 

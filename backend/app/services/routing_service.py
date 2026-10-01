@@ -280,7 +280,7 @@ class RoutingService:
 
             # OSRM expects {lng},{lat}
             coords_str = ";".join(f"{p[1]},{p[0]}" for p in points)
-            url = f"http://router.project-osrm.org/route/v1/driving/{coords_str}?overview=full&geometries=geojson"
+            url = f"http://router.project-osrm.org/route/v1/driving/{coords_str}?overview=full&geometries=geojson&steps=true"
             req = urllib.request.Request(url, headers={"User-Agent": "IRS-Admissions-App/1.0"})
             
             with urllib.request.urlopen(req, timeout=8) as resp:
@@ -296,20 +296,31 @@ class RoutingService:
             coords = [[c[1], c[0]] for c in route.get("geometry", {}).get("coordinates", [])]
             encoded = polyline.encode(coords) if coords else ""
             
-            # Vận tốc lái xe thực tế tại VN: ~25.5 km/h (đô thị / liên huyện Biên Hòa - Đồng Nai)
+            # Vận tốc lái xe trung bình thực tế: ~25.5 km/h (giao thông đô thị và liên tỉnh tại VN)
             speed_mps = 25.5 * 1000 / 3600
             total_dur_s = int(dist_m / speed_mps) if speed_mps > 0 else int(route.get("duration", 0))
             
-            # Xử lý từng chặng (legs)
+            # Xử lý từng chặng (legs) với tọa độ chi tiết của từng chặng
             processed_legs = []
-            for leg in route.get("legs", []):
+            for leg_idx, leg in enumerate(route.get("legs", [])):
                 leg_dist = float(leg.get("distance", 0.0))
                 leg_dur = int(leg_dist / speed_mps) if speed_mps > 0 else int(leg.get("duration", 0))
+                
+                # Trích xuất tọa độ chi tiết của chặng từ steps
+                leg_coords = []
+                for step in leg.get("steps", []):
+                    for c in step.get("geometry", {}).get("coordinates", []):
+                        pt = [c[1], c[0]]
+                        if not leg_coords or leg_coords[-1] != pt:
+                            leg_coords.append(pt)
+                
                 processed_legs.append({
+                    "leg_index": leg_idx,
                     "distance_meters": leg_dist,
                     "duration_seconds": leg_dur,
                     "distance_text": f"{leg_dist / 1000:.1f} km" if leg_dist >= 1000 else f"{int(leg_dist)} m",
-                    "duration_text": self._format_duration_text(leg_dur)
+                    "duration_text": self._format_duration_text(leg_dur),
+                    "geometry": leg_coords
                 })
             
             res = {
@@ -326,6 +337,220 @@ class RoutingService:
             logger.warning(f"Error fetching route from OSRM: {e}")
             return None
 
+    def get_osrm_table_matrix(self, points: List[Tuple[float, float]]) -> Optional[dict]:
+        """
+        Lấy ma trận khoảng cách đường bộ thực tế (mét) và thời gian (giây) giữa tất cả các điểm
+        bằng 1 request duy nhất qua OSRM Table Service.
+        points: [(lat, lng), ...]
+        """
+        if len(points) < 2:
+            return None
+
+        cache_key = "osrm_table:" + ";".join(f"{round(p[0], 4)},{round(p[1], 4)}" for p in points)
+        cached = distance_matrix_cache.get(cache_key)
+        if cached is not None:
+            return cached
+
+        try:
+            import urllib.request
+            import json
+
+            coords_str = ";".join(f"{p[1]},{p[0]}" for p in points)
+            url = f"http://router.project-osrm.org/table/v1/driving/{coords_str}?annotations=distance,duration"
+            req = urllib.request.Request(url, headers={"User-Agent": "IRS-Admissions-App/1.0"})
+
+            with urllib.request.urlopen(req, timeout=8) as resp:
+                data = json.loads(resp.read().decode())
+
+            if data.get("code") == "Ok" and "distances" in data:
+                res = {
+                    "distances": data["distances"],
+                    "durations": data.get("durations", [])
+                }
+                distance_matrix_cache.set(cache_key, res, ttl=600)
+                return res
+        except Exception as e:
+            logger.warning(f"Error calling OSRM Table API: {e}")
+        return None
+
+    def solve_tsp_optimal_sequence(
+        self,
+        start_point: Tuple[float, float],
+        destinations: List[Dict[str, Any]],
+        dist_matrix: List[List[float]]
+    ) -> List[int]:
+        """
+        Tìm thứ tự ghé thăm tối ưu toàn cục (0-indexed destinations) dựa trên ma trận khoảng cách đường bộ.
+        - Tự động tôn trọng thứ tự ưu tiên (priority).
+        - Nếu số điểm đến <= 8: Kiểm tra toàn bộ hoán vị (Brute-Force Permutations) để tìm lời giải tối ưu 100%.
+        - Nếu số điểm đến > 8: Sử dụng thuật toán Nearest Neighbor kết hợp 2-Opt heuristic.
+        """
+        import itertools
+        n = len(destinations)
+        if n <= 1:
+            return list(range(n))
+
+        def get_priority(d: Dict[str, Any]) -> int:
+            p = d.get("priority")
+            if p is not None:
+                try:
+                    val = int(p)
+                    if val > 0:
+                        return val
+                except (ValueError, TypeError):
+                    pass
+            return 999999
+
+        # Kiểm tra xem có ràng buộc priority không
+        priorities = [get_priority(d) for d in destinations]
+        has_different_priorities = len(set(priorities)) > 1
+
+        if n <= 8:
+            best_perm = None
+            min_score = float("inf")
+
+            for perm in itertools.permutations(range(1, n + 1)):
+                # Tính tổng quãng đường đường bộ thực tế: Start -> perm[0] -> perm[1] -> ...
+                total_dist = dist_matrix[0][perm[0]]
+                for i in range(len(perm) - 1):
+                    total_dist += dist_matrix[perm[i]][perm[i + 1]]
+
+                # Tie-breaker nhẹ theo priority: nếu quãng đường bằng nhau, ưu tiên thứ tự priority
+                priority_penalty = 0.0
+                if has_different_priorities:
+                    for idx_in_perm, p_node in enumerate(perm):
+                        priority_penalty += priorities[p_node - 1] * (idx_in_perm + 1) * 0.01
+
+                score = total_dist + priority_penalty
+
+                if score < min_score:
+                    min_score = score
+                    best_perm = perm
+
+            if best_perm is not None:
+                return [idx - 1 for idx in best_perm]
+
+        # Heuristic 2-opt cho trường hợp nhiều điểm (> 8)
+        # Bắt đầu bằng Nearest Neighbor
+        unvisited = list(range(1, n + 1))
+        curr = 0
+        tour = []
+        while unvisited:
+            next_node = min(unvisited, key=lambda x: dist_matrix[curr][x])
+            tour.append(next_node)
+            unvisited.remove(next_node)
+            curr = next_node
+
+        # 2-Opt optimization
+        improved = True
+        while improved:
+            improved = False
+            for i in range(len(tour) - 1):
+                for j in range(i + 1, len(tour)):
+                    prev_node = 0 if i == 0 else tour[i - 1]
+                    next_node = tour[j + 1] if j + 1 < len(tour) else None
+
+                    cur_dist = dist_matrix[prev_node][tour[i]]
+                    if next_node:
+                        cur_dist += dist_matrix[tour[j]][next_node]
+
+                    new_dist = dist_matrix[prev_node][tour[j]]
+                    if next_node:
+                        new_dist += dist_matrix[tour[i]][next_node]
+
+                    if new_dist < cur_dist - 1e-4:
+                        tour[i:j + 1] = reversed(tour[i:j + 1])
+                        improved = True
+                        break
+                if improved:
+                    break
+
+        return [idx - 1 for idx in tour]
+
+    def get_osrm_trip_optimal_order(
+        self,
+        start_point: Tuple[float, float],
+        destinations: List[Tuple[float, float]]
+    ) -> Optional[List[int]]:
+        """
+        Sử dụng OSRM Trip API (TSP solver) để tìm thứ tự ghé thăm tối ưu theo đường bộ thực tế.
+        Trả về danh sách index tối ưu của destinations (0-indexed).
+        start_point là điểm cố định đầu tiên (source=first).
+        """
+        if not destinations:
+            return None
+
+        try:
+            import urllib.request
+            import json
+
+            # Build coords: start_point + all destinations
+            all_points = [start_point] + list(destinations)
+            coords_str = ";".join(f"{p[1]},{p[0]}" for p in all_points)
+
+            # source=first: cố định điểm xuất phát, roundtrip=false: không quay về
+            url = (
+                f"http://router.project-osrm.org/trip/v1/driving/{coords_str}"
+                f"?source=first&roundtrip=false&geometries=geojson&overview=full"
+            )
+            req = urllib.request.Request(url, headers={"User-Agent": "IRS-Admissions-App/1.0"})
+
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                data = json.loads(resp.read().decode())
+
+            if data.get("code") != "Ok" or not data.get("trips"):
+                logger.warning(f"OSRM Trip API returned non-OK: {data.get('code')}")
+                return None
+
+            # waypoints chứa thứ tự tối ưu (waypoint_index) cho mỗi điểm
+            waypoints = data.get("waypoints", [])
+            if not waypoints or len(waypoints) != len(all_points):
+                return None
+
+            # Tạo mapping: trip_index -> original_index
+            # waypoints[i].waypoint_index = vị trí trong trip tối ưu
+            trip_order = sorted(range(len(waypoints)), key=lambda i: waypoints[i].get("waypoint_index", i))
+
+            # Bỏ start_point (index 0), trả về thứ tự destination (original index - 1)
+            dest_order = [idx - 1 for idx in trip_order if idx > 0]
+
+            logger.info(f"🗺️ [OSRM Trip TSP]: Thứ tự tối ưu destinations = {dest_order}")
+            return dest_order
+
+        except Exception as e:
+            logger.warning(f"Error calling OSRM Trip API: {e}")
+            return None
+
+    def get_osrm_pairwise_distance(self, lat1: float, lng1: float, lat2: float, lng2: float) -> Optional[float]:
+        """
+        Lấy khoảng cách đường bộ thực tế (mét) giữa 2 điểm qua OSRM Route API.
+        Dùng cho Dynamic Next-Hop khi OSRM Trip API thất bại.
+        """
+        cache_key = f"osrm_dist:{round(lat1, 4)},{round(lng1, 4)}->{round(lat2, 4)},{round(lng2, 4)}"
+        cached = distance_matrix_cache.get(cache_key)
+        if cached is not None:
+            return cached
+
+        try:
+            import urllib.request
+            import json
+
+            coords_str = f"{lng1},{lat1};{lng2},{lat2}"
+            url = f"http://router.project-osrm.org/route/v1/driving/{coords_str}?overview=false"
+            req = urllib.request.Request(url, headers={"User-Agent": "IRS-Admissions-App/1.0"})
+
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                data = json.loads(resp.read().decode())
+
+            if data.get("routes"):
+                dist_m = float(data["routes"][0].get("distance", 0.0))
+                distance_matrix_cache.set(cache_key, dist_m, ttl=600)
+                return dist_m
+        except Exception as e:
+            logger.warning(f"Error fetching OSRM pairwise distance: {e}")
+
+        return None
+
     def _format_duration_text(self, duration_seconds: int) -> str:
         if duration_seconds < 60:
             return "1 phút"
@@ -337,6 +562,65 @@ class RoutingService:
         if rem_mins == 0:
             return f"{hours} giờ"
         return f"{hours} giờ {rem_mins} phút"
+
+    def get_osrm_single_leg_optimized(
+        self,
+        p1: Tuple[float, float],
+        p2: Tuple[float, float]
+    ) -> Optional[dict]:
+        """
+        Tính toán lộ trình độc lập cho 1 chặng từ p1 -> p2 qua OSRM Driving Engine.
+        Áp dụng tổng quát cho mọi cặp tọa độ trên toàn quốc:
+        - Gọi OSRM routing với alternatives=true để lấy các phương án đường đi thực tế.
+        - Tối ưu hóa lựa chọn tuyến đường chính (đại lộ/quốc lộ lớn) có thời gian và quãng đường ngắn nhất.
+        """
+        lat1, lng1 = p1
+        lat2, lng2 = p2
+
+        cache_key = f"single_leg_v3:{round(lat1, 4)},{round(lng1, 4)}->{round(lat2, 4)},{round(lng2, 4)}"
+        cached = directions_cache.get(cache_key)
+        if cached is not None:
+            return cached
+
+        try:
+            import urllib.request
+            import json
+
+            # Gọi OSRM Driving Engine trực tiếp cho mọi cặp tọa độ bất kỳ (hoàn toàn tổng quát cho toàn quốc)
+            url = f"http://router.project-osrm.org/route/v1/driving/{lng1},{lat1};{lng2},{lat2}?overview=full&geometries=geojson&steps=true&alternatives=true"
+            req = urllib.request.Request(url, headers={"User-Agent": "IRS-Admissions-App/1.0"})
+
+            with urllib.request.urlopen(req, timeout=8) as resp:
+                data = json.loads(resp.read().decode())
+
+            routes = data.get("routes", [])
+            if routes:
+                best_route = min(
+                    routes,
+                    key=lambda r: float(r.get("distance", 0.0)) + float(r.get("duration", 0.0)) * 10.0
+                )
+                dist_m = float(best_route.get("distance", 0.0))
+                coords = [[c[1], c[0]] for c in best_route.get("geometry", {}).get("coordinates", [])]
+                dur_s = int(best_route.get("duration", 0))
+                if dur_s <= 0:
+                    speed_mps = 28.0 * 1000 / 3600
+                    dur_s = int(dist_m / speed_mps)
+
+                best_res = {
+                    "distance_meters": dist_m,
+                    "duration_seconds": dur_s,
+                    "distance_text": f"{dist_m / 1000:.1f} km" if dist_m >= 1000 else f"{int(dist_m)} m",
+                    "duration_text": self._format_duration_text(dur_s),
+                    "geometry": coords
+                }
+
+                directions_cache.set(cache_key, best_res, ttl=300)
+                return best_res
+
+        except Exception as e:
+            logger.warning(f"Error fetching single leg route from OSRM: {e}")
+
+        return None
 
     async def get_directions(
         self,
@@ -472,156 +756,187 @@ class RoutingService:
                         pass
             return None
 
-        # 1. Áp dụng thuật toán Time-Window / Priority-Aware Dynamic Next-Hop
+        # 1. Xác định thứ tự các điểm dừng (Destination Ordering)
+        # Phân loại: Điểm có cài đặt khung giờ ghé thăm (timed) và điểm linh hoạt (flexible)
         timed_dests = [d for d in destinations if get_dest_time_minutes(d) is not None]
         flexible_dests = [d for d in destinations if get_dest_time_minutes(d) is None]
 
         if timed_dests:
-            # Sắp xếp các điểm có khung giờ cố định theo thứ tự thời gian trong ngày
-            # Nếu 2 trường cùng giờ, ưu tiên trường gần điểm hiện tại hơn
-            timed_unvisited = list(timed_dests)
-            timed_ordered = []
-            c_lat, c_lng = curr_lat, curr_lng
+            # Nếu người dùng có cài đặt khung giờ ghé thăm:
+            # BẮT BUỘC tôn trọng mốc thời gian của người dùng theo trình tự thời gian trong ngày
+            # (ví dụ: ĐH Gia Định 06:30 sáng phải đi trước, ĐH Bình Dương 16:30 chiều phải đi sau)
+            timed_ordered = sorted(timed_dests, key=lambda d: get_dest_time_minutes(d))
 
-            while timed_unvisited:
-                min_time = min(get_dest_time_minutes(d) for d in timed_unvisited)
-                same_time_pool = [d for d in timed_unvisited if get_dest_time_minutes(d) == min_time]
+            if not flexible_dests:
+                ordered = [dict(d) for d in timed_ordered]
+            else:
+                # Nếu có thêm các điểm linh hoạt (không cài giờ):
+                # Chèn các điểm linh hoạt vào vị trí tối ưu cự ly nhất (Cheapest Insertion)
+                curr_route = [dict(d) for d in timed_ordered]
+                flex_unvisited = list(flexible_dests)
 
-                # Chọn trường gần nhất trong cùng khung giờ
-                best_cand = min(
-                    same_time_pool,
-                    key=lambda d: self._haversine(c_lat, c_lng, d.get("lat", 0.0), d.get("lng", 0.0))
-                )
-                timed_ordered.append(dict(best_cand))
-                timed_unvisited.remove(best_cand)
-                c_lat, c_lng = best_cand.get("lat", 0.0), best_cand.get("lng", 0.0)
+                while flex_unvisited:
+                    min_p = min(get_dest_priority(d) for d in flex_unvisited)
+                    flex_pool = [d for d in flex_unvisited if get_dest_priority(d) == min_p]
 
-            # Chèn các trường linh hoạt (không cố định giờ) vào vị trí tối ưu cự ly (Cheapest Insertion)
-            curr_route = timed_ordered
-            flex_unvisited = list(flexible_dests)
+                    best_dest = None
+                    best_insert_pos = 0
+                    min_extra_dist = float("inf")
 
-            while flex_unvisited:
-                # Sắp xếp theo priority nếu có
-                min_p = min(get_dest_priority(d) for d in flex_unvisited)
-                flex_pool = [d for d in flex_unvisited if get_dest_priority(d) == min_p]
+                    for flex_cand in flex_pool:
+                        f_lat, f_lng = flex_cand.get("lat", 0.0), flex_cand.get("lng", 0.0)
 
-                best_dest = None
-                best_insert_pos = 0
-                min_extra_dist = float("inf")
+                        for pos in range(len(curr_route) + 1):
+                            prev_lat = start_point["lat"] if pos == 0 else curr_route[pos - 1].get("lat", 0.0)
+                            prev_lng = start_point["lng"] if pos == 0 else curr_route[pos - 1].get("lng", 0.0)
 
-                for flex_cand in flex_pool:
-                    f_lat, f_lng = flex_cand.get("lat", 0.0), flex_cand.get("lng", 0.0)
+                            if pos == len(curr_route):
+                                extra_dist = self._haversine(prev_lat, prev_lng, f_lat, f_lng)
+                            else:
+                                next_lat = curr_route[pos].get("lat", 0.0)
+                                next_lng = curr_route[pos].get("lng", 0.0)
+                                dist_before = self._haversine(prev_lat, prev_lng, next_lat, next_lng)
+                                dist_after = (
+                                    self._haversine(prev_lat, prev_lng, f_lat, f_lng)
+                                    + self._haversine(f_lat, f_lng, next_lat, next_lng)
+                                )
+                                extra_dist = dist_after - dist_before
 
-                    # Thử chèn vào từng vị trí trong route:
-                    # Vị trí 0: start_point -> flex -> curr_route[0]
-                    # Vị trí i: curr_route[i-1] -> flex -> curr_route[i]
-                    # Vị trí cuối: curr_route[-1] -> flex
-                    for pos in range(len(curr_route) + 1):
-                        prev_lat = start_point["lat"] if pos == 0 else curr_route[pos - 1].get("lat", 0.0)
-                        prev_lng = start_point["lng"] if pos == 0 else curr_route[pos - 1].get("lng", 0.0)
+                            if extra_dist < min_extra_dist:
+                                min_extra_dist = extra_dist
+                                best_dest = flex_cand
+                                best_insert_pos = pos
 
-                        if pos == len(curr_route):
-                            # Thêm vào cuối
-                            extra_dist = self._haversine(prev_lat, prev_lng, f_lat, f_lng)
-                        else:
-                            next_lat = curr_route[pos].get("lat", 0.0)
-                            next_lng = curr_route[pos].get("lng", 0.0)
-                            dist_before = self._haversine(prev_lat, prev_lng, next_lat, next_lng)
-                            dist_after = (
-                                self._haversine(prev_lat, prev_lng, f_lat, f_lng)
-                                + self._haversine(f_lat, f_lng, next_lat, next_lng)
-                            )
-                            extra_dist = dist_after - dist_before
+                    if best_dest:
+                        curr_route.insert(best_insert_pos, dict(best_dest))
+                        flex_unvisited.remove(best_dest)
+                    else:
+                        break
 
-                        if extra_dist < min_extra_dist:
-                            min_extra_dist = extra_dist
-                            best_dest = flex_cand
-                            best_insert_pos = pos
-
-                if best_dest:
-                    curr_route.insert(best_insert_pos, dict(best_dest))
-                    flex_unvisited.remove(best_dest)
-                else:
-                    break
-
-            ordered = curr_route
+                ordered = curr_route
         else:
-            # Nếu không có trường nào cài giờ cụ thể, áp dụng Dynamic Next-Hop theo độ ưu tiên & khoảng cách
-            while unvisited:
-                min_priority = min(get_dest_priority(d) for d in unvisited)
-                priority_pool = [d for d in unvisited if get_dest_priority(d) == min_priority]
+            # Nếu KHÔNG có trường nào cài giờ cụ thể (Linh hoạt hoàn toàn):
+            # Tối ưu hóa toàn cục cự ly ngắn nhất theo ma trận đường bộ OSRM (Global TSP Road Solver)
+            all_matrix_pts = [(curr_lat, curr_lng)] + [(d.get("lat", 0.0), d.get("lng", 0.0)) for d in unvisited]
+            matrix_res = self.get_osrm_table_matrix(all_matrix_pts)
 
-                candidates = []
-                for dest in priority_pool:
-                    d_lat = dest.get("lat", 0.0)
-                    d_lng = dest.get("lng", 0.0)
-                    dist_m = self._haversine(curr_lat, curr_lng, d_lat, d_lng)
-                    dur_s = int(dist_m / (25.5 * 1000 / 3600))
-                    candidates.append({
-                        "dest": dest,
-                        "distance_meters": dist_m,
-                        "duration_seconds": dur_s
-                    })
+            if matrix_res and matrix_res.get("distances"):
+                dist_matrix = matrix_res["distances"]
+                optimal_indices = self.solve_tsp_optimal_sequence((curr_lat, curr_lng), unvisited, dist_matrix)
+                logger.info(f"✅ [OSRM Table Matrix TSP]: Thứ tự tối ưu toàn cục = {optimal_indices}")
+                ordered = [dict(unvisited[i]) for i in optimal_indices]
+            else:
+                # Fallback 1: OSRM Trip API (TSP solver)
+                dest_coords = [(d.get("lat", 0.0), d.get("lng", 0.0)) for d in unvisited]
+                optimal_order = self.get_osrm_trip_optimal_order((curr_lat, curr_lng), dest_coords)
 
-                candidates.sort(key=lambda x: x["duration_seconds"])
+                if optimal_order is not None and len(optimal_order) == len(unvisited):
+                    logger.info(f"✅ [OSRM Trip TSP]: Thứ tự tối ưu = {optimal_order}")
+                    ordered = [dict(unvisited[i]) for i in optimal_order]
+                else:
+                    # Fallback 2: OSRM pairwise distance greedy
+                    remaining = list(unvisited)
+                    c_lat, c_lng = curr_lat, curr_lng
 
-                # Ra quyết định Next-Hop
-                best = candidates[0]
-                for cand in candidates[1:]:
-                    time_diff = cand["duration_seconds"] - best["duration_seconds"]
-                    if time_diff <= TIME_THRESHOLD_SECONDS and cand["distance_meters"] < best["distance_meters"]:
-                        best = cand
+                    while remaining:
+                        best_dest = None
+                        best_dist = float("inf")
 
-                chosen_dest = dict(best["dest"])
-                unvisited.remove(best["dest"])
-                ordered.append(chosen_dest)
-                curr_lat, curr_lng = chosen_dest["lat"], chosen_dest["lng"]
+                        for dest in remaining:
+                            d_lat = dest.get("lat", 0.0)
+                            d_lng = dest.get("lng", 0.0)
 
-        # 2. Truy vấn định tuyến đường bộ thực tế qua OSRM (Google Maps-like actual roads)
-        all_pts = [(start_point["lat"], start_point["lng"])] + [(d["lat"], d["lng"]) for d in ordered]
-        osrm_result = self.get_osrm_multi_route(all_pts)
+                            road_dist = self.get_osrm_pairwise_distance(c_lat, c_lng, d_lat, d_lng)
+                            dist_m = road_dist if road_dist is not None else self._haversine(c_lat, c_lng, d_lat, d_lng) * 1.3
 
-        if osrm_result and osrm_result.get("route_geometry"):
-            total_distance = osrm_result["distance_meters"]
-            total_duration = osrm_result["duration_seconds"]
-            route_geometry = osrm_result["route_geometry"]
-            encoded_polyline = osrm_result["polyline"]
-            duration_text = osrm_result["duration_text"]
+                            if dist_m < best_dist:
+                                best_dist = dist_m
+                                best_dest = dest
 
-            # Gán cự ly và thời gian thực tế từng chặng cho từng điểm đến
-            legs = osrm_result.get("legs", [])
-            for idx, leg in enumerate(legs):
-                if idx < len(ordered):
-                    ordered[idx]["distance_meters"] = leg["distance_meters"]
-                    ordered[idx]["duration_seconds"] = leg["duration_seconds"]
-                    ordered[idx]["distance_text"] = leg["distance_text"]
-                    ordered[idx]["duration_text"] = leg["duration_text"]
+                        if best_dest:
+                            ordered.append(dict(best_dest))
+                            remaining.remove(best_dest)
+                            c_lat = best_dest.get("lat", 0.0)
+                            c_lng = best_dest.get("lng", 0.0)
+                        else:
+                            break
 
-            return ordered, total_distance, total_duration, route_geometry, encoded_polyline, duration_text
-
-        # 3. Fallback: Nếu OSRM tạm thời gián đoạn, tính xấp xỉ theo mạng lưới đường bộ (hệ số 1.25x)
-        speed_mps = 25.5 * 1000 / 3600
+        # 2. Định tuyến từng chặng độc lập & Tính toán tiến trình thời gian
         total_distance = 0.0
-        c_lat, c_lng = start_point["lat"], start_point["lng"]
-        route_geometry = [[c_lat, c_lng]]
+        total_duration = 0
+        all_route_coords = []
 
-        for d in ordered:
-            d_lat, d_lng = d["lat"], d["lng"]
-            leg_dist = self._haversine(c_lat, c_lng, d_lat, d_lng) * 1.25
-            leg_dur = int(leg_dist / speed_mps)
-            d["distance_meters"] = leg_dist
-            d["duration_seconds"] = leg_dur
-            d["distance_text"] = f"{leg_dist / 1000:.1f} km"
-            d["duration_text"] = self._format_duration_text(leg_dur)
+        curr_pt = (start_point["lat"], start_point["lng"])
+        current_time_cursor = 7 * 60 + 30 # Mặc định 07:30 sáng
+
+        def format_clock(minutes: int) -> str:
+            h = (minutes // 60) % 24
+            m = minutes % 60
+            return f"{h:02d}:{m:02d}"
+
+        for idx, dest in enumerate(ordered):
+            target_pt = (dest["lat"], dest["lng"])
+
+            # Tính toán chặng độc lập
+            leg_res = self.get_osrm_single_leg_optimized(curr_pt, target_pt)
+
+            if leg_res and leg_res.get("geometry"):
+                leg_dist = leg_res["distance_meters"]
+                leg_dur = leg_res["duration_seconds"]
+                leg_geom = leg_res["geometry"]
+                leg_dist_txt = leg_res["distance_text"]
+                leg_dur_txt = leg_res["duration_text"]
+            else:
+                speed_mps = 25.5 * 1000 / 3600
+                leg_dist = self._haversine(curr_pt[0], curr_pt[1], target_pt[0], target_pt[1]) * 1.25
+                leg_dur = int(leg_dist / speed_mps)
+                leg_geom = [[curr_pt[0], curr_pt[1]], [target_pt[0], target_pt[1]]]
+                leg_dist_txt = f"{leg_dist / 1000:.1f} km"
+                leg_dur_txt = self._format_duration_text(leg_dur)
+
+            stay_mins = int(dest.get("visit_duration_minutes") or 60)
+            user_set_time = get_dest_time_minutes(dest)
+
+            if user_set_time is not None:
+                # Nếu người dùng đã cài đặt giờ: GIỮ NGUYÊN GIỜ CỦA NGƯỜI DÙNG!
+                arrival_mins = user_set_time
+                departure_mins = arrival_mins + stay_mins
+                visit_time_str = dest.get("preferred_visit_time") or format_clock(arrival_mins)
+            else:
+                # Điểm linh hoạt: Tự động tính giờ đến tiếp theo
+                travel_mins = max(1, round(leg_dur / 60))
+                arrival_mins = current_time_cursor + travel_mins
+                departure_mins = arrival_mins + stay_mins
+                visit_time_str = format_clock(arrival_mins)
+
+            dest["distance_meters"] = leg_dist
+            dest["duration_seconds"] = leg_dur
+            dest["distance_text"] = leg_dist_txt
+            dest["duration_text"] = leg_dur_txt
+            dest["leg_geometry"] = leg_geom
+            dest["order"] = idx + 1
+            dest["visit_duration_minutes"] = stay_mins
+            dest["preferred_visit_time"] = visit_time_str
+            dest["departure_time"] = format_clock(departure_mins)
+
+            # Cập nhật con trỏ thời gian
+            current_time_cursor = departure_mins
+
             total_distance += leg_dist
-            route_geometry.append([d_lat, d_lng])
-            c_lat, c_lng = d_lat, d_lng
+            total_duration += leg_dur
 
-        total_duration = int(total_distance / speed_mps)
-        encoded_polyline = polyline.encode(route_geometry) if len(route_geometry) >= 2 else ""
+            if not all_route_coords:
+                all_route_coords.extend(leg_geom)
+            else:
+                if leg_geom:
+                    all_route_coords.extend(leg_geom[1:] if leg_geom[0] == all_route_coords[-1] else leg_geom)
+
+            curr_pt = target_pt
+
+        encoded_polyline = polyline.encode(all_route_coords) if len(all_route_coords) >= 2 else ""
         duration_text = self._format_duration_text(total_duration)
 
-        return ordered, total_distance, total_duration, route_geometry, encoded_polyline, duration_text
+        return ordered, total_distance, total_duration, all_route_coords, encoded_polyline, duration_text
 
 
 routing_service = RoutingService()

@@ -17,11 +17,10 @@ import {
   Sparkles,
   ChevronDown,
   ChevronUp,
-  UserCheck,
-  RefreshCw,
   Play,
   Layers,
   Award,
+  X,
 } from 'lucide-react';
 
 import { useAppStore } from '../../store/useAppStore';
@@ -128,9 +127,9 @@ export function StaffCampaignsPage() {
   const [systemStaffList, setSystemStaffList] = useState<any[]>([]);
 
   // Lọc theo người dùng (Mặc định là người dùng đang đăng nhập)
-  const [selectedStaffId, setSelectedStaffId] = useState<string>(() => user?.id || '');
+  const [selectedStaffId] = useState<string>(() => user?.id || '');
   const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'assigned' | 'active' | 'completed'>('all');
+  const [statusFilter] = useState<'all' | 'assigned' | 'active' | 'completed'>('all');
 
   // Chiến dịch và Điểm trường đang chọn để focus trên bản đồ
   const [selectedCampaignId, setSelectedCampaignId] = useState<string | null>(null);
@@ -182,80 +181,103 @@ export function StaffCampaignsPage() {
   // Kiểm tra xem 1 cán bộ có thuộc danh sách phân bổ hay không
   const isStaffAssigned = (staffList: any[] | undefined, targetStaff: any): boolean => {
     if (!staffList || !Array.isArray(staffList) || !targetStaff) return false;
-    const targetId = String(targetStaff.id || targetStaff._id || '');
-    const targetName = String(targetStaff.full_name || targetStaff.username || '').toLowerCase();
-    const targetEmail = String(targetStaff.email || '').toLowerCase();
+    const targetId = String(targetStaff.id || targetStaff._id || '').toLowerCase().trim();
+    const targetName = String(targetStaff.full_name || targetStaff.name || targetStaff.username || '').toLowerCase().trim();
+    const targetEmail = String(targetStaff.email || '').toLowerCase().trim();
+    const targetUsername = String(targetStaff.username || '').toLowerCase().trim();
 
     return staffList.some((s) => {
-      const sId = String(s.id || s._id || '');
-      const sName = String(s.name || s.full_name || s.username || '').toLowerCase();
-      const sEmail = String(s.email || '').toLowerCase();
+      if (!s) return false;
+      if (typeof s === 'string') {
+        const sStr = s.toLowerCase().trim();
+        return (
+          (targetId && sStr === targetId) ||
+          (targetName && (sStr === targetName || sStr.includes(targetName) || targetName.includes(sStr))) ||
+          (targetUsername && (sStr === targetUsername || sStr.includes(targetUsername) || targetUsername.includes(sStr))) ||
+          (targetEmail && sStr === targetEmail)
+        );
+      }
+      const sId = String(s.id || s._id || '').toLowerCase().trim();
+      const sName = String(s.name || s.full_name || s.username || '').toLowerCase().trim();
+      const sEmail = String(s.email || '').toLowerCase().trim();
+      const sUsername = String(s.username || '').toLowerCase().trim();
 
       return (
         (targetId && sId && targetId === sId) ||
-        (targetName && sName && targetName === sName) ||
+        (targetName && sName && (targetName === sName || targetName.includes(sName) || sName.includes(targetName))) ||
+        (targetUsername && sUsername && targetUsername === sUsername) ||
         (targetEmail && sEmail && targetEmail === sEmail)
       );
     });
   };
 
-  // Lọc các chiến dịch mà Staff này ĐƯỢC PHÂN BỔ
+  // Kiểm tra cán bộ có được phân công trong chiến dịch hay không
+  const isUserAssignedToCamp = (camp: any, targetUser: any): boolean => {
+    if (!targetUser) return false;
+    const userName = String(targetUser.full_name || targetUser.name || targetUser.username || '').toLowerCase().trim();
+
+    // 1. Trưởng đoàn
+    const leaderName = String(camp.team?.leader_name || '').toLowerCase().trim();
+    if (leaderName && userName && (leaderName === userName || leaderName.includes(userName) || userName.includes(leaderName))) {
+      return true;
+    }
+
+    // 2. Thành viên đoàn (team.members)
+    if (isStaffAssigned(camp.team?.members, targetUser)) {
+      return true;
+    }
+
+    // 3. Phân công từng điểm dừng (stop_assignments)
+    if (camp.team?.stop_assignments && typeof camp.team.stop_assignments === 'object') {
+      const hasInStop = Object.values(camp.team.stop_assignments).some((list) =>
+        isStaffAssigned(list as any[], targetUser)
+      );
+      if (hasInStop) return true;
+    }
+
+    // 4. Điểm xuất phát (start_point.assigned_staff)
+    if (isStaffAssigned(camp.start_point?.assigned_staff, targetUser)) {
+      return true;
+    }
+
+    // 5. Điểm đến mục tiêu (destinations[...].assigned_staff)
+    if (Array.isArray(camp.destinations)) {
+      const hasInDest = camp.destinations.some((d: any) =>
+        isStaffAssigned(d.assigned_staff, targetUser)
+      );
+      if (hasInDest) return true;
+    }
+
+    return false;
+  };
+
+  // Lọc các chiến dịch: Ai được phân công trong chiến dịch đó thì bên tổng quan chiến dịch sẽ hiển thị chiến dịch đó
   const allocatedCampaignsForStaff = useMemo(() => {
     if (!campaigns || campaigns.length === 0) return [];
 
     return campaigns.filter((camp) => {
-      // 1. Phải là chiến dịch đã được phân bổ hoặc đang chạy/hoàn thành
+      // Phải là chiến dịch có phân bổ đoàn/điểm đến hoặc có trạng thái đã phân bổ/đang chạy/hoàn thành
       const hasTeam = Boolean(camp.team && (camp.team.leader_name || camp.team.members?.length > 0 || camp.team.stop_assignments));
       const isAllocatedStatus = ['assigned', 'deployed', 'active', 'completed'].includes(camp.status);
       if (!hasTeam && !isAllocatedStatus) return false;
 
-      // Nếu Admin chọn "Tất cả cán bộ" (selectedStaffId === 'all')
-      if (isAdmin && selectedStaffId === 'all') return true;
+      // Nếu là Admin: hiển thị tất cả các chiến dịch đã phân bổ trong hệ thống
+      if (isAdmin) return true;
 
-      if (!activeStaff) return false;
-
-      // 2. Kiểm tra nếu là Trưởng đoàn
-      const leaderName = String(camp.team?.leader_name || '').toLowerCase();
-      const staffName = String(activeStaff.full_name || activeStaff.username || '').toLowerCase();
-      if (leaderName && staffName && leaderName === staffName) return true;
-
-      // 3. Kiểm tra nếu nằm trong danh sách thành viên đoàn (team.members)
-      if (isStaffAssigned(camp.team?.members, activeStaff)) return true;
-
-      // 4. Kiểm tra trong stop_assignments
-      if (camp.team?.stop_assignments && typeof camp.team.stop_assignments === 'object') {
-        const hasInStop = Object.values(camp.team.stop_assignments).some((list) =>
-          isStaffAssigned(list as any[], activeStaff)
-        );
-        if (hasInStop) return true;
-      }
-
-      // 5. Kiểm tra trong điểm xuất phát
-      if (isStaffAssigned(camp.start_point?.assigned_staff, activeStaff)) return true;
-
-      // 6. Kiểm tra trong từng điểm đến
-      if (Array.isArray(camp.destinations)) {
-        const hasInDest = camp.destinations.some((d: any) =>
-          isStaffAssigned(d.assigned_staff, activeStaff)
-        );
-        if (hasInDest) return true;
-      }
-
-      return false;
+      // Nếu là Cán bộ: CHỈ hiển thị những chiến dịch mà cán bộ đó được phân công
+      return isUserAssignedToCamp(camp, user);
     });
-  }, [campaigns, activeStaff, selectedStaffId, isAdmin]);
+  }, [campaigns, user, isAdmin]);
 
   // Lọc theo tìm kiếm và trạng thái
   const filteredCampaigns = useMemo(() => {
     return allocatedCampaignsForStaff.filter((camp) => {
-      // Lọc trạng thái
       if (statusFilter !== 'all') {
         if (statusFilter === 'assigned' && camp.status !== 'assigned') return false;
         if (statusFilter === 'active' && camp.status !== 'active' && camp.status !== 'deployed') return false;
         if (statusFilter === 'completed' && camp.status !== 'completed') return false;
       }
 
-      // Lọc tìm kiếm
       const q = searchQuery.trim().toLowerCase();
       if (!q) return true;
 
@@ -269,61 +291,22 @@ export function StaffCampaignsPage() {
     });
   }, [allocatedCampaignsForStaff, statusFilter, searchQuery]);
 
-  // Tự động chọn chiến dịch đầu tiên nếu chưa chọn
-  useEffect(() => {
-    if (filteredCampaigns.length > 0 && !selectedCampaignId) {
-      const firstId = filteredCampaigns[0].id || filteredCampaigns[0]._id;
-      setSelectedCampaignId(firstId);
-      setExpandedCampaignIds((prev) => ({ ...prev, [firstId]: true }));
+  // Chọn chiến dịch: mở dropdown chi tiết và mở bản đồ tương ứng
+  const handleSelectCampaign = (cId: string) => {
+    if (selectedCampaignId === cId) {
+      toggleExpand(cId);
+    } else {
+      setSelectedCampaignId(cId);
+      setExpandedCampaignIds((prev) => ({ ...prev, [cId]: true }));
+      setActiveStop(null);
     }
-  }, [filteredCampaigns, selectedCampaignId]);
+  };
 
-  // Chiến dịch đang được chọn để hiển thị chi tiết và bản đồ
+  // Chiến dịch đang được chọn để hiển thị chi tiết và bản đồ (chỉ có khi đã chọn chiến dịch)
   const currentCampaign = useMemo(() => {
-    if (!selectedCampaignId) return filteredCampaigns[0] || null;
-    return (
-      filteredCampaigns.find((c) => c.id === selectedCampaignId || c._id === selectedCampaignId) ||
-      filteredCampaigns[0] ||
-      null
-    );
+    if (!selectedCampaignId) return null;
+    return filteredCampaigns.find((c) => (c.id || c._id) === selectedCampaignId) || null;
   }, [filteredCampaigns, selectedCampaignId]);
-
-  // Thống kê tổng hợp cho Staff đang xem
-  const staffStats = useMemo(() => {
-    const totalCampaigns = allocatedCampaignsForStaff.length;
-    let totalAssignedSchools = 0;
-    let totalDistanceKm = 0;
-    let isLeaderCount = 0;
-
-    allocatedCampaignsForStaff.forEach((camp) => {
-      if (camp.estimated_distance_km) {
-        totalDistanceKm += Number(camp.estimated_distance_km);
-      }
-
-      const leaderName = String(camp.team?.leader_name || '').toLowerCase();
-      const staffName = String(activeStaff?.full_name || activeStaff?.username || '').toLowerCase();
-      if (leaderName && staffName && leaderName === staffName) {
-        isLeaderCount++;
-      }
-
-      // Đếm các điểm trường mà staff này được phụ trách
-      (camp.destinations || []).forEach((dest: any) => {
-        if (isStaffAssigned(dest.assigned_staff, activeStaff)) {
-          totalAssignedSchools++;
-        }
-      });
-      if (isStaffAssigned(camp.start_point?.assigned_staff, activeStaff)) {
-        totalAssignedSchools++;
-      }
-    });
-
-    return {
-      totalCampaigns,
-      totalAssignedSchools,
-      totalDistanceKm: Math.round(totalDistanceKm * 10) / 10,
-      isLeaderCount,
-    };
-  }, [allocatedCampaignsForStaff, activeStaff]);
 
   // Danh sách các điểm dừng trên bản đồ của chiến dịch hiện tại
   const mapPoints = useMemo(() => {
@@ -358,6 +341,66 @@ export function StaffCampaignsPage() {
 
     return points;
   }, [currentCampaign, activeStaff]);
+
+  // Bảng màu cho từng chặng riêng biệt (tránh trùng màu / chung đường)
+  const LEG_COLORS = [
+    '#2563eb', // Chặng 1: Xanh dương đậm
+    '#059669', // Chặng 2: Xanh ngọc
+    '#7c3aed', // Chặng 3: Tím hoàng gia
+    '#ea580c', // Chặng 4: Cam hổ phách
+    '#db2777', // Chặng 5: Hồng ruby
+    '#0891b2', // Chặng 6: Xanh mòng két
+  ];
+
+  // Danh sách các chặng riêng biệt kèm tọa độ đường bộ của từng chặng
+  const individualLegs = useMemo(() => {
+    if (!currentCampaign) return [];
+    const dests = currentCampaign.destinations || [];
+    const legs: Array<{
+      index: number;
+      fromName: string;
+      toName: string;
+      distanceText: string;
+      durationText: string;
+      geometry: [number, number][];
+      color: string;
+      destId: string;
+    }> = [];
+
+    dests.forEach((dest: any, idx: number) => {
+      const prevName = idx === 0
+        ? (currentCampaign.start_point?.name || 'Điểm xuất phát')
+        : (dests[idx - 1]?.name || `Điểm dừng ${idx}`);
+      
+      const geom = (dest.leg_geometry && Array.isArray(dest.leg_geometry) && dest.leg_geometry.length > 1)
+        ? dest.leg_geometry
+        : [];
+
+      legs.push({
+        index: idx + 1,
+        fromName: prevName,
+        toName: dest.name || `Điểm dừng ${idx + 1}`,
+        distanceText: dest.distance_text || '',
+        durationText: dest.duration_text || '',
+        geometry: geom,
+        color: LEG_COLORS[idx % LEG_COLORS.length],
+        destId: dest.id || dest.school_id || String(idx),
+      });
+    });
+
+    return legs;
+  }, [currentCampaign]);
+
+  const hasIndividualLegGeometries = useMemo(() => {
+    return individualLegs.length > 0 && individualLegs.some((l) => l.geometry.length > 1);
+  }, [individualLegs]);
+
+  // Hàm tạo độ lệch nhẹ để các chặng song hành/ngược chiều không bị đè mất nhau
+  const getOffsetGeometry = (coords: [number, number][], legIdx: number): [number, number][] => {
+    if (!coords || coords.length < 2 || legIdx === 0) return coords;
+    const offset = (legIdx % 2 === 1 ? 1 : -1) * Math.ceil(legIdx / 2) * 0.00008;
+    return coords.map(([lat, lng]) => [lat + offset, lng + offset]);
+  };
 
   // Tọa độ vẽ đường polyline
   const polylinePositions = useMemo<[number, number][]>(() => {
@@ -444,160 +487,81 @@ export function StaffCampaignsPage() {
   return (
     <div className="space-y-5 animate-fade-in pb-12">
       {/* 1. Header Banner & Profile Card */}
-      <div className="bg-gradient-to-r from-[#0f3b7d] via-[#1d4ed8] to-[#2563eb] rounded-[5px] p-5 sm:p-6 text-white shadow-xs relative overflow-hidden">
-        {/* Nền đồ họa trang trí */}
-        <div className="absolute right-0 top-0 bottom-0 w-1/3 bg-white/5 transform skew-x-12 pointer-events-none" />
-        <div className="absolute -bottom-10 -right-10 w-44 h-44 bg-blue-400/10 rounded-full blur-2xl pointer-events-none" />
-
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2 mb-1.5">
-              <span className="px-2.5 py-0.5 rounded-full bg-white/20 backdrop-blur-xs text-xs font-semibold tracking-wide flex items-center gap-1.5">
-                <Compass className="w-3.5 h-3.5" />
-                CỔNG CÁN BỘ TUYỂN SINH
-              </span>
-              {activeStaff?.role && (
-                <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/80 text-white text-[11px] font-bold uppercase tracking-wider">
-                  {activeStaff.role === 'staff' ? 'Cán bộ thực địa' : activeStaff.role}
-                </span>
-              )}
-            </div>
-
-            <h1 className="text-xl sm:text-2xl font-black tracking-tight">
-              Xin chào, {activeStaff?.full_name || activeStaff?.username || 'Cán bộ'}!
-            </h1>
-            <p className="text-xs sm:text-sm text-blue-100 mt-1 max-w-xl">
-              Theo dõi danh sách các chiến dịch tuyển sinh lưu động, lộ trình di chuyển và các điểm trường được ban chỉ đạo phân công phụ trách.
-            </p>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-3">
-            {/* Bộ chọn cán bộ (Dành riêng cho Admin kiểm tra góc nhìn của từng staff) */}
-            {isAdmin && (
-              <div className="bg-white/10 backdrop-blur-md border border-white/20 rounded-[5px] p-1.5 flex items-center gap-2">
-                <UserCheck className="w-4 h-4 text-blue-200 shrink-0 ml-1" />
-                <span className="text-xs text-blue-100 font-medium hidden sm:inline">Xem theo:</span>
-                <select
-                  value={selectedStaffId}
-                  onChange={(e) => {
-                    setSelectedStaffId(e.target.value);
-                    setSelectedCampaignId(null);
-                    setActiveStop(null);
-                  }}
-                  className="bg-white text-slate-800 text-xs font-semibold rounded-[5px] px-2.5 py-1 outline-hidden cursor-pointer"
-                >
-                  <option value={user?.id || ''}>👤 Cá nhân tôi ({user?.full_name || user?.username})</option>
-                  <option value="all">🌐 Tất cả chiến dịch đã phân bổ</option>
-                  <optgroup label="Danh sách Cán bộ tuyển sinh">
-                    {systemStaffList.map((st) => (
-                      <option key={st.id || st._id} value={st.id || st._id}>
-                        {st.full_name || st.username} {st.email ? `(${st.email})` : ''}
-                      </option>
-                    ))}
-                  </optgroup>
-                </select>
-              </div>
-            )}
-
-            <button
-              type="button"
-              onClick={loadData}
-              disabled={loading}
-              className="px-3 py-1.5 rounded-[5px] bg-white/10 hover:bg-white/20 border border-white/25 text-white text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer"
-              title="Làm mới dữ liệu"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-              <span>Cập nhật</span>
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* 2. Thống kê nhanh (KPI Chips) */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        <div className="bg-white p-4 rounded-[5px] border border-slate-200/80 shadow-xs flex items-center gap-3.5">
-          <div className="w-11 h-11 rounded-[5px] bg-blue-50 text-[#0f3b7d] flex items-center justify-center shrink-0">
-            <Compass className="w-5 h-5" />
-          </div>
-          <div className="min-w-0">
-            <p className="text-xs text-slate-500 font-medium truncate">Chiến dịch tham gia</p>
-            <p className="text-lg font-black text-slate-800">{staffStats.totalCampaigns}</p>
-          </div>
-        </div>
-
-        <div className="bg-white p-4 rounded-[5px] border border-slate-200/80 shadow-xs flex items-center gap-3.5">
-          <div className="w-11 h-11 rounded-[5px] bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
-            <Building2 className="w-5 h-5" />
-          </div>
-          <div className="min-w-0">
-            <p className="text-xs text-slate-500 font-medium truncate">Điểm trường phụ trách</p>
-            <p className="text-lg font-black text-slate-800">{staffStats.totalAssignedSchools}</p>
-          </div>
-        </div>
-
-        <div className="bg-white p-4 rounded-[5px] border border-slate-200/80 shadow-xs flex items-center gap-3.5">
-          <div className="w-11 h-11 rounded-[5px] bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
-            <Route className="w-5 h-5" />
-          </div>
-          <div className="min-w-0">
-            <p className="text-xs text-slate-500 font-medium truncate">Tổng cự ly dự kiến</p>
-            <p className="text-lg font-black text-slate-800">{staffStats.totalDistanceKm} <span className="text-xs font-normal text-slate-500">km</span></p>
-          </div>
-        </div>
-
-        <div className="bg-white p-4 rounded-[5px] border border-slate-200/80 shadow-xs flex items-center gap-3.5">
-          <div className="w-11 h-11 rounded-[5px] bg-purple-50 text-purple-600 flex items-center justify-center shrink-0">
-            <Award className="w-5 h-5" />
-          </div>
-          <div className="min-w-0">
-            <p className="text-xs text-slate-500 font-medium truncate">Vai trò Trưởng đoàn</p>
-            <p className="text-lg font-black text-slate-800">
-              {staffStats.isLeaderCount > 0 ? `${staffStats.isLeaderCount} chuyến` : 'Thành viên'}
-            </p>
-          </div>
-        </div>
-      </div>
-
       {/* 3. Bố cục chính: Cột trái Danh sách Chiến dịch & Cột phải Bản đồ tương tác */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
         {/* CỘT TRÁI: DANH SÁCH CHIẾN DỊCH & ĐỊA ĐIỂM (5 CỘT) */}
-        <div className="lg:col-span-5 space-y-4">
-          {/* Thanh tìm kiếm & Bộ lọc trạng thái */}
+        <div className={`${currentCampaign ? 'lg:col-span-5' : 'lg:col-span-12 max-w-4xl mx-auto w-full'} space-y-4`}>
+          {/* Thanh tìm kiếm & Dropdown chọn chiến dịch */}
           <div className="bg-white p-3.5 rounded-[5px] border border-slate-200/80 shadow-xs space-y-3">
-            <div className="relative">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-              <input
-                type="text"
-                placeholder="Tìm tên chiến dịch, mã chuyến, tên trường..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-9 pr-3.5 py-2 text-xs rounded-[5px] bg-slate-50 border border-slate-200 focus:bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-hidden transition"
-              />
+            <div className="flex flex-col sm:flex-row gap-2.5 items-stretch sm:items-center">
+              <div className="relative flex-1">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <input
+                  type="text"
+                  placeholder="Tìm tên chiến dịch, mã chuyến, tên trường..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-9 pr-3.5 py-2 text-xs rounded-[5px] bg-slate-50 border border-slate-200 focus:bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-hidden transition"
+                />
+              </div>
+
+              {/* Dropdown chọn chiến dịch */}
+              <div className="sm:w-72">
+                <select
+                  aria-label="Chọn chiến dịch"
+                  value={selectedCampaignId || ''}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (!val) {
+                      setSelectedCampaignId(null);
+                      setActiveStop(null);
+                    } else {
+                      handleSelectCampaign(val);
+                    }
+                  }}
+                  className="w-full px-3 py-2 text-xs font-semibold rounded-[5px] bg-blue-50/80 border border-blue-200 text-[#0f3b7d] focus:bg-white focus:border-[#0f3b7d] focus:ring-1 focus:ring-[#0f3b7d] outline-hidden transition cursor-pointer"
+                >
+                  <option value="">▼ Chọn chiến dịch xem bản đồ...</option>
+                  {filteredCampaigns.map((camp) => {
+                    const cId = camp.id || camp._id;
+                    const leaderText = camp.team?.leader_name ? ` (Trưởng đoàn: ${camp.team.leader_name})` : '';
+                    return (
+                      <option key={cId} value={cId}>
+                        {camp.name}{leaderText}
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
             </div>
 
-            <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5">
-              {(
-                [
-                  { key: 'all', label: 'Tất cả' },
-                  { key: 'assigned', label: 'Đã phân bổ' },
-                  { key: 'active', label: 'Đang chạy' },
-                  { key: 'completed', label: 'Hoàn thành' },
-                ] as const
-              ).map((tab) => (
+            {/* Thông báo trạng thái đang xem bản đồ */}
+            {currentCampaign ? (
+              <div className="flex items-center justify-between px-3 py-2 bg-blue-50 border border-blue-200 rounded-[5px] text-xs">
+                <div className="flex items-center gap-2 truncate">
+                  <Compass className="w-4 h-4 text-[#0f3b7d] shrink-0" />
+                  <span className="font-semibold text-slate-800 truncate">
+                    Đang hiển thị bản đồ: <strong className="text-[#0f3b7d]">{currentCampaign.name}</strong>
+                  </span>
+                </div>
                 <button
-                  key={tab.key}
                   type="button"
-                  onClick={() => setStatusFilter(tab.key)}
-                  className={`px-2.5 py-1 text-xs font-semibold rounded-[5px] transition shrink-0 cursor-pointer ${
-                    statusFilter === tab.key
-                      ? 'bg-[#0f3b7d] text-white shadow-2xs'
-                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200/80'
-                  }`}
+                  onClick={() => {
+                    setSelectedCampaignId(null);
+                    setActiveStop(null);
+                  }}
+                  className="text-[11px] font-bold text-red-600 hover:text-red-700 hover:underline shrink-0 ml-2 cursor-pointer flex items-center gap-1"
                 >
-                  {tab.label}
+                  <X className="w-3.5 h-3.5" />
+                  <span>Ẩn bản đồ</span>
                 </button>
-              ))}
-            </div>
+              </div>
+            ) : filteredCampaigns.length > 0 ? (
+              <div className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-[5px] text-xs text-slate-500 flex items-center gap-2">
+                <Compass className="w-4 h-4 text-slate-400 shrink-0" />
+                <span>Bấm vào một chiến dịch bên dưới hoặc chọn từ menu thả xuống để mở bản đồ lộ trình chi tiết.</span>
+              </div>
+            ) : null}
           </div>
 
           {/* Danh sách các chiến dịch */}
@@ -605,25 +569,6 @@ export function StaffCampaignsPage() {
             <div className="p-12 bg-white rounded-[5px] border border-slate-200 flex flex-col items-center justify-center text-slate-400">
               <div className="w-8 h-8 border-3 border-blue-600/30 border-t-[#0f3b7d] rounded-full animate-spin mb-3" />
               <p className="text-xs font-semibold">Đang tải danh sách chiến dịch phân bổ...</p>
-            </div>
-          ) : filteredCampaigns.length === 0 ? (
-            <div className="p-8 bg-white rounded-[5px] border border-slate-200 text-center flex flex-col items-center justify-center">
-              <div className="w-12 h-12 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center mb-3">
-                <Compass className="w-6 h-6" />
-              </div>
-              <h3 className="text-sm font-bold text-slate-700">Chưa có chiến dịch nào được phân bổ</h3>
-              <p className="text-xs text-slate-500 mt-1 max-w-xs">
-                {activeStaff?.full_name || 'Cán bộ'} hiện chưa được chỉ định vào chiến dịch tuyển sinh nào hoặc không tìm thấy kết quả phù hợp.
-              </p>
-              {isAdmin && (
-                <Link
-                  to="/admin/campaigns"
-                  className="mt-3.5 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[5px] bg-[#0f3b7d] text-white text-xs font-semibold hover:bg-[#0c2f64] transition"
-                >
-                  <Navigation className="w-3.5 h-3.5" />
-                  <span>Đi tới trang Phân bổ chiến dịch</span>
-                </Link>
-              )}
             </div>
           ) : (
             <div className="space-y-3">
@@ -653,10 +598,7 @@ export function StaffCampaignsPage() {
                   >
                     {/* Header Thẻ Chiến dịch */}
                     <div
-                      onClick={() => {
-                        setSelectedCampaignId(cId);
-                        setActiveStop(null);
-                      }}
+                      onClick={() => handleSelectCampaign(cId)}
                       className="p-3.5 cursor-pointer hover:bg-slate-50/60 transition"
                     >
                       <div className="flex items-start justify-between gap-2 mb-2">
@@ -848,6 +790,22 @@ export function StaffCampaignsPage() {
                                     {dest.address || 'Chưa cập nhật địa chỉ'}
                                   </p>
 
+                                  {/* Thông tin chặng đường */}
+                                  {(dest.distance_text || dest.duration_text) && (
+                                    <div className="flex items-center gap-1.5 mt-1">
+                                      <span
+                                        className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold"
+                                        style={{
+                                          backgroundColor: `${LEG_COLORS[idx % LEG_COLORS.length]}18`,
+                                          color: LEG_COLORS[idx % LEG_COLORS.length],
+                                        }}
+                                      >
+                                        <Navigation className="w-2.5 h-2.5" />
+                                        Chặng {idx + 1}: {dest.distance_text} {dest.duration_text ? `• ~${dest.duration_text}` : ''}
+                                      </span>
+                                    </div>
+                                  )}
+
                                   {/* Hiển thị cán bộ phụ trách điểm này */}
                                   {dest.assigned_staff && dest.assigned_staff.length > 0 && (
                                     <div className="flex items-center gap-1 mt-1 text-[10px] text-slate-600 flex-wrap">
@@ -878,14 +836,15 @@ export function StaffCampaignsPage() {
                     <div className="px-3.5 py-2.5 bg-slate-50 border-t border-slate-100 flex items-center justify-between gap-2">
                       <button
                         type="button"
-                        onClick={() => {
-                          setSelectedCampaignId(cId);
-                          setActiveStop(null);
-                        }}
-                        className="text-xs font-bold text-[#0f3b7d] hover:text-[#0c2f64] flex items-center gap-1 py-1 px-2 rounded-[5px] hover:bg-blue-50 transition cursor-pointer"
+                        onClick={() => handleSelectCampaign(cId)}
+                        className={`text-xs font-bold flex items-center gap-1.5 py-1 px-2.5 rounded-[5px] transition cursor-pointer ${
+                          isSelected
+                            ? 'bg-[#0f3b7d] text-white'
+                            : 'text-[#0f3b7d] hover:text-[#0c2f64] hover:bg-blue-50'
+                        }`}
                       >
                         <Compass className="w-3.5 h-3.5" />
-                        <span>Xem lộ trình trên bản đồ</span>
+                        <span>{isSelected ? 'Đang xem bản đồ' : 'Xem lộ trình trên bản đồ'}</span>
                       </button>
 
                       {/* Nút mở chuyến đi thực tế để check-in và ghi chú */}
@@ -910,8 +869,9 @@ export function StaffCampaignsPage() {
           )}
         </div>
 
-        {/* CỘT PHẢI: BẢN ĐỒ LỘ TRÌNH VÀ CÁC ĐỊA ĐIỂM (7 CỘT) */}
-        <div className="lg:col-span-7 flex flex-col gap-3">
+        {/* CỘT PHẢI: BẢN ĐỒ LỘ TRÌNH VÀ CÁC ĐỊA ĐIỂM (CHỈ HIỂN THỊ KHI ĐÃ CHỌN CHIẾN DỊCH) */}
+        {currentCampaign && (
+          <div className="lg:col-span-7 flex flex-col gap-3">
           <div className="bg-white rounded-[5px] border border-slate-200/80 shadow-xs overflow-hidden flex flex-col h-[650px] lg:h-[720px] relative">
             {/* Top Bar bên trên Bản đồ */}
             <div className="px-4 py-3 bg-white border-b border-slate-100 flex items-center justify-between gap-3 shrink-0 z-10">
@@ -952,12 +912,39 @@ export function StaffCampaignsPage() {
                   <Layers className="w-3.5 h-3.5" />
                   <span className="hidden sm:inline">Toàn tuyến</span>
                 </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedCampaignId(null);
+                    setActiveStop(null);
+                  }}
+                  className="px-2.5 py-1.5 rounded-[5px] bg-red-50 hover:bg-red-100 text-red-600 text-xs font-semibold flex items-center gap-1 transition cursor-pointer"
+                  title="Ẩn bản đồ"
+                >
+                  <X className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Ẩn bản đồ</span>
+                </button>
               </div>
             </div>
 
             {/* Container Bản đồ Leaflet */}
             <div className="flex-1 w-full h-full relative">
+              {/* Floating Legend hiển thị các chặng độc lập */}
+              {hasIndividualLegGeometries && individualLegs.length > 0 && (
+                <div className="absolute top-2.5 right-2.5 z-[1000] bg-white/95 backdrop-blur-xs px-3 py-1.5 rounded-[5px] border border-slate-200 shadow-md flex items-center gap-3 text-[11px] pointer-events-auto">
+                  {individualLegs.map((leg, lIdx) => (
+                    <div key={lIdx} className="flex items-center gap-1.5">
+                      <span className="w-3 h-3 rounded-full shrink-0 shadow-xs" style={{ backgroundColor: leg.color }}></span>
+                      <span className="font-bold text-slate-800">Chặng {leg.index}:</span>
+                      <span className="text-slate-600 font-medium">{leg.distanceText || '...'}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
               <MapContainer
+                key={currentCampaign.id || currentCampaign._id}
                 bounds={mapBounds}
                 boundsOptions={{ padding: [40, 40] }}
                 scrollWheelZoom={true}
@@ -975,14 +962,63 @@ export function StaffCampaignsPage() {
                   bounds={!activeCenter ? mapBounds : undefined}
                 />
 
-                {/* Đường dẫn lộ trình */}
-                {polylinePositions.length > 1 && (
-                  <Polyline
-                    positions={polylinePositions}
-                    color="#2563eb"
-                    weight={5}
-                    opacity={0.85}
-                  />
+                {/* Đường dẫn lộ trình: Vẽ từng chặng với màu sắc riêng biệt hoặc đường fallback */}
+                {hasIndividualLegGeometries ? (
+                  individualLegs.map((leg, lIdx) => {
+                    if (leg.geometry.length < 2) return null;
+                    const isLegActive = activeStop && (activeStop.order === leg.index || activeStop.id === leg.destId);
+                    const displayGeom = getOffsetGeometry(leg.geometry, lIdx);
+                    return (
+                      <Polyline
+                        key={`leg-${lIdx}`}
+                        positions={displayGeom}
+                        color={leg.color}
+                        weight={isLegActive ? 7 : 5}
+                        opacity={isLegActive ? 1 : 0.88}
+                        eventHandlers={{
+                          click: () => {
+                            if (currentCampaign?.destinations?.[lIdx]) {
+                              const dest = currentCampaign.destinations[lIdx];
+                              setActiveStop({
+                                ...dest,
+                                isStart: false,
+                                label: String(lIdx + 1),
+                                order: lIdx + 1,
+                              });
+                            }
+                          }
+                        }}
+                      >
+                        <Popup>
+                          <div className="p-1 min-w-[190px] text-xs">
+                            <span 
+                              className="inline-block px-1.5 py-0.5 rounded font-bold text-[10px] text-white uppercase mb-1"
+                              style={{ backgroundColor: leg.color }}
+                            >
+                              Chặng {leg.index}
+                            </span>
+                            <h4 className="font-bold text-slate-800 text-xs">
+                              {leg.fromName} ➔ {leg.toName}
+                            </h4>
+                            <div className="flex items-center gap-2 text-slate-600 text-[11px] mt-1">
+                              <span>Khoảng cách: <strong>{leg.distanceText || 'N/A'}</strong></span>
+                              <span>•</span>
+                              <span>Thời gian: <strong>{leg.durationText || 'N/A'}</strong></span>
+                            </div>
+                          </div>
+                        </Popup>
+                      </Polyline>
+                    );
+                  })
+                ) : (
+                  polylinePositions.length > 1 && (
+                    <Polyline
+                      positions={polylinePositions}
+                      color="#2563eb"
+                      weight={5}
+                      opacity={0.85}
+                    />
+                  )
                 )}
 
                 {/* Điểm GPS người dùng nếu có */}
@@ -1185,6 +1221,7 @@ export function StaffCampaignsPage() {
             </div>
           </div>
         </div>
+        )}
       </div>
     </div>
   );

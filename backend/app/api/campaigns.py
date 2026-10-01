@@ -66,8 +66,23 @@ async def preview_campaign_route_direct(
         routing_service.plan_dynamic_next_hop_route(st_pt, destinations)
     )
 
+    # Trích xuất route_legs từ ordered_dests
+    route_legs = []
+    for idx, d in enumerate(ordered_dests):
+        prev_name = st_pt.get("name", "Điểm xuất phát") if idx == 0 else ordered_dests[idx - 1].get("name", f"Điểm dừng {idx}")
+        route_legs.append({
+            "leg_index": idx,
+            "from_name": prev_name,
+            "to_name": d.get("name", f"Điểm dừng {idx + 1}"),
+            "distance_meters": d.get("distance_meters"),
+            "duration_seconds": d.get("duration_seconds"),
+            "distance_text": d.get("distance_text"),
+            "duration_text": d.get("duration_text"),
+            "geometry": d.get("leg_geometry", [])
+        })
+
     return {
-        "routing_algorithm": "Dynamic Next-Hop Routing",
+        "routing_algorithm": "Dynamic Next-Hop Routing (OSRM Table Matrix TSP)",
         "start_point": st_pt,
         "total_destinations": len(ordered_dests),
         "estimated_distance_km": round(total_dist_meters / 1000, 2),
@@ -75,6 +90,7 @@ async def preview_campaign_route_direct(
         "estimated_duration_text": duration_text,
         "optimized_order": [d["name"] for d in ordered_dests],
         "destinations": ordered_dests,
+        "route_legs": route_legs,
         "polyline": encoded_polyline,
         "route_geometry": route_geometry
     }
@@ -87,29 +103,27 @@ def format_campaign_response(c: dict, route_plan: dict = None, trip: dict = None
     destinations = doc.get("destinations", [])
     doc["total_destinations"] = len(destinations)
 
-    # Nếu có chuyến đi trong admission_trips, tự động populate mã chuyến và trạng thái
+    # Nếu có chuyến đi trong admission_trips, tự động populate mã chuyến, trạng thái và đoàn công tác đã phân bổ
     if trip:
         if trip.get("id"):
             doc["deployed_trip_id"] = trip["id"]
         if trip.get("status") == "assigned" and doc.get("status") != "deployed":
             doc["status"] = "assigned"
-
-    # Đảm bảo destinations và start_point của chiến dịch luôn sạch, không dính assigned_staff
-    if "destinations" in doc and isinstance(doc["destinations"], list):
-        clean_dests = []
-        for d in doc["destinations"]:
-            if isinstance(d, dict):
-                d_c = dict(d)
-                d_c.pop("assigned_staff", None)
-                clean_dests.append(d_c)
-            else:
-                clean_dests.append(d)
-        doc["destinations"] = clean_dests
-
-    if "start_point" in doc and isinstance(doc["start_point"], dict):
-        sp_c = dict(doc["start_point"])
-        sp_c.pop("assigned_staff", None)
-        doc["start_point"] = sp_c
+        if trip.get("team"):
+            doc["team"] = trip.get("team")
+        if trip.get("destinations"):
+            doc["destinations"] = trip.get("destinations")
+            doc["total_destinations"] = len(trip.get("destinations"))
+        if trip.get("start_point"):
+            doc["start_point"] = trip.get("start_point")
+        if trip.get("route_geometry"):
+            doc["route_geometry"] = trip.get("route_geometry")
+        if trip.get("polyline"):
+            doc["polyline"] = trip.get("polyline")
+        if trip.get("start_date") and not doc.get("start_date"):
+            doc["start_date"] = str(trip.get("start_date"))
+        if trip.get("end_date") and not doc.get("end_date"):
+            doc["end_date"] = str(trip.get("end_date"))
 
     # Nếu có route_plan, tự động merge các thông tin định tuyến đã tính toán
     if route_plan:
@@ -133,6 +147,24 @@ def format_campaign_response(c: dict, route_plan: dict = None, trip: dict = None
         if route_plan.get("destinations") and len(route_plan["destinations"]) > 0:
             doc["destinations"] = route_plan["destinations"]
             doc["total_destinations"] = len(route_plan["destinations"])
+
+    # Tự động trích xuất route_legs
+    dests = doc.get("destinations", [])
+    st_pt = doc.get("start_point") or {}
+    route_legs = []
+    for idx, d in enumerate(dests):
+        prev_name = st_pt.get("name", "Điểm xuất phát") if idx == 0 else dests[idx - 1].get("name", f"Điểm dừng {idx}")
+        route_legs.append({
+            "leg_index": idx,
+            "from_name": prev_name,
+            "to_name": d.get("name", f"Điểm dừng {idx + 1}"),
+            "distance_meters": d.get("distance_meters"),
+            "duration_seconds": d.get("duration_seconds"),
+            "distance_text": d.get("distance_text"),
+            "duration_text": d.get("duration_text"),
+            "geometry": d.get("leg_geometry", [])
+        })
+    doc["route_legs"] = route_legs
 
     return CampaignResponse.model_validate(doc)
 
@@ -244,6 +276,24 @@ async def create_campaign(
         "created_at": now,
         "updated_at": now
     }
+
+    # Tự động tính toán lộ trình tối ưu nếu có điểm xuất phát và các điểm đến
+    if camp_dict.get("destinations") and camp_dict.get("start_point"):
+        st = camp_dict["start_point"]
+        if st.get("lat") is not None and st.get("lng") is not None:
+            try:
+                ordered_dests, total_dist_meters, total_dur_seconds, route_geometry, encoded_polyline, duration_text = (
+                    routing_service.plan_dynamic_next_hop_route(st, camp_dict["destinations"])
+                )
+                camp_doc["destinations"] = ordered_dests
+                camp_doc["estimated_distance_km"] = round(total_dist_meters / 1000, 2)
+                camp_doc["estimated_duration_minutes"] = int(total_dur_seconds / 60)
+                camp_doc["estimated_duration_text"] = duration_text
+                camp_doc["route_geometry"] = route_geometry
+                camp_doc["polyline"] = encoded_polyline
+            except Exception as e:
+                logger.warning(f"Error calculating initial route for campaign: {e}")
+
     await db.campaigns.insert_one(camp_doc)
     return format_campaign_response(camp_doc)
 
@@ -414,38 +464,28 @@ async def allocate_campaign(
     if payload.trip_id and not existing_trip:
         existing_trip = await db.admission_trips.find_one({"id": payload.trip_id, "is_deleted": {"$ne": True}})
 
-    destinations = camp.get("destinations", [])
-    start_point = camp.get("start_point")
+    destinations = payload.destinations if payload.destinations is not None else camp.get("destinations", [])
+    start_point = payload.start_point if payload.start_point is not None else camp.get("start_point")
     origin_lat = start_point.get("lat") if start_point else (destinations[0]["lat"] if destinations else None)
     origin_lng = start_point.get("lng") if start_point else (destinations[0]["lng"] if destinations else None)
-    
-    # Tính toán lại route geometry nếu chưa có
+
     route_geom = camp.get("route_geometry")
     poly = camp.get("polyline")
     dist_km = camp.get("estimated_distance_km")
     dur_min = camp.get("estimated_duration_minutes")
 
-    if not route_geom or not poly:
-        rp = await db.route_plans.find_one({"campaign_id": campaign_id, "is_deleted": {"$ne": True}}, sort=[("created_at", -1)])
-        if rp:
-            route_geom = rp.get("route_geometry")
-            poly = rp.get("polyline")
-            if dist_km is None:
-                dist_km = rp.get("total_distance_km")
-            if dur_min is None:
-                dur_min = rp.get("total_duration_minutes")
-    
-    if (not route_geom or not poly) and destinations and origin_lat is not None:
-        st_pt = {"lat": origin_lat, "lng": origin_lng, "name": start_point.get("name") if start_point else "Điểm xuất phát"}
-        ordered_dests, total_dist_meters, total_dur_seconds, route_geom, poly, duration_text = (
-            routing_service.plan_dynamic_next_hop_route(st_pt, destinations)
-        )
-        dist_km = round(total_dist_meters / 1000, 2)
-        dur_min = int(total_dur_seconds / 60)
-    if payload.destinations is not None:
-        destinations = payload.destinations
-    if payload.start_point is not None:
-        start_point = payload.start_point
+    # Luôn tối ưu lại thứ tự và tính tọa độ từng chặng khi phân bổ
+    if destinations and origin_lat is not None and origin_lng is not None:
+        try:
+            st_pt = {"lat": origin_lat, "lng": origin_lng, "name": start_point.get("name") if start_point else "Điểm xuất phát"}
+            ordered_dests, total_dist_meters, total_dur_seconds, route_geom, poly, duration_text = (
+                routing_service.plan_dynamic_next_hop_route(st_pt, destinations)
+            )
+            destinations = ordered_dests
+            dist_km = round(total_dist_meters / 1000, 2)
+            dur_min = int(total_dur_seconds / 60)
+        except Exception as e:
+            logger.warning(f"Error optimizing route in allocate: {e}")
 
     team_data = payload.team.model_dump() if payload.team else {}
     start_date = payload.start_date
@@ -512,18 +552,23 @@ async def allocate_campaign(
     if dur_min is not None:
         camp_update["estimated_duration_minutes"] = dur_min
 
-    # Đảm bảo destinations trong campaigns không chứa assigned_staff
+    # Đảm bảo destinations trong campaigns không chứa assigned_staff nhưng giữ đúng thứ tự tối ưu
     clean_campaign_dests = []
-    for d in camp.get("destinations", []):
+    for d in destinations:
         d_copy = dict(d)
         d_copy.pop("assigned_staff", None)
         clean_campaign_dests.append(d_copy)
     camp_update["destinations"] = clean_campaign_dests
 
-    if camp.get("start_point"):
-        clean_sp = dict(camp["start_point"])
+    if start_point:
+        clean_sp = dict(start_point)
         clean_sp.pop("assigned_staff", None)
         camp_update["start_point"] = clean_sp
+
+    if route_geom:
+        camp_update["route_geometry"] = route_geom
+    if poly:
+        camp_update["polyline"] = poly
 
     await db.campaigns.update_one(
         {"id": campaign_id},
