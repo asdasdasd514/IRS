@@ -21,6 +21,12 @@ from app.api.router import api_router
 async def lifespan(app: FastAPI):
     """Application lifespan handler"""
     await connect_to_mongo()
+    try:
+        from app.services.school_counter_service import sync_all_school_counters
+        await sync_all_school_counters()
+    except Exception as e:
+        import logging
+        logging.warning(f"Could not sync school counters on startup: {e}")
     yield
     await close_mongo_connection()
 

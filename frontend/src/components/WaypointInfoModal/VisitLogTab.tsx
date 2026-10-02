@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import type { VisitLog, VisitLogFormData } from '../../types';
 import { visitLogApi, uploadApi } from '../../services/api';
-import { Trash2, Plus, Upload, X, Eye, Download } from 'lucide-react';
+import { Trash2, Plus, Upload, X, Eye, Download, Clock, Navigation, UserCheck, Users } from 'lucide-react';
 import heic2any from 'heic2any';
 
 interface VisitLogTabProps {
@@ -12,10 +12,17 @@ interface VisitLogTabProps {
   onUpdate: () => void;
 }
 
+const getLocalIsoString = () => {
+  const d = new Date();
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+};
+
 export const VisitLogTab: React.FC<VisitLogTabProps> = ({ waypointId, logs, isLoading, onUpdate }) => {
   const [isAdding, setIsAdding] = useState(false);
   const [formData, setFormData] = useState<VisitLogFormData>({
     visit_content: '',
+    visit_date: getLocalIsoString(),
     image_urls: '',
   });
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
@@ -47,7 +54,7 @@ export const VisitLogTab: React.FC<VisitLogTabProps> = ({ waypointId, logs, isLo
     onSuccess: () => {
       onUpdate();
       setIsAdding(false);
-      setFormData({ visit_content: '', image_urls: '' });
+      setFormData({ visit_content: '', visit_date: getLocalIsoString(), image_urls: '' });
       setSelectedFiles([]);
       setPreviewUrls([]);
     },
@@ -130,6 +137,7 @@ export const VisitLogTab: React.FC<VisitLogTabProps> = ({ waypointId, logs, isLo
       // Tạo visit log trước (không có ảnh)
       const newLog = await createMutation.mutateAsync({ 
         visit_content: formData.visit_content,
+        visit_date: formData.visit_date ? new Date(formData.visit_date).toISOString() : undefined,
         image_urls: '' 
       });
       
@@ -185,16 +193,29 @@ export const VisitLogTab: React.FC<VisitLogTabProps> = ({ waypointId, logs, isLo
       )}
 
       {isAdding && (
-        <form onSubmit={handleSubmit} className="bg-gray-50 p-4 rounded-lg space-y-3">
+        <form onSubmit={handleSubmit} className="bg-gray-50 p-4 rounded-xl border border-gray-200 space-y-3">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Nội dung *
+            <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1.5">
+              <Clock className="w-4 h-4 text-emerald-600" />
+              Thời gian đã tới
+            </label>
+            <input
+              type="datetime-local"
+              value={formData.visit_date || ''}
+              onChange={(e) => setFormData({ ...formData, visit_date: e.target.value })}
+              className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 text-sm bg-white"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Nội dung ghé thăm *
             </label>
             <textarea
               value={formData.visit_content}
               onChange={(e) => setFormData({ ...formData, visit_content: e.target.value })}
-              className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500"
-              rows={6}
+              className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 text-sm"
+              rows={5}
               placeholder="Mô tả chi tiết...&#10;- Đã gặp ai&#10;- Nội dung trao đổi&#10;- Kết quả đạt được"
               required
             />
@@ -245,7 +266,7 @@ export const VisitLogTab: React.FC<VisitLogTabProps> = ({ waypointId, logs, isLo
               type="button"
               onClick={() => {
                 setIsAdding(false);
-                setFormData({ visit_content: '', image_urls: '' });
+                setFormData({ visit_content: '', visit_date: getLocalIsoString(), image_urls: '' });
                 setSelectedFiles([]);
                 setPreviewUrls([]);
               }}
@@ -271,26 +292,63 @@ export const VisitLogTab: React.FC<VisitLogTabProps> = ({ waypointId, logs, isLo
       )}
 
       {logs.map((log) => (
-        <div key={log.id} className="bg-white border rounded-lg p-4 space-y-3">
-          <div className="flex items-start justify-between">
-            <div className="flex-1">
-              <p className="text-sm text-gray-500">
-                {new Date(log.visit_date).toLocaleString('vi-VN')}
-              </p>
+        <div key={log.id} className="bg-white border border-gray-200 rounded-xl p-4 space-y-3 shadow-2xs hover:border-gray-300 transition-colors">
+          <div className="flex items-start justify-between gap-2">
+            <div className="flex-1 space-y-1.5">
+              {/* Giờ tới & Chuyến đi */}
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-semibold">
+                  <Clock className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Đã tới lúc: <strong>{new Date(log.visit_date || log.created_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}</strong>, {new Date(log.visit_date || log.created_at).toLocaleDateString('vi-VN')}</span>
+                </span>
+
+                {(log.trip_code || log.trip_name) && (
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-blue-50 text-blue-800 border border-blue-200 text-xs font-semibold">
+                    <Navigation className="w-3.5 h-3.5 text-blue-600" />
+                    <span>Chuyến: <strong>{log.trip_code || log.trip_name}</strong></span>
+                  </span>
+                )}
+              </div>
+
+              {/* Trưởng đoàn & Thành viên đoàn (Tuyệt đối KHÔNG có tài xế) */}
+              {(log.leader_name || log.members_names) && (
+                <div className="flex items-center gap-2 flex-wrap text-xs text-gray-600 pt-0.5">
+                  {log.leader_name && (
+                    <span className="inline-flex items-center gap-1 bg-slate-50 px-2 py-0.5 rounded border border-slate-200">
+                      <UserCheck className="w-3.5 h-3.5 text-indigo-600" />
+                      <span>Trưởng đoàn: <strong className="text-gray-900">{log.leader_name}</strong></span>
+                    </span>
+                  )}
+                  {log.members_names && (
+                    <span className="inline-flex items-center gap-1 bg-slate-50 px-2 py-0.5 rounded border border-slate-200">
+                      <Users className="w-3.5 h-3.5 text-purple-600" />
+                      <span>Thành viên: <strong className="text-gray-900">{log.members_names}</strong></span>
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
-            <button
-              onClick={() => {
-                if (window.confirm('Xóa lịch sử này?')) {
-                  deleteMutation.mutate(log.id);
-                }
-              }}
-              className="text-red-500 hover:text-red-700 p-1"
-            >
-              <Trash2 className="w-4 h-4" />
-            </button>
+
+            {log.id.startsWith('auto-visit-') ? (
+              <span className="text-[10px] text-emerald-700 bg-emerald-50 px-2 py-1 rounded-md font-medium border border-emerald-200 flex-shrink-0">
+                ✓ Check-in thực tế
+              </span>
+            ) : (
+              <button
+                onClick={() => {
+                  if (window.confirm('Xóa lịch sử này?')) {
+                    deleteMutation.mutate(log.id);
+                  }
+                }}
+                className="text-gray-400 hover:text-red-600 p-1.5 rounded-lg hover:bg-red-50 transition-colors flex-shrink-0"
+                title="Xóa lịch sử"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            )}
           </div>
 
-          <p className="whitespace-pre-wrap text-gray-700">{log.visit_content}</p>
+          <p className="whitespace-pre-wrap text-gray-700 text-sm leading-relaxed">{log.visit_content}</p>
 
           {/* Hiển thị ảnh từ database */}
           {log.images && log.images.length > 0 && (

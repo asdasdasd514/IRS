@@ -175,6 +175,9 @@ class SchoolBase(BaseModel):
     principal_phone: Optional[str] = None
     school_board: Optional[SchoolBoard] = None
     notes: Optional[str] = None
+    total_visits: int = 0  # Tổng số lần đã ghé qua từ trước tới nay (Counter Cache)
+    total_tickets: int = 0  # Tổng số phiếu tuyển sinh đã thu thập được từ trước tới nay
+    last_visited_at: Optional[datetime] = None  # Thời điểm ghé gần nhất
 
 
 class SchoolCreate(SchoolBase):
@@ -200,6 +203,9 @@ class SchoolUpdate(BaseModel):
     principal_phone: Optional[str] = None
     school_board: Optional[SchoolBoard] = None
     notes: Optional[str] = None
+    total_visits: Optional[int] = None
+    total_tickets: Optional[int] = None
+    last_visited_at: Optional[datetime] = None
 
 
 class SchoolResponse(SchoolBase):

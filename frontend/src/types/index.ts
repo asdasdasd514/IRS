@@ -106,6 +106,9 @@ export interface School {
   };
   preferred_visit_hours?: string;
   notes?: string;
+  total_visits?: number;
+  total_tickets?: number;
+  last_visited_at?: string;
   created_at?: string;
   updated_at?: string;
 }
@@ -157,6 +160,9 @@ export interface WaypointDetail {
   our_contact_role?: string;
   contact_process?: string;
   total_contact_attempts: number;
+  total_visits?: number;
+  total_tickets?: number;
+  last_visited_at?: string;
   notes?: string;
   created_at: string;
   updated_at: string;
@@ -198,10 +204,16 @@ export interface VisitLog {
   images: WaypointImage[];  // New: images from database
   visit_date: string;
   created_at: string;
+  trip_id?: string;
+  trip_code?: string;
+  trip_name?: string;
+  leader_name?: string;
+  members_names?: string;
 }
 
 export interface VisitLogFormData {
   visit_content: string;
+  visit_date?: string;
   image_urls?: string;  // DEPRECATED
 }
 

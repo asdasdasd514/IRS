@@ -32,6 +32,9 @@ class WaypointDetailBase(BaseModel):
     our_contact_role: Optional[str] = None
     contact_process: Optional[str] = None
     total_contact_attempts: int = 0
+    total_visits: int = 0
+    total_tickets: int = 0
+    last_visited_at: Optional[datetime] = None
     notes: Optional[str] = None
 
 
@@ -54,6 +57,9 @@ class WaypointDetailUpdate(BaseModel):
     our_contact_role: Optional[str] = None
     contact_process: Optional[str] = None
     total_contact_attempts: Optional[int] = None
+    total_visits: Optional[int] = None
+    total_tickets: Optional[int] = None
+    last_visited_at: Optional[datetime] = None
     notes: Optional[str] = None
 
 
@@ -71,6 +77,7 @@ class WaypointDetailResponse(WaypointDetailBase):
 # ==================== PHẦN 2: Lịch sử ghé thăm ====================
 class VisitLogBase(BaseModel):
     visit_content: str
+    visit_date: Optional[datetime] = None
     image_urls: Optional[str] = None
 
 
@@ -89,6 +96,11 @@ class VisitLogResponse(VisitLogBase):
     visit_date: Optional[datetime] = None
     created_at: Optional[datetime] = None
     images: List[Any] = []
+    trip_id: Optional[str] = None
+    trip_code: Optional[str] = None
+    trip_name: Optional[str] = None
+    leader_name: Optional[str] = None
+    members_names: Optional[str] = None
     
     class Config:
         from_attributes = True

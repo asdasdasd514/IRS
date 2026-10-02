@@ -143,6 +143,30 @@ Vui lòng tạo một báo cáo chi tiết và chuyên nghiệp cho chuyến đi
     else:
         prompt += "*Đã hoàn thành tất cả các trường.*\n"
 
+    # Thông tin các điểm dừng chân, quán ăn đoàn đã ghé
+    rest_stops = [w for w in waypoints if w.get("type") in [WaypointType.REST_STOP.value, "REST_STOP"]]
+    if rest_stops:
+        rest_stops_visited = [w for w in rest_stops if w.get("is_visited")]
+        rest_stops_unvisited = [w for w in rest_stops if not w.get("is_visited")]
+        prompt += f"\n## Các Điểm Dừng Chân / Quán Ăn Dọc Tuyến Đường ({len(rest_stops)} điểm)\n\n"
+        if rest_stops_visited:
+            prompt += f"### Các điểm dừng chân đã ghé qua ({len(rest_stops_visited)} điểm):\n"
+            for idx, stop in enumerate(rest_stops_visited, 1):
+                prompt += f"{idx}. **{stop.get('name')}**\n"
+                if stop.get("address"):
+                    prompt += f"   - Địa chỉ: {stop.get('address')}\n"
+                if stop.get("visited_at"):
+                    prompt += f"   - Thời gian ghé: {to_vietnam_time(stop.get('visited_at'))}\n"
+                if stop.get("notes"):
+                    prompt += f"   - Ghi chú: {stop.get('notes')}\n"
+        if rest_stops_unvisited:
+            prompt += f"\n### Các điểm dừng chân dự kiến chưa ghé ({len(rest_stops_unvisited)} điểm):\n"
+            for idx, stop in enumerate(rest_stops_unvisited, 1):
+                prompt += f"{idx}. **{stop.get('name')}**"
+                if stop.get("address"):
+                    prompt += f" - {stop.get('address')}"
+                prompt += "\n"
+
     return prompt
 
 
@@ -289,6 +313,13 @@ async def process_report_job_background(job_id: str, trip_id: str):
         created_at = job.get("created_at")
 
         report = await generate_trip_report(trip_id, created_at=created_at)
+
+        # Tự động đối soát và cập nhật Counter Cache cho trường học ngay sau khi hoàn tất báo cáo chuyến đi
+        try:
+            from app.services.school_counter_service import sync_all_school_counters
+            await sync_all_school_counters()
+        except Exception as se:
+            logger.warning(f"Could not re-sync counters after report generation: {se}")
 
         if job_id in _memory_job_status:
             _memory_job_status[job_id]["status"] = "completed"

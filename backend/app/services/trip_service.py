@@ -16,6 +16,8 @@ from app.schemas import (
     CheckInRequest, CheckInResponse, WaypointType, TripStatus
 )
 from app.services.routing_service import routing_service
+from app.core.cache import api_response_cache
+from app.services.school_counter_service import increment_school_visit, decrement_school_visit
 
 
 def calculate_distance(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
@@ -58,6 +60,14 @@ async def sync_waypoint_to_school(db, school_id: str, updated_fields: dict):
         school_set["description"] = updated_fields["description"]
     if "admissions_info" in updated_fields and updated_fields["admissions_info"]:
         school_set["admissions_info"] = updated_fields["admissions_info"]
+    if "our_contact_person" in updated_fields and updated_fields["our_contact_person"]:
+        school_set["our_contact_person"] = updated_fields["our_contact_person"]
+    if "our_contact_role" in updated_fields and updated_fields["our_contact_role"]:
+        school_set["our_contact_role"] = updated_fields["our_contact_role"]
+    if "contact_process" in updated_fields and updated_fields["contact_process"]:
+        school_set["contact_process"] = updated_fields["contact_process"]
+    if "total_contact_attempts" in updated_fields and updated_fields["total_contact_attempts"] is not None:
+        school_set["total_contact_attempts"] = updated_fields["total_contact_attempts"]
 
     school_set.update(board_updates)
     if school_set:
@@ -288,6 +298,38 @@ class TripService:
 
         cursor = db.campaign_waypoints.find({"trip_id": trip_id, "is_deleted": {"$ne": True}})
         existing_wps = await cursor.to_list(length=1000)
+
+        # Fallback khởi tạo tự động từ destinations nếu campaign_waypoints chưa có dữ liệu
+        if not existing_wps and trip.get("destinations"):
+            destinations = trip.get("destinations", [])
+            init_docs = []
+            now_init = datetime.now(timezone.utc)
+            for i, dest in enumerate(destinations):
+                cw_id_init = str(dest.get("id") or uuid.uuid4())
+                init_docs.append({
+                    "id": cw_id_init,
+                    "trip_id": trip_id,
+                    "campaign_id": trip.get("campaign_id") or trip_id,
+                    "school_id": dest.get("school_id") or dest.get("id"),
+                    "name": dest.get("name") or f"Điểm dừng {i + 1}",
+                    "lat": float(dest.get("lat", 0.0)),
+                    "lng": float(dest.get("lng", 0.0)),
+                    "address": dest.get("address") or "",
+                    "type": "SCHOOL",
+                    "visit_order": int(dest.get("order") or (i + 1)),
+                    "is_visited": bool(dest.get("is_visited", False)),
+                    "visited_at": dest.get("visited_at"),
+                    "preferred_visit_time": dest.get("preferred_visit_time"),
+                    "notes": dest.get("notes") or "",
+                    "is_deleted": False,
+                    "created_at": now_init,
+                    "updated_at": now_init
+                })
+            if init_docs:
+                await db.campaign_waypoints.insert_many(init_docs)
+                cursor = db.campaign_waypoints.find({"trip_id": trip_id, "is_deleted": {"$ne": True}})
+                existing_wps = await cursor.to_list(length=1000)
+
         max_order = max([w.get("visit_order", 0) for w in existing_wps], default=0)
 
         cw_id = str(uuid.uuid4())
@@ -296,12 +338,27 @@ class TripService:
         if "type" in wp_data_dict and hasattr(wp_data_dict["type"], "value"):
             wp_data_dict["type"] = wp_data_dict["type"].value
 
+        # Nếu là điểm quán ăn / dừng chân (REST_STOP) thêm vào giữa chuyến:
+        # Xếp vào ngay trước điểm chưa đi gần nhất để xe ghé vào ngay lập tức
+        is_rest_stop = str(wp_data_dict.get("type", "")).upper() == "REST_STOP"
+        unvisited_wps = [w for w in existing_wps if not w.get("is_visited")]
+        if is_rest_stop and unvisited_wps:
+            min_unvisited_order = min([w.get("visit_order", 1) for w in unvisited_wps])
+            # Tăng visit_order của các điểm chưa đi phía sau lên 1 bậc
+            await db.campaign_waypoints.update_many(
+                {"trip_id": trip_id, "visit_order": {"$gte": min_unvisited_order}, "is_visited": False},
+                {"$inc": {"visit_order": 1}}
+            )
+            target_order = min_unvisited_order
+        else:
+            target_order = max_order + 1
+
         cw_doc = {
             **wp_data_dict,
             "id": cw_id,
             "trip_id": trip_id,
             "campaign_id": trip.get("campaign_id") or trip_id,
-            "visit_order": max_order + 1,
+            "visit_order": target_order,
             "is_visited": False,
             "visited_at": None,
             "visit_logs": [],
@@ -312,6 +369,26 @@ class TripService:
         }
 
         await db.campaign_waypoints.insert_one(cw_doc)
+
+        # Cập nhật thêm vào admission_trips.destinations nếu có danh sách này
+        dest_item = {
+            "id": cw_id,
+            "name": cw_doc["name"],
+            "lat": cw_doc["lat"],
+            "lng": cw_doc["lng"],
+            "address": cw_doc.get("address", ""),
+            "type": cw_doc.get("type", "REST_STOP"),
+            "order": target_order,
+            "is_visited": False
+        }
+        await db.admission_trips.update_one(
+            {"id": trip_id},
+            {"$push": {"destinations": dest_item}, "$set": {"updated_at": now}}
+        )
+
+        # Xóa cache next-hop của trip để tính toán đề xuất điểm dừng chân màu ĐỎ ngay lập tức
+        api_response_cache.clear_prefix(f"nexthop:{trip_id}")
+
         cw_doc.pop("_id", None)
         return cw_doc
 
@@ -360,6 +437,7 @@ class TripService:
                 {"id": waypoint_id, "is_deleted": {"$ne": True}},
                 {"$set": {"is_deleted": True, "deleted_at": now, "updated_at": now}}
             )
+        api_response_cache.clear()
         return res.modified_count > 0
 
     async def check_in(self, trip_id: str, checkin_data: CheckInRequest, max_distance: float = 30.0) -> CheckInResponse:
@@ -387,7 +465,9 @@ class TripService:
                 message="Điểm dừng này đã được check-in trước đó"
             )
 
-        if checkin_data.lat and checkin_data.lng and not checkin_data.remote:
+        # Quán ăn/dừng chân (REST_STOP) không yêu cầu giới hạn bán kính GPS 30m
+        is_rest_stop = str(waypoint.get("type", "")).upper() == "REST_STOP"
+        if checkin_data.lat and checkin_data.lng and not checkin_data.remote and not is_rest_stop:
             dist = calculate_distance(checkin_data.lat, checkin_data.lng, waypoint["lat"], waypoint["lng"])
             if dist > max_distance:
                 waypoint.pop("_id", None)
@@ -416,12 +496,17 @@ class TripService:
             {"$set": {"current_lat": current_lat, "current_lng": current_lng, "updated_at": now}}
         )
 
+        # Giải pháp 1 (Counter Cache): Tăng biến đếm tổng số lần ghé vào bảng schools (O(1))
+        school_id = waypoint.get("school_id")
+        if school_id:
+            await increment_school_visit(db, school_id, visited_time)
+
         updated_wp = await db.campaign_waypoints.find_one({"id": checkin_data.waypoint_id})
         if not updated_wp:
             updated_wp = await db.waypoints.find_one({"id": checkin_data.waypoint_id})
 
-        if updated_wp:
-            updated_wp.pop("_id", None)
+        # Xóa cache next-hop để tính toán điểm đến tiếp theo ngay lập tức
+        api_response_cache.clear_prefix(f"nexthop:{trip_id}")
 
         return CheckInResponse(
             success=True,
@@ -461,6 +546,13 @@ class TripService:
             updated_wp = await db.waypoints.find_one({"id": waypoint_id})
         if updated_wp:
             updated_wp.pop("_id", None)
+
+        # Giải pháp 1 (Counter Cache): Giảm biến đếm tổng số lần ghé vào bảng schools
+        school_id = waypoint.get("school_id")
+        if school_id:
+            await decrement_school_visit(db, school_id)
+
+        api_response_cache.clear_prefix(f"nexthop:{trip_id}")
 
         return CheckInResponse(
             success=True,

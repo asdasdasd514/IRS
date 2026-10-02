@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, RefreshCw, MapPin, Menu, Utensils, Search, X } from 'lucide-react';
 import polyline from '@mapbox/polyline';
 
-import { MapView, BottomSheet, VisitedBottomSheet, WaypointInfoModal } from '../../components';
+import { MapView, BottomSheet, WaypointInfoModal } from '../../components';
 import { tripApi, ticketApi, reportApi } from '../../services/api';
 import { useAppStore } from '../../store/useAppStore';
 import { useWatchPosition } from '../../hooks';
@@ -69,9 +69,10 @@ export const TripMapPage: React.FC = () => {
   // Toast for undo check-in
   const [showUndoToast, setShowUndoToast] = useState(false);
   const [lastCheckedInWaypoint, setLastCheckedInWaypoint] = useState<Waypoint | null>(null);
+  const [addSuccessToast, setAddSuccessToast] = useState<string | null>(null);
 
   // Fetch trip data
-  const { data: trip, isLoading: tripLoading } = useQuery({
+  const { data: trip, isLoading: tripLoading, refetch: refetchTrip } = useQuery({
     queryKey: ['trip', tripId],
     queryFn: () => tripApi.getTrip(tripId!),
     enabled: !!tripId,
@@ -104,7 +105,8 @@ export const TripMapPage: React.FC = () => {
           visit_order: waypoint.visit_order || waypoint.order || (index + 1),
         };
       })
-      .filter((waypoint: any) => Number.isFinite(waypoint.lat) && Number.isFinite(waypoint.lng));
+      .filter((waypoint: any) => Number.isFinite(waypoint.lat) && Number.isFinite(waypoint.lng))
+      .sort((a: any, b: any) => (a.visit_order || 0) - (b.visit_order || 0));
   }, [rawWaypointsSource]);
 
   // Giải mã toàn bộ tuyến đường tổng thể (Trip Route Polyline)
@@ -334,9 +336,71 @@ export const TripMapPage: React.FC = () => {
     [currentLocation, nextHop, route]
   );
 
+  // Hoàn thành ghé quán ăn/điểm dừng chân (không cần kiểm tra bán kính GPS 30m, không thu phiếu)
+  const handleCompleteRestStop = useCallback(async (waypoint: Waypoint) => {
+    if (!tripId) return;
+
+    const confirmed = window.confirm(
+      `Xác nhận bạn đã ghé "${waypoint.name}" xong để hệ thống chuyển tiếp sang điểm trường tiếp theo trong lộ trình?`
+    );
+    if (!confirmed) return;
+
+    try {
+      const res = await tripApi.checkIn(tripId, {
+        waypoint_id: waypoint.id,
+        remote: true,
+        visited_at: new Date().toISOString(),
+      });
+
+      if (res.success) {
+        setAddSuccessToast(`✓ Đã ghé "${waypoint.name}"! Tuyến đường đã tự động chuyển sang chặng tiếp theo.`);
+        setTimeout(() => setAddSuccessToast(null), 5000);
+
+        await queryClient.invalidateQueries({ queryKey: ['trip', tripId] });
+        await refetchTrip();
+        await fetchNextHop();
+      } else {
+        alert(res.message || 'Không thể cập nhật trạng thái điểm dừng.');
+      }
+    } catch (err: any) {
+      console.error('Error completing rest stop:', err);
+      alert(err?.response?.data?.detail || 'Lỗi khi cập nhật điểm dừng.');
+    }
+  }, [tripId, queryClient, refetchTrip, fetchNextHop]);
+
+  // Xóa quán ăn / điểm dừng chân khỏi lộ trình
+  const handleRemoveRestStop = useCallback(async (waypointId: string) => {
+    if (!tripId) return;
+
+    const wp = displayWaypoints.find((w: any) => w.id === waypointId);
+    const name = wp?.name || 'Điểm dừng';
+
+    const confirmed = window.confirm(`Bạn có chắc muốn xóa "${name}" khỏi tuyến đường di chuyển?`);
+    if (!confirmed) return;
+
+    try {
+      await tripApi.deleteWaypoint(tripId, waypointId);
+      setAddSuccessToast(`Đã xóa "${name}" khỏi tuyến đường.`);
+      setTimeout(() => setAddSuccessToast(null), 4000);
+
+      await queryClient.invalidateQueries({ queryKey: ['trip', tripId] });
+      await refetchTrip();
+      await fetchNextHop();
+    } catch (err: any) {
+      console.error('Error removing rest stop:', err);
+      alert(err?.response?.data?.detail || 'Lỗi khi xóa điểm dừng.');
+    }
+  }, [tripId, displayWaypoints, queryClient, refetchTrip, fetchNextHop]);
+
   // Check-in handler với quy tắc bán kính 10m - 30m
   const handleCheckIn = useCallback(
     (waypoint: Waypoint) => {
+      // Nếu là quán ăn / điểm dừng chân, chuyển ngay sang xử lý ghé quán (không bán kính GPS 30m, không phiếu)
+      if (waypoint.type === 'REST_STOP') {
+        handleCompleteRestStop(waypoint);
+        return;
+      }
+
       if (!currentLocation) {
         alert('Không xác định được vị trí GPS của bạn. Vui lòng bật định vị hoặc kiểm tra kết nối.');
         return;
@@ -373,7 +437,7 @@ export const TripMapPage: React.FC = () => {
 
       checkInMutation.mutate({ waypointId: waypoint.id, remote: isRemoteCheckIn });
     },
-    [checkInMutation, currentLocation]
+    [checkInMutation, currentLocation, handleCompleteRestStop]
   );
 
   // Center on current location
@@ -437,8 +501,61 @@ export const TripMapPage: React.FC = () => {
     }
   }, [foodQuery, route, tripRoute, currentLocation, tripId]);
 
+  // Thêm quán/điểm bán đồ ăn vào tuyến đường chính thức của chuyến đi
+  const handleAddPlaceToRoute = useCallback(async (place: {
+    place_id: string;
+    name: string;
+    address?: string;
+    lat: number;
+    lng: number;
+    type?: string;
+    dist_to_route_text?: string;
+  }) => {
+    if (!tripId) return;
+
+    try {
+      // 1. Thêm điểm dừng kiểu REST_STOP vào collection campaign_waypoints
+      await tripApi.addWaypoint(tripId, {
+        name: place.name,
+        lat: place.lat,
+        lng: place.lng,
+        address: place.address || '',
+        google_place_id: place.place_id,
+        type: 'REST_STOP' as any,
+        notes: place.dist_to_route_text
+          ? `${place.dist_to_route_text} (${place.type || 'Quán ăn'})`
+          : `Điểm dừng chân ăn uống (${place.type || 'Quán ăn'})`,
+      });
+
+      // 2. Refetch chuyến đi để nạp lại danh sách waypoints mới
+      await queryClient.invalidateQueries({ queryKey: ['trip', tripId] });
+      await refetchTrip();
+
+      // 3. Tự động tính toán lại lộ trình và đề xuất Next-Hop (chuyển sang màu ĐỎ ngay lập tức)
+      setBottomSheetExpanded(true);
+      setShowVisitedSheet(false);
+      await fetchNextHop();
+
+      // 4. Loại bỏ quán khỏi danh sách tìm kiếm tạm thời để tránh trùng ghim
+      setNearbyPlaces((prev) => prev.filter((p) => p.place_id !== place.place_id));
+
+      // 5. Hiển thị thông báo Toast thành công
+      setAddSuccessToast(`⭐ Đã thêm "${place.name}" vào tuyến đường! Điểm đến đã được cập nhật sang màu ĐỎ để bạn xuất phát đi tới ngay.`);
+      setTimeout(() => {
+        setAddSuccessToast(null);
+      }, 5000);
+    } catch (error) {
+      console.error('Error adding place to route:', error);
+      alert('Lỗi khi thêm điểm dừng vào tuyến đường.');
+    }
+  }, [tripId, queryClient, refetchTrip, fetchNextHop, setBottomSheetExpanded]);
+
   // Handle waypoint marker click
   const handleWaypointClick = useCallback((waypoint: Waypoint) => {
+    // Không mở modal thông tin trường học cho quán ăn / điểm dừng chân
+    if (waypoint.type === 'REST_STOP') {
+      return;
+    }
     setSelectedWaypoint(waypoint);
     setShowWaypointModal(true);
   }, []);
@@ -538,8 +655,12 @@ export const TripMapPage: React.FC = () => {
           route={route || undefined}
           tripRoute={tripRoute}
           onWaypointClick={handleWaypointClick}
+          onNavigate={handleNavigate}
+          onCompleteRestStop={handleCompleteRestStop}
+          onRemoveRestStop={handleRemoveRestStop}
           centerTrigger={centerTrigger}
           nearbyPlaces={nearbyPlaces}
+          onAddPlaceToRoute={handleAddPlaceToRoute}
         />
 
 
@@ -642,19 +763,49 @@ export const TripMapPage: React.FC = () => {
 
             {/* Search Results Summary */}
             {nearbyPlaces.length > 0 && (
-              <div className="mt-2.5 pt-2.5 border-t border-slate-100 flex items-center justify-between text-xs">
-                <span className="text-emerald-700 font-semibold flex items-center gap-1">
-                  ✅ Tìm thấy {nearbyPlaces.length} điểm bán sát đường
-                </span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setNearbyPlaces([]);
-                  }}
-                  className="text-red-500 hover:text-red-600 font-medium hover:underline"
-                >
-                  Xóa ghim
-                </button>
+              <div className="mt-2.5 pt-2.5 border-t border-slate-100 flex flex-col gap-2">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-emerald-700 font-semibold flex items-center gap-1">
+                    ✅ Tìm thấy {nearbyPlaces.length} điểm bán sát đường
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNearbyPlaces([]);
+                    }}
+                    className="text-red-500 hover:text-red-600 font-medium hover:underline text-[11px]"
+                  >
+                    Xóa ghim
+                  </button>
+                </div>
+
+                {/* List of found places with quick "Thêm" button */}
+                <div className="max-h-48 overflow-y-auto flex flex-col gap-1.5 pr-1">
+                  {nearbyPlaces.slice(0, 6).map((place) => (
+                    <div
+                      key={place.place_id}
+                      className="p-2 bg-slate-50 hover:bg-orange-50/50 rounded-xl border border-slate-200/80 flex items-center justify-between gap-2 text-xs transition-colors"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <div className="font-semibold text-slate-800 truncate">{place.name}</div>
+                        <div className="text-[11px] text-slate-500 flex items-center gap-1.5">
+                          {place.dist_to_route_text && (
+                            <span className="text-emerald-700 font-medium">🚗 {place.dist_to_route_text}</span>
+                          )}
+                          {place.rating && <span>⭐ {place.rating}</span>}
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleAddPlaceToRoute(place)}
+                        className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-semibold rounded-lg shadow-sm flex items-center gap-1 shrink-0 transition"
+                        title="Thêm điểm này vào tuyến đường"
+                      >
+                        ➕ Thêm
+                      </button>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
           </div>
@@ -717,59 +868,29 @@ export const TripMapPage: React.FC = () => {
             </button>
           )}
         </div>
-      </div>
 
-      {/* Toggle Button - Fixed above bottom sheet, tách ra khỏi bottom sheet */}
-      <div className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t">
-        <div className="flex gap-2 p-2">
-          <button
-            onClick={() => setShowVisitedSheet(false)}
-            className={`flex-1 py-2 px-4 rounded-lg font-medium transition-colors ${!showVisitedSheet
-              ? 'bg-primary-500 text-white'
-              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              }`}
-          >
-            Chưa đi ({unvisitedSchools.length})
-          </button>
-          <button
-            onClick={() => setShowVisitedSheet(true)}
-            className={`flex-1 py-2 px-4 rounded-lg font-medium transition-colors ${showVisitedSheet
-              ? 'bg-green-500 text-white'
-              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              }`}
-          >
-            Đã đi ({visitedWaypoints.length})
-          </button>
-        </div>
-      </div>
-
-      {/* Bottom Sheet - Fixed at bottom, thêm margin-bottom để không bị che bởi thanh Chưa đi/Đã đi */}
-      <div className="pb-[56px]"> {/* 56px là chiều cao của thanh Chưa đi/Đã đi */}
-        {!showVisitedSheet ? (
-          <BottomSheet
-            isExpanded={bottomSheetExpanded}
-            onToggle={() => setBottomSheetExpanded(!bottomSheetExpanded)}
-            recommended={nextHop}
-            alternatives={alternatives}
-            totalUnvisited={unvisitedSchools.length}
-            totalUnvisitedSchools={unvisitedSchools.length}
-            isLoading={isLoadingNextHop}
-            onNavigate={handleNavigate}
-            onCheckIn={handleCheckIn}
-            onSelectWaypoint={handleWaypointClick}
-            currentLocation={currentLocation}
-          />
-        ) : (
-          <VisitedBottomSheet
-            isExpanded={bottomSheetExpanded}
-            onToggle={() => setBottomSheetExpanded(!bottomSheetExpanded)}
-            visitedWaypoints={visitedWaypoints}
-            isLoading={false}
-            onSelectWaypoint={handleWaypointClick}
-            currentLocation={currentLocation}
-            waypointTickets={waypointTickets}
-          />
-        )}
+        {/* Floating Route Card / Timeline Liên hoàn (Khớp chính xác 100% Hình 2) */}
+        <BottomSheet
+          isExpanded={bottomSheetExpanded}
+          onToggle={() => setBottomSheetExpanded(!bottomSheetExpanded)}
+          recommended={nextHop}
+          alternatives={alternatives}
+          totalUnvisited={unvisitedSchools.length}
+          totalUnvisitedSchools={unvisitedSchools.length}
+          isLoading={isLoadingNextHop}
+          onNavigate={handleNavigate}
+          onCheckIn={handleCheckIn}
+          onSelectWaypoint={handleWaypointClick}
+          onCompleteRestStop={handleCompleteRestStop}
+          onRemoveRestStop={handleRemoveRestStop}
+          currentLocation={currentLocation}
+          allWaypoints={displayWaypoints}
+          visitedWaypoints={visitedWaypoints}
+          waypointTickets={waypointTickets}
+          trip={trip}
+          showVisitedSheet={showVisitedSheet}
+          onToggleVisitedSheet={(show) => setShowVisitedSheet(show)}
+        />
       </div>
 
       {/* Menu Overlay */}
@@ -1017,6 +1138,24 @@ export const TripMapPage: React.FC = () => {
             <button
               onClick={() => setShowUndoToast(false)}
               className="ml-2 text-white hover:text-green-100"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Toast thông báo thêm điểm dừng chân/quán ăn thành công */}
+      {addSuccessToast && (
+        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[9999] max-w-md w-[calc(100%-2rem)] animate-bounce">
+          <div className="bg-red-600 text-white px-4 py-3 rounded-2xl shadow-2xl flex items-center justify-between gap-3 border border-red-400">
+            <div className="flex items-center gap-2 text-xs sm:text-sm font-bold">
+              <span>🍽️</span>
+              <span>{addSuccessToast}</span>
+            </div>
+            <button
+              onClick={() => setAddSuccessToast(null)}
+              className="p-1 hover:bg-red-700 rounded-lg text-white"
             >
               ✕
             </button>

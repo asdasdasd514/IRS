@@ -235,6 +235,35 @@ export const DetailTab: React.FC<DetailTabProps> = ({ waypointId, detail, isLoad
           </div>
         </div>
 
+        {/* Thống kê lịch sử tiếp cận & Tuyển sinh (Counter Cache O(1)) */}
+        <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
+          <h3 className="font-semibold text-gray-800 mb-3 flex items-center gap-2 text-base">
+            <span className="text-xl">📊</span> Thống kê tuyển sinh từ trước tới nay
+          </h3>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 mb-2">
+            <div className="p-3 bg-gradient-to-br from-blue-50 to-blue-100/60 rounded-xl border border-blue-200">
+              <span className="text-[11px] font-bold text-blue-700 block mb-0.5">🏫 Đã ghé qua</span>
+              <div className="text-xl font-black text-blue-900">
+                {detail.total_visits || 0} <span className="text-xs font-semibold text-blue-600">lần</span>
+              </div>
+            </div>
+            <div className="p-3 bg-gradient-to-br from-emerald-50 to-emerald-100/60 rounded-xl border border-emerald-200">
+              <span className="text-[11px] font-bold text-emerald-700 block mb-0.5">🎫 Phiếu thu về</span>
+              <div className="text-xl font-black text-emerald-900">
+                {detail.total_tickets || 0} <span className="text-xs font-semibold text-emerald-600">phiếu</span>
+              </div>
+            </div>
+            <div className="p-3 bg-gradient-to-br from-amber-50 to-amber-100/60 rounded-xl border border-amber-200 col-span-2 sm:col-span-1">
+              <span className="text-[11px] font-bold text-amber-700 block mb-0.5">🕒 Lần ghé gần nhất</span>
+              <div className="text-xs font-bold text-amber-900 mt-1">
+                {detail.last_visited_at
+                  ? `${new Date(detail.last_visited_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}, ${new Date(detail.last_visited_at).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })}`
+                  : 'Chưa có'}
+              </div>
+            </div>
+          </div>
+        </div>
+
         {/* Quá trình liên lạc Card */}
         <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
           <h3 className="font-semibold text-gray-800 mb-3 flex items-center gap-2 text-base">

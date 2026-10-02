@@ -23,23 +23,26 @@ export const WaypointInfoModal: React.FC<WaypointInfoModalProps> = ({
   const [activeTab, setActiveTab] = useState<TabType>('detail');
   const queryClient = useQueryClient();
 
+  // Quán ăn / điểm dừng chân không hiển thị modal này
+  const isRestStop = waypoint?.type === 'REST_STOP';
+
   // Fetch data for all 3 parts
   const { data: detail, isLoading: detailLoading } = useQuery({
     queryKey: ['waypoint-detail', waypoint?.id],
     queryFn: () => waypointDetailApi.get(waypoint!.id),
-    enabled: !!waypoint && isOpen,
+    enabled: !!waypoint && !isRestStop && isOpen,
   });
 
   const { data: visitLogs = [], isLoading: logsLoading } = useQuery({
     queryKey: ['visit-logs', waypoint?.id],
     queryFn: () => visitLogApi.getAll(waypoint!.id),
-    enabled: !!waypoint && isOpen,
+    enabled: !!waypoint && !isRestStop && isOpen,
   });
 
   const { data: tickets = [], isLoading: ticketsLoading } = useQuery({
     queryKey: ['tickets', waypoint?.id],
     queryFn: () => ticketApi.getAll(waypoint!.id),
-    enabled: !!waypoint && isOpen,
+    enabled: !!waypoint && !isRestStop && isOpen,
   });
 
   const handleTabChange = (tab: TabType) => {
@@ -54,7 +57,7 @@ export const WaypointInfoModal: React.FC<WaypointInfoModalProps> = ({
     }
   };
 
-  if (!isOpen || !waypoint) return null;
+  if (!isOpen || !waypoint || isRestStop) return null;
 
   // Chỉ SCHOOL mới có tab Tickets
   const showTicketsTab = waypoint.type === 'SCHOOL';

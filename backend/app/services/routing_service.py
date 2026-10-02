@@ -72,6 +72,17 @@ class RoutingService:
         # Tối ưu hóa thứ tự: Tôn trọng kế hoạch lộ trình đã định (visit_order hoặc preferred_visit_time)
         def get_itinerary_priority(c: NextHopCandidate):
             wp = c.waypoint
+            wp_type = getattr(wp, "type", None)
+            if wp_type is None and isinstance(wp, dict):
+                wp_type = wp.get("type")
+            elif hasattr(wp, "model_dump"):
+                wp_type = wp.model_dump().get("type")
+            if hasattr(wp_type, "value"):
+                wp_type = wp_type.value
+
+            # Điểm dừng chân / Quán ăn (REST_STOP) được ưu tiên hàng đầu để xe rẽ vào ăn uống ngay lập tức (lên đỏ)
+            is_rest_stop = 0 if str(wp_type).upper() == "REST_STOP" else 1
+
             # 1. Giờ hẹn đến trường (preferred_visit_time)
             time_mins = None
             pref_time = getattr(wp, "preferred_visit_time", None) or (wp.model_dump().get("preferred_visit_time") if hasattr(wp, "model_dump") else None)
@@ -90,7 +101,7 @@ class RoutingService:
             has_time = 0 if time_mins is not None else 1
             time_val = time_mins if time_mins is not None else 9999
 
-            return (has_time, time_val, order, c.distance_meters)
+            return (is_rest_stop, has_time, time_val, order, c.distance_meters)
 
         has_planned_schedule = any(
             (getattr(c.waypoint, "visit_order", 0) or 0) > 0 or getattr(c.waypoint, "preferred_visit_time", None)

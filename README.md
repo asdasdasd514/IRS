@@ -33,7 +33,7 @@ Hệ thống **IRS (Intelligent Routing System for Admissions)** là nền tản
 | **`users`** | Tài khoản người dùng, phân quyền (Admin / Staff), mật khẩu băm bcrypt, hỗ trợ xóa mềm. |
 | **`campaigns`** | Kế hoạch chiến dịch tuyển sinh (tên chiến dịch, thời gian bắt đầu/kết thúc, ghi chú, trạng thái). |
 | **`admission_trips`** | Chuyến đi thực tế thuộc chiến dịch (xe phụ trách, thời gian khởi hành, trạng thái). |
-| **`schools`** | Hồ sơ danh bạ trường học gốc: Ban giám hiệu, thông tin tuyển sinh, website, ảnh, ghi chú... |
+| **`schools`** | Hồ sơ danh bạ trường học gốc: Ban giám hiệu, thông tin tuyển sinh, website, ảnh, ghi chú... Tích hợp Counter Cache (`total_visits`, `total_tickets`, `last_visited_at`) đọc tức thì O(1). |
 | **`waypoints`** | Điểm mốc / POI trên bản đồ: Tọa độ GPS (`lat`, `lng`), địa chỉ, loại điểm. Tách biệt hoàn toàn với chuyến đi. |
 | **`campaign_waypoints`** | Các điểm/trường sẽ đi trong chiến dịch và chuyến đi: Lưu thứ tự ghé thăm (`visit_order`), trạng thái check-in, nhật ký và phiếu khảo sát. |
 | **`route_plans`** | Lưu trữ kết quả của thuật toán Dynamic Next-Hop Routing (`start_point`, danh sách điểm đến đã tối ưu, tổng quãng đường, trạng thái draft / applied). |

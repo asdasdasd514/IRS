@@ -60,6 +60,9 @@ interface MapViewProps {
   route?: { lat: number; lng: number }[];
   tripRoute?: { lat: number; lng: number }[];
   onWaypointClick?: (waypoint: Waypoint) => void;
+  onNavigate?: (waypoint: Waypoint) => void;
+  onCompleteRestStop?: (waypoint: Waypoint) => void;
+  onRemoveRestStop?: (waypointId: string) => void;
   nearbyPlaces?: Array<{
     place_id: string;
     name: string;
@@ -71,6 +74,14 @@ interface MapViewProps {
     dist_to_route_m?: number;
     dist_to_route_text?: string;
   }>;
+  onAddPlaceToRoute?: (place: {
+    place_id: string;
+    name: string;
+    address?: string;
+    lat: number;
+    lng: number;
+    type?: string;
+  }) => void;
 }
 
 // Component to auto-fit map bounds ONCE on load to avoid jitter
@@ -125,8 +136,12 @@ export function MapView({
   route,
   tripRoute,
   onWaypointClick,
+  onNavigate,
+  onCompleteRestStop,
+  onRemoveRestStop,
   centerTrigger,
   nearbyPlaces = [],
+  onAddPlaceToRoute,
 }: MapViewProps & { centerTrigger?: number }) {
   const center: [number, number] = currentLocation
     ? [currentLocation.lat, currentLocation.lng]
@@ -167,11 +182,12 @@ export function MapView({
       {/* Schools/Waypoints & Bán kính Check-in 30m */}
       {waypoints.map((waypoint) => {
         const isRecommended = recommended?.waypoint.id === waypoint.id;
+        const isRestStop = waypoint.type === 'REST_STOP';
         
         // Chọn icon dựa trên type
         let baseIcon = icons.school;
         if (waypoint.type === 'HQ') baseIcon = icons.hq;
-        else if (waypoint.type === 'REST_STOP') baseIcon = icons.restStop;
+        else if (isRestStop) baseIcon = icons.restStop;
         
         const markerIcon = waypoint.is_visited
           ? icons.visited
@@ -186,8 +202,8 @@ export function MapView({
 
         return (
           <Fragment key={waypoint.id}>
-            {/* Vòng tròn bán kính check-in 30m */}
-            {!waypoint.is_visited && (
+            {/* Vòng tròn bán kính check-in 30m - Chỉ hiển thị cho trường học, KHÔNG hiển thị cho quán ăn */}
+            {!waypoint.is_visited && !isRestStop && (
               <Circle
                 center={[waypoint.lat, waypoint.lng]}
                 radius={30}
@@ -205,42 +221,101 @@ export function MapView({
               position={[waypoint.lat, waypoint.lng]}
               icon={markerIcon}
               eventHandlers={{
-                click: () => onWaypointClick?.(waypoint),
+                click: () => {
+                  // Quán ăn không mở modal thông tin trường học
+                  if (!isRestStop) {
+                    onWaypointClick?.(waypoint);
+                  }
+                },
               }}
             >
               <Popup>
                 <div className="min-w-[210px]">
-                  <h3 className="font-bold text-base mb-1 text-slate-800">{waypoint.name}</h3>
+                  <h3 className="font-bold text-base mb-1 text-slate-800">
+                    {isRestStop && '🍽️ '}
+                    {waypoint.name}
+                  </h3>
                   {waypoint.address && (
                     <p className="text-xs text-slate-600 mb-2 leading-relaxed">{waypoint.address}</p>
                   )}
-                  {isRecommended && (
-                    <div className="bg-red-50 text-red-700 px-2 py-1 rounded text-xs font-bold mb-1.5 flex items-center gap-1 border border-red-200">
-                      ⭐ Điểm đến ưu tiên tiếp theo
-                    </div>
-                  )}
-                  {waypoint.is_visited ? (
-                    <div className="bg-emerald-50 text-emerald-700 px-2 py-1 rounded text-xs font-bold mb-1.5 flex items-center gap-1 border border-emerald-200">
-                      ✓ Đã check-in hoàn tất
+
+                  {isRestStop ? (
+                    /* Thông tin và nút thao tác riêng biệt cho quán ăn (không có thông tin trường hay check-in) */
+                    <div>
+                      {waypoint.is_visited ? (
+                        <div className="bg-emerald-50 text-emerald-700 px-2 py-1 rounded text-xs font-bold mb-2 flex items-center gap-1 border border-emerald-200">
+                          ✓ Đã ghé quán xong
+                        </div>
+                      ) : (
+                        <div className="bg-orange-50 text-orange-700 px-2 py-1 rounded text-xs font-bold mb-2 flex items-center gap-1 border border-orange-200">
+                          {isRecommended ? '⭐ Quán ăn cần ghé tới ngay' : '🍽️ Điểm dừng ăn uống'}
+                        </div>
+                      )}
+
+                      {!waypoint.is_visited && (
+                        <div className="flex flex-col gap-1.5 mt-2 pt-2 border-t border-slate-100">
+                          {onNavigate && (
+                            <button
+                              type="button"
+                              onClick={() => onNavigate(waypoint)}
+                              className="w-full py-1.5 px-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg flex items-center justify-center gap-1 transition shadow-xs"
+                            >
+                              🚀 Chỉ đường tới quán
+                            </button>
+                          )}
+                          {onCompleteRestStop && (
+                            <button
+                              type="button"
+                              onClick={() => onCompleteRestStop(waypoint)}
+                              className="w-full py-1.5 px-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg flex items-center justify-center gap-1 transition shadow-xs"
+                            >
+                              ✓ Đã ghé quán xong
+                            </button>
+                          )}
+                          {onRemoveRestStop && (
+                            <button
+                              type="button"
+                              onClick={() => onRemoveRestStop(waypoint.id)}
+                              className="w-full py-1 px-2 bg-slate-100 hover:bg-red-50 text-slate-600 hover:text-red-600 text-[11px] font-semibold rounded-lg flex items-center justify-center gap-1 transition"
+                            >
+                              ✕ Xóa khỏi tuyến đường
+                            </button>
+                          )}
+                        </div>
+                      )}
                     </div>
                   ) : (
-                    <div className={`px-2 py-1 rounded text-xs font-semibold mb-1.5 border ${
-                      isInsideCheckInRange
-                        ? 'bg-emerald-100 text-emerald-800 border-emerald-300 animate-pulse'
-                        : 'bg-blue-50 text-blue-700 border-blue-200'
-                    }`}>
-                      📍 Bán kính check-in: 30m {distanceToMe !== null ? `(Hiện tại: ~${Math.round(distanceToMe)}m)` : ''}
+                    /* Thông tin trường học */
+                    <div>
+                      {isRecommended && (
+                        <div className="bg-red-50 text-red-700 px-2 py-1 rounded text-xs font-bold mb-1.5 flex items-center gap-1 border border-red-200">
+                          ⭐ Điểm đến ưu tiên tiếp theo
+                        </div>
+                      )}
+                      {waypoint.is_visited ? (
+                        <div className="bg-emerald-50 text-emerald-700 px-2 py-1 rounded text-xs font-bold mb-1.5 flex items-center gap-1 border border-emerald-200">
+                          ✓ Đã check-in hoàn tất
+                        </div>
+                      ) : (
+                        <div className={`px-2 py-1 rounded text-xs font-semibold mb-1.5 border ${
+                          isInsideCheckInRange
+                            ? 'bg-emerald-100 text-emerald-800 border-emerald-300 animate-pulse'
+                            : 'bg-blue-50 text-blue-700 border-blue-200'
+                        }`}>
+                          📍 Bán kính check-in: 30m {distanceToMe !== null ? `(Hiện tại: ~${Math.round(distanceToMe)}m)` : ''}
+                        </div>
+                      )}
+                      {waypoint.contact_name && (
+                        <p className="text-xs mt-1 text-slate-700">
+                          <strong>Liên hệ:</strong> {waypoint.contact_name}
+                        </p>
+                      )}
+                      {waypoint.contact_phone && (
+                        <p className="text-xs text-slate-700">
+                          <strong>SĐT:</strong> {waypoint.contact_phone}
+                        </p>
+                      )}
                     </div>
-                  )}
-                  {waypoint.contact_name && (
-                    <p className="text-xs mt-1 text-slate-700">
-                      <strong>Liên hệ:</strong> {waypoint.contact_name}
-                    </p>
-                  )}
-                  {waypoint.contact_phone && (
-                    <p className="text-xs text-slate-700">
-                      <strong>SĐT:</strong> {waypoint.contact_phone}
-                    </p>
                   )}
                 </div>
               </Popup>
@@ -312,15 +387,25 @@ export function MapView({
                   🍽️ Điểm bán đồ ăn gần đây
                 </div>
               )}
-              <button
-                onClick={() => {
-                  const url = `https://www.google.com/maps/dir/?api=1&destination=${place.lat},${place.lng}&travelmode=driving`;
-                  window.open(url, '_blank');
-                }}
-                className="mt-1 w-full bg-blue-600 text-white px-3 py-1.5 rounded text-xs font-semibold hover:bg-blue-700 flex items-center justify-center gap-1 transition"
-              >
-                Chỉ đường tới quán
-              </button>
+              <div className="flex flex-col gap-1.5 mt-2">
+                {onAddPlaceToRoute && (
+                  <button
+                    onClick={() => onAddPlaceToRoute(place)}
+                    className="w-full bg-emerald-600 text-white px-3 py-1.5 rounded text-xs font-semibold hover:bg-emerald-700 flex items-center justify-center gap-1 transition shadow-sm"
+                  >
+                    ➕ Thêm vào tuyến đường
+                  </button>
+                )}
+                <button
+                  onClick={() => {
+                    const url = `https://www.google.com/maps/dir/?api=1&destination=${place.lat},${place.lng}&travelmode=driving`;
+                    window.open(url, '_blank');
+                  }}
+                  className="w-full bg-blue-600 text-white px-3 py-1.5 rounded text-xs font-semibold hover:bg-blue-700 flex items-center justify-center gap-1 transition"
+                >
+                  Chỉ đường tới quán
+                </button>
+              </div>
             </div>
           </Popup>
         </Marker>

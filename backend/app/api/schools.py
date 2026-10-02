@@ -295,3 +295,11 @@ async def delete_school_media_image(
 
     await db.schools.update_one({"_id": school["_id"]}, update_ops)
     return {"success": True, "message": "Đã xóa ảnh khỏi kho"}
+
+
+@router.post("/sync-counters")
+async def sync_counters(current_user: dict = Depends(get_current_user)):
+    """Đồng bộ lại toàn bộ biến đếm Counter Cache (total_visits, total_tickets) cho các trường học"""
+    from app.services.school_counter_service import sync_all_school_counters
+    count = await sync_all_school_counters()
+    return {"success": True, "message": f"Đã đồng bộ thành công cho {count} trường học", "synced_count": count}
