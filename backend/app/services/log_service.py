@@ -263,6 +263,9 @@ async def count_system_logs(
 
     if action_type:
         query["action_type"] = action_type
+    else:
+        # Bỏ qua hoàn toàn các log đăng nhập / phiên đăng nhập (AUTH_SESSION)
+        query["action_type"] = {"$nin": ["AUTH_SESSION"]}
 
     if user_id:
         query["actor.user_id"] = user_id
@@ -305,6 +308,9 @@ async def get_system_logs(
 
     if action_type:
         query["action_type"] = action_type
+    else:
+        # Bỏ qua hoàn toàn các log đăng nhập / phiên đăng nhập (AUTH_SESSION)
+        query["action_type"] = {"$nin": ["AUTH_SESSION"]}
 
     if user_id:
         query["actor.user_id"] = user_id

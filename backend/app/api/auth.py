@@ -72,22 +72,6 @@ async def login(
 
     access_token = create_access_token(data={"sub": user["username"]})
 
-    # Ghi nhật ký hệ thống: Đăng nhập thành công
-    try:
-        from app.services.log_service import log_system_activity
-        client_ip = request.client.host if request.client else "unknown"
-        await log_system_activity(
-            action_type="AUTH_SESSION",
-            session_title="Phiên làm việc người dùng",
-            sub_action="LOGIN_SUCCESS",
-            sub_label="Đăng nhập",
-            description=f"Tài khoản '{user.get('full_name') or user.get('username')}' ({user.get('role', 'user')}) đăng nhập vào hệ thống",
-            actor_user=user,
-            details={"ip": client_ip}
-        )
-    except Exception as log_err:
-        logger.warning(f"Error logging login activity: {log_err}")
-
     return {
         "access_token": access_token,
         "token_type": "bearer",
@@ -151,21 +135,6 @@ async def register(register_data: RegisterRequest):
     }
 
     await db.users.insert_one(user_doc)
-
-    try:
-        from app.services.log_service import log_system_activity
-        role_label = "Quản trị viên" if is_admin else "Cán bộ thực địa"
-        await log_system_activity(
-            action_type="USER_SESSION",
-            session_title="Quản lý tài khoản người dùng",
-            sub_action="CREATE_USER",
-            sub_label="Đăng ký tài khoản",
-            description=f"Tài khoản mới '{user_doc['username']}' ({user_doc['full_name']}) vừa đăng ký vào hệ thống với vai trò {role_label}",
-            actor_user=user_doc,
-            details={"user_id": user_id, "username": user_doc["username"], "role": user_doc["role"]}
-        )
-    except Exception as log_err:
-        pass
 
     # Tự động cấp mã Token sau khi đăng ký
     access_token = create_access_token(data={"sub": user_doc["username"]})
