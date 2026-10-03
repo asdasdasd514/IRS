@@ -77,6 +77,8 @@ export const TripMapPage: React.FC = () => {
     queryKey: ['trip', tripId],
     queryFn: () => tripApi.getTrip(tripId!),
     enabled: !!tripId,
+    staleTime: 30000,
+    refetchOnWindowFocus: false,
   });
 
   // Hỗ trợ hiển thị điểm dừng từ cả waypoints lẫn fallback destinations
@@ -219,22 +221,36 @@ export const TripMapPage: React.FC = () => {
     }
   }, [currentLocation, trip, nextHop, fetchNextHop]);
 
-  // Fetch tickets for visited waypoints
+  // Fetch tickets for visited waypoints (ưu tiên dữ liệu embedded trong waypoint để tránh spam API)
   useEffect(() => {
-    const fetchTickets = async () => {
-      if (!trip?.waypoints) return;
+    if (!trip?.waypoints) return;
 
-      const visitedIds = trip.waypoints
-        .filter(w => w.visited_at)
-        .map(w => w.id);
+    const ticketMap: Record<string, number> = {};
+    const missingVisitedIds: string[] = [];
 
-      if (visitedIds.length === 0) return;
+    trip.waypoints.forEach((w: any) => {
+      if (w.tickets_count !== undefined) {
+        ticketMap[w.id] = w.tickets_count;
+      } else if (Array.isArray(w.tickets) && w.tickets.length > 0) {
+        ticketMap[w.id] = w.tickets.reduce(
+          (sum: number, t: any) => sum + (t.tickets_collected || 0),
+          0
+        );
+      } else if (w.visited_at) {
+        missingVisitedIds.push(w.id);
+      }
+    });
 
+    setWaypointTickets((prev) => ({ ...prev, ...ticketMap }));
+
+    if (missingVisitedIds.length === 0) return;
+
+    // Fallback qua API nếu có điểm chưa có sẵn tickets
+    const fetchMissingTickets = async () => {
       try {
-        const ticketPromises = visitedIds.map(async (waypointId) => {
+        const ticketPromises = missingVisitedIds.map(async (waypointId) => {
           try {
             const tickets = await ticketApi.getAll(waypointId);
-            // Tính tổng số phiếu thật sự thu được (tickets_collected), không phải số lần
             const totalTickets = tickets.reduce((sum, ticket) => sum + ticket.tickets_collected, 0);
             return { waypointId, count: totalTickets };
           } catch {
@@ -243,18 +259,19 @@ export const TripMapPage: React.FC = () => {
         });
 
         const results = await Promise.all(ticketPromises);
-        const ticketMap: Record<string, number> = {};
-        results.forEach(({ waypointId, count }) => {
-          ticketMap[waypointId] = count;
+        setWaypointTickets((prev) => {
+          const next = { ...prev };
+          results.forEach(({ waypointId, count }) => {
+            next[waypointId] = count;
+          });
+          return next;
         });
-
-        setWaypointTickets(ticketMap);
       } catch (error) {
         console.error('Error fetching tickets:', error);
       }
     };
 
-    fetchTickets();
+    fetchMissingTickets();
   }, [trip?.waypoints]);
 
   // Check-in mutation

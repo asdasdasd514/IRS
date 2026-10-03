@@ -10,6 +10,7 @@ import {
   Info,
   CheckCircle2,
   ArrowUpDown,
+  Utensils,
 } from 'lucide-react';
 import type { NextHopCandidate, Waypoint, Location } from '../../types';
 import { calculateDistance } from '../../utils';
@@ -232,180 +233,246 @@ export const BottomSheet: React.FC<BottomSheetProps> = ({
 
   return (
     <div
-      className={`absolute bottom-4 left-4 z-[1000] w-[calc(100%-2rem)] max-w-sm sm:max-w-md bg-white/98 backdrop-blur-md rounded-3xl shadow-2xl border border-slate-200/90 transition-all duration-300 pointer-events-auto flex flex-col overflow-hidden ${
-        isExpanded ? 'max-h-[82vh]' : 'max-h-[175px]'
+      className={`absolute bottom-4 left-4 z-[1000] w-[calc(100%-2rem)] max-w-sm sm:max-w-md bg-white/98 backdrop-blur-md rounded-[5px] shadow-2xl border border-slate-200/90 transition-all duration-300 pointer-events-auto flex flex-col overflow-hidden ${
+        isExpanded ? 'max-h-[82vh]' : ''
       }`}
     >
-      {/* ========================================================================= */}
-      {/* HEADER CARD - CHUẨN ĐỒNG BỘ THEO HÌNH 2 */}
-      {/* ========================================================================= */}
-      <div className="p-4 sm:p-5 pb-3 border-b border-slate-100 flex items-center justify-between shrink-0 bg-white">
-        <div className="flex items-center gap-3 min-w-0">
-          {/* Biểu tượng ô tô trong hình tròn xanh dương nhạt (Khớp hình 2) */}
-          <div className="w-11 h-11 rounded-full bg-[#E8F1FC] text-[#1A56DB] flex items-center justify-center shrink-0 shadow-xs">
-            <Car className="w-5 h-5" />
+      {!isExpanded ? (
+        /* ========================================================================= */
+        /* 1. GIAO DIỆN KHI GỘP XUỐNG: HIỂN THỊ TRỰC TIẾP ĐIỂM TỚI (COMPACT VIEW)     */
+        /* ========================================================================= */
+        isLoading ? (
+          <div className="p-4 bg-white flex items-center justify-center gap-2.5 text-xs text-slate-600 font-medium">
+            <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+            <span>Đang tối ưu chặng tiếp theo...</span>
           </div>
+        ) : recommended ? (
+          <div className="p-3.5 sm:p-4 bg-white space-y-2.5">
+            {/* Hàng 1: Icon, Tên điểm tới, Thời gian, Khoảng cách và Nút mở rộng */}
+            <div className="flex items-start justify-between gap-2.5">
+              <div className="flex items-start gap-3 min-w-0 flex-1">
+                {/* Biểu tượng ô tô / điểm đến bo góc 5px */}
+                <div
+                  className={`w-10 h-10 rounded-[5px] flex items-center justify-center shrink-0 shadow-xs mt-0.5 ${
+                    isRecommendedRestStop
+                      ? 'bg-orange-50 text-orange-600 border border-orange-200'
+                      : 'bg-[#E8F1FC] text-[#1A56DB] border border-blue-200'
+                  }`}
+                >
+                  {isRecommendedRestStop ? <Utensils className="w-5 h-5" /> : <Car className="w-5 h-5" />}
+                </div>
 
-          <div className="min-w-0">
-            <h3 className="text-base sm:text-lg font-bold text-slate-900 leading-tight">Chi tiết lộ trình</h3>
-            <p className="text-xs sm:text-sm text-slate-500 font-medium truncate mt-0.5">{routeSubtitle}</p>
-          </div>
-        </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="px-1.5 py-0.2 rounded-[5px] bg-red-50 text-red-600 text-[10px] font-bold border border-red-200 flex items-center gap-1">
+                      ⭐ {isRecommendedRestStop ? 'Điểm dừng ăn uống' : 'Điểm tới tiếp theo'} ({totalUnvisitedSchools} trường)
+                    </span>
+                  </div>
 
-        {/* Nút hành động góc phải */}
-        <div className="flex items-center gap-1 shrink-0 ml-1">
-          {/* Nút đảo chiều thứ tự hiển thị (Dưới lên / Trên xuống) */}
-          {isExpanded && !showVisitedSheet && (
-            <button
-              onClick={() => setIsBottomUp(!isBottomUp)}
-              className="p-1.5 px-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold flex items-center gap-1 transition shadow-2xs"
-              title={isBottomUp ? "Đang hiển thị: Điểm đi trước ở DƯỚI, điểm tiếp theo ở TRÊN. Bấm để đổi sang Trên xuống." : "Đang hiển thị: Trên xuống. Bấm để đổi sang Dưới lên."}
-            >
-              <ArrowUpDown className="w-3.5 h-3.5 text-blue-600" />
-              <span className="text-[11px] font-bold text-slate-700 hidden sm:inline">
-                {isBottomUp ? 'Dưới lên ↑' : 'Trên xuống ↓'}
-              </span>
-            </button>
-          )}
+                  <h3
+                    className={`text-sm sm:text-base font-bold truncate mt-1 ${
+                      isRecommendedRestStop ? 'text-red-600' : 'text-slate-900'
+                    }`}
+                    title={recommended.waypoint.name}
+                  >
+                    {isRecommendedRestStop && '🍽️ '}
+                    {recommended.waypoint.name}
+                  </h3>
 
-          {/* Nút thu nhỏ / mở rộng */}
-          <button
-            onClick={onToggle}
-            className="p-2 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition"
-            title={isExpanded ? 'Thu gọn thẻ' : 'Mở rộng chi tiết lộ trình'}
-          >
-            {isExpanded ? <ChevronDown className="w-5 h-5" /> : <ChevronUp className="w-5 h-5" />}
-          </button>
-        </div>
-      </div>
+                  <div className="flex items-center gap-2 text-xs text-slate-500 font-medium mt-0.5 flex-wrap">
+                    <span className="text-blue-600 font-bold flex items-center gap-1">
+                      <Clock className="w-3.5 h-3.5" />
+                      {recommended.duration_text}
+                    </span>
+                    <span>•</span>
+                    <span className="text-emerald-600 font-semibold flex items-center gap-1">
+                      <MapPin className="w-3.5 h-3.5" />
+                      {recommended.distance_text}
+                    </span>
+                    {recommended.waypoint.address && (
+                      <>
+                        <span className="hidden sm:inline text-slate-300">•</span>
+                        <span className="text-slate-400 text-[11px] truncate max-w-[140px] hidden sm:inline" title={recommended.waypoint.address}>
+                          {recommended.waypoint.address}
+                        </span>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
 
-      {/* Tabs chuyển đổi Lộ trình chưa đi / Đã ghé */}
-      {onToggleVisitedSheet && (
-        <div className="px-4 py-1.5 bg-slate-50 border-b border-slate-100 flex items-center gap-2 shrink-0">
-          <button
-            onClick={() => onToggleVisitedSheet(false)}
-            className={`flex-1 py-1.5 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 ${
-              !showVisitedSheet
-                ? 'bg-blue-600 text-white shadow-xs'
-                : 'text-slate-600 hover:bg-slate-200/60'
-            }`}
-          >
-            <span>Lộ trình ({allWaypoints.filter(w => !w.is_visited).length})</span>
-          </button>
-          <button
-            onClick={() => onToggleVisitedSheet(true)}
-            className={`flex-1 py-1.5 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 ${
-              showVisitedSheet
-                ? 'bg-emerald-600 text-white shadow-xs'
-                : 'text-slate-600 hover:bg-slate-200/60'
-            }`}
-          >
-            <CheckCircle className="w-3.5 h-3.5" />
-            <span>Đã đi ({visitedWaypoints.length})</span>
-          </button>
-        </div>
-      )}
+              {/* Nút bấm mở rộng toàn bộ lộ trình */}
+              <button
+                onClick={onToggle}
+                className="p-1.5 px-2 rounded-[5px] hover:bg-slate-100 text-slate-700 border border-slate-200/90 bg-slate-50 text-xs font-bold transition flex items-center gap-1 cursor-pointer shrink-0 shadow-2xs"
+                title="Mở rộng chi tiết lộ trình"
+              >
+                <span className="text-[11px] font-bold text-slate-700 hidden sm:inline">Lộ trình</span>
+                <ChevronUp className="w-4 h-4 text-slate-600" />
+              </button>
+            </div>
 
-      {/* Loading state */}
-      {isLoading && (
-        <div className="flex items-center justify-center py-6">
-          <div className="w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
-          <span className="ml-2.5 text-xs text-slate-600 font-medium">Đang tối ưu chặng tiếp theo...</span>
-        </div>
-      )}
-
-      {/* ========================================================================= */}
-      {/* 1. COLLAPSED VIEW (Khi thu nhỏ: hiển thị điểm tiếp theo gọn gàng và nút thao tác) */}
-      {/* ========================================================================= */}
-      {!isLoading && !isExpanded && !showVisitedSheet && recommended && (
-        <div className="px-4 py-3 bg-white">
-          <div className="flex items-start justify-between gap-2 mb-2">
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-1.5 mb-1">
-                {isRecommendedRestStop ? (
-                  <span className="px-2 py-0.5 rounded-full bg-red-100 text-red-700 text-[10px] font-bold border border-red-200 flex items-center gap-1 animate-pulse">
-                    ⭐ Điểm dừng ăn uống (Đi tới ngay)
-                  </span>
-                ) : (
-                  <span className="px-2 py-0.5 rounded-full bg-red-50 text-red-600 text-[10px] font-bold border border-red-200 flex items-center gap-1">
-                    ⭐ Điểm tiếp theo ({totalUnvisitedSchools} trường)
-                  </span>
+            {/* Hàng 2: Các nút hành động nhanh */}
+            {isRecommendedRestStop ? (
+              <div className="flex items-center gap-2 pt-1 border-t border-slate-100">
+                <button
+                  onClick={() => onNavigate(recommended.waypoint)}
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 px-3 rounded-[5px] font-bold flex items-center justify-center gap-1.5 text-xs shadow-xs transition cursor-pointer"
+                >
+                  <Navigation className="w-3.5 h-3.5" />
+                  Chỉ đường tới quán
+                </button>
+                {onCompleteRestStop && (
+                  <button
+                    onClick={() => onCompleteRestStop(recommended.waypoint)}
+                    className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-2 px-3 rounded-[5px] font-bold flex items-center justify-center gap-1.5 text-xs shadow-xs transition cursor-pointer"
+                    title="Xác nhận đã ghé ăn uống xong để tiếp tục đi đến trường tiếp theo"
+                  >
+                    <CheckCircle className="w-3.5 h-3.5" />
+                    Đã ghé xong
+                  </button>
+                )}
+                {onRemoveRestStop && (
+                  <button
+                    onClick={() => onRemoveRestStop(recommended.waypoint.id)}
+                    className="px-3 py-2 bg-slate-100 hover:bg-red-50 text-slate-500 hover:text-red-600 rounded-[5px] font-bold text-xs transition cursor-pointer"
+                    title="Xóa quán khỏi lộ trình"
+                  >
+                    ✕
+                  </button>
                 )}
               </div>
-              <h4 className={`text-sm font-bold truncate ${
-                isRecommendedRestStop ? 'text-red-600' : 'text-slate-900'
-              }`}>
-                {isRecommendedRestStop && '🍽️ '}
-                {recommended.waypoint.name}
-              </h4>
+            ) : (
+              <div className="flex items-center gap-2 pt-1 border-t border-slate-100">
+                <button
+                  onClick={() => onNavigate(recommended.waypoint)}
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 px-3 rounded-[5px] font-bold flex items-center justify-center gap-1.5 text-xs shadow-xs transition cursor-pointer"
+                >
+                  <Navigation className="w-3.5 h-3.5" />
+                  Chỉ đường
+                </button>
+                <button
+                  onClick={() => onCheckIn(recommended.waypoint)}
+                  className={`flex-1 py-2 px-3 rounded-[5px] font-bold flex items-center justify-center gap-1.5 text-xs shadow-xs transition cursor-pointer ${
+                    isInsideCheckInRange
+                      ? 'bg-emerald-600 hover:bg-emerald-700 text-white ring-2 ring-emerald-300 animate-pulse'
+                      : 'bg-emerald-500 hover:bg-emerald-600 text-white'
+                  }`}
+                >
+                  <CheckCircle className="w-3.5 h-3.5" />
+                  {isInsideCheckInRange ? 'Check-in (Đã tới)' : 'Check-in'}
+                </button>
+                <button
+                  onClick={() => onSelectWaypoint(recommended.waypoint)}
+                  className="px-2.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-[5px] text-xs font-semibold flex items-center gap-1 transition cursor-pointer"
+                  title="Xem thông tin chi tiết trường"
+                >
+                  <Info className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Chi tiết</span>
+                </button>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="p-3.5 sm:p-4 bg-white flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="w-9 h-9 rounded-[5px] bg-emerald-50 text-emerald-600 border border-emerald-200 flex items-center justify-center shrink-0">
+                <CheckCircle2 className="w-5 h-5" />
+              </div>
+              <div className="min-w-0">
+                <h4 className="text-sm font-bold text-slate-900 truncate">Đã hoàn thành chuyến đi!</h4>
+                <p className="text-xs text-slate-500 font-medium">Tất cả {visitedWaypoints.length} điểm đã check-in</p>
+              </div>
+            </div>
+            <button
+              onClick={onToggle}
+              className="px-3 py-1.5 bg-[#0F3A66] hover:bg-[#0c2e52] text-white rounded-[5px] text-xs font-bold transition flex items-center gap-1 cursor-pointer shrink-0 shadow-2xs"
+            >
+              <span>Xem lộ trình</span>
+              <ChevronUp className="w-4 h-4" />
+            </button>
+          </div>
+        )
+      ) : (
+        /* ========================================================================= */
+        /* 2. GIAO DIỆN KHI MỞ RỘNG (EXPANDED): HEADER + TABS + TIMELINE CHI TIẾT   */
+        /* ========================================================================= */
+        <>
+          {/* HEADER CARD - CHUẨN ĐỒNG BỘ THEO HÌNH 2 */}
+          <div className="p-4 sm:p-5 pb-3 border-b border-slate-100 flex items-center justify-between shrink-0 bg-white">
+            <div className="flex items-center gap-3 min-w-0">
+              {/* Biểu tượng ô tô bo góc 5px */}
+              <div className="w-11 h-11 rounded-[5px] bg-[#E8F1FC] text-[#1A56DB] flex items-center justify-center shrink-0 shadow-xs">
+                <Car className="w-5 h-5" />
+              </div>
+
+              <div className="min-w-0">
+                <h3 className="text-base sm:text-lg font-bold text-slate-900 leading-tight">Chi tiết lộ trình</h3>
+                <p className="text-xs sm:text-sm text-slate-500 font-medium truncate mt-0.5">{routeSubtitle}</p>
+              </div>
             </div>
 
-            <div className="text-right shrink-0">
-              <div className="text-xs font-bold text-blue-600 flex items-center justify-end gap-1">
-                <Clock className="w-3 h-3" />
-                {recommended.duration_text}
-              </div>
-              <div className="text-[11px] font-semibold text-emerald-600 flex items-center justify-end gap-1">
-                <MapPin className="w-2.5 h-2.5" />
-                {recommended.distance_text}
-              </div>
+            {/* Nút hành động góc phải */}
+            <div className="flex items-center gap-1 shrink-0 ml-1">
+              {/* Nút đảo chiều thứ tự hiển thị (Dưới lên / Trên xuống) */}
+              {!showVisitedSheet && (
+                <button
+                  onClick={() => setIsBottomUp(!isBottomUp)}
+                  className="p-1.5 px-2 rounded-[5px] bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold flex items-center gap-1 transition shadow-2xs cursor-pointer"
+                  title={isBottomUp ? "Đang hiển thị: Điểm đi trước ở DƯỚI, điểm tiếp theo ở TRÊN. Bấm để đổi sang Trên xuống." : "Đang hiển thị: Trên xuống. Bấm để đổi sang Dưới lên."}
+                >
+                  <ArrowUpDown className="w-3.5 h-3.5 text-blue-600" />
+                  <span className="text-[11px] font-bold text-slate-700 hidden sm:inline">
+                    {isBottomUp ? 'Dưới lên ↑' : 'Trên xuống ↓'}
+                  </span>
+                </button>
+              )}
+
+              {/* Nút thu nhỏ */}
+              <button
+                onClick={onToggle}
+                className="p-2 rounded-[5px] hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition cursor-pointer"
+                title="Thu gọn thẻ"
+              >
+                <ChevronDown className="w-5 h-5" />
+              </button>
             </div>
           </div>
 
-          {/* Quick buttons */}
-          {isRecommendedRestStop ? (
-            <div className="flex items-center gap-2">
+          {/* Tabs chuyển đổi Lộ trình chưa đi / Đã ghé */}
+          {onToggleVisitedSheet && (
+            <div className="px-4 py-1.5 bg-slate-50 border-b border-slate-100 flex items-center gap-2 shrink-0">
               <button
-                onClick={() => onNavigate(recommended.waypoint)}
-                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 px-3 rounded-xl font-bold flex items-center justify-center gap-1.5 text-xs shadow-xs transition"
+                onClick={() => onToggleVisitedSheet(false)}
+                className={`flex-1 py-1.5 px-3 rounded-[5px] text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                  !showVisitedSheet
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : 'text-slate-600 hover:bg-slate-200/60'
+                }`}
               >
-                <Navigation className="w-3.5 h-3.5" />
-                Chỉ đường tới quán
-              </button>
-              {onCompleteRestStop && (
-                <button
-                  onClick={() => onCompleteRestStop(recommended.waypoint)}
-                  className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-2 px-3 rounded-xl font-bold flex items-center justify-center gap-1.5 text-xs shadow-xs transition"
-                  title="Xác nhận đã ghé ăn uống xong để tiếp tục đi đến trường tiếp theo"
-                >
-                  <CheckCircle className="w-3.5 h-3.5" />
-                  Đã ghé xong
-                </button>
-              )}
-              {onRemoveRestStop && (
-                <button
-                  onClick={() => onRemoveRestStop(recommended.waypoint.id)}
-                  className="px-3 py-2 bg-slate-100 hover:bg-red-50 text-slate-500 hover:text-red-600 rounded-xl font-bold text-xs transition"
-                  title="Xóa quán khỏi lộ trình"
-                >
-                  ✕
-                </button>
-              )}
-            </div>
-          ) : (
-            <div className="flex gap-2">
-              <button
-                onClick={() => onNavigate(recommended.waypoint)}
-                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 px-3 rounded-xl font-bold flex items-center justify-center gap-1.5 text-xs shadow-xs transition"
-              >
-                <Navigation className="w-3.5 h-3.5" />
-                Chỉ đường
+                <span>Lộ trình ({allWaypoints.filter(w => !w.is_visited).length})</span>
               </button>
               <button
-                onClick={() => onCheckIn(recommended.waypoint)}
-                className={`flex-1 py-2 px-3 rounded-xl font-bold flex items-center justify-center gap-1.5 text-xs shadow-xs transition ${
-                  isInsideCheckInRange
-                    ? 'bg-emerald-600 hover:bg-emerald-700 text-white ring-2 ring-emerald-300 animate-pulse'
-                    : 'bg-emerald-500 hover:bg-emerald-600 text-white'
+                onClick={() => onToggleVisitedSheet(true)}
+                className={`flex-1 py-1.5 px-3 rounded-[5px] text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                  showVisitedSheet
+                    ? 'bg-emerald-600 text-white shadow-xs'
+                    : 'text-slate-600 hover:bg-slate-200/60'
                 }`}
               >
                 <CheckCircle className="w-3.5 h-3.5" />
-                {isInsideCheckInRange ? 'Check-in (Đã tới nơi)' : 'Check-in'}
+                <span>Đã đi ({visitedWaypoints.length})</span>
               </button>
             </div>
           )}
-        </div>
-      )}
+
+          {/* Loading state trong expanded */}
+          {isLoading && (
+            <div className="flex items-center justify-center py-6">
+              <div className="w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+              <span className="ml-2.5 text-xs text-slate-600 font-medium">Đang tối ưu chặng tiếp theo...</span>
+            </div>
+          )}
 
       {/* ========================================================================= */}
       {/* 2. EXPANDED VIEW - TIMELINE LỘ TRÌNH (ĐI TRƯỚC Ở DƯỚI, TIẾP THEO Ở TRÊN) */}
@@ -474,7 +541,7 @@ export const BottomSheet: React.FC<BottomSheetProps> = ({
                 <div
                   key={node.id}
                   ref={node.isRec ? recommendedRef : undefined}
-                  className={`flex items-start gap-3.5 p-2 rounded-2xl transition ${
+                  className={`flex items-start gap-3.5 p-2.5 rounded-[5px] transition ${
                     node.isRec ? 'bg-red-50/70 border border-red-200' : 'hover:bg-slate-50'
                   }`}
                 >
@@ -495,17 +562,17 @@ export const BottomSheet: React.FC<BottomSheetProps> = ({
 
                       {/* Huy hiệu */}
                       {node.isStart && (
-                        <span className="px-1.5 py-0.2 rounded bg-blue-50 text-blue-700 text-[10px] font-bold border border-blue-200">
+                        <span className="px-1.5 py-0.2 rounded-[5px] bg-blue-50 text-blue-700 text-[10px] font-bold border border-blue-200">
                           Khởi hành
                         </span>
                       )}
                       {node.isRec && (
-                        <span className="px-2 py-0.5 rounded-full bg-red-500 text-white font-bold text-[10px] shadow-xs">
+                        <span className="px-2 py-0.5 rounded-[5px] bg-red-500 text-white font-bold text-[10px] shadow-xs">
                           {node.isRestStop ? '⭐ Điểm ăn uống (Đi tới ngay)' : '⭐ Điểm tiếp theo'}
                         </span>
                       )}
                       {node.isRestStop && !node.isRec && (
-                        <span className="px-2 py-0.5 rounded-full bg-orange-100 text-orange-700 font-semibold text-[10px] border border-orange-200">
+                        <span className="px-2 py-0.5 rounded-[5px] bg-orange-100 text-orange-700 font-semibold text-[10px] border border-orange-200">
                           Quán ăn
                         </span>
                       )}
@@ -525,7 +592,7 @@ export const BottomSheet: React.FC<BottomSheetProps> = ({
                           <>
                             <button
                               onClick={() => onNavigate(node.waypoint!)}
-                              className="bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white py-1.5 px-3 rounded-xl text-xs font-bold flex items-center gap-1 shadow-xs transition"
+                              className="bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white py-1.5 px-3 rounded-[5px] text-xs font-bold flex items-center gap-1 shadow-xs transition cursor-pointer"
                             >
                               <Navigation className="w-3.5 h-3.5" />
                               Chỉ đường tới quán
@@ -533,7 +600,7 @@ export const BottomSheet: React.FC<BottomSheetProps> = ({
                             {onCompleteRestStop && (
                               <button
                                 onClick={() => onCompleteRestStop(node.waypoint!)}
-                                className="bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white py-1.5 px-3 rounded-xl text-xs font-bold flex items-center gap-1 shadow-xs transition"
+                                className="bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white py-1.5 px-3 rounded-[5px] text-xs font-bold flex items-center gap-1 shadow-xs transition cursor-pointer"
                                 title="Xác nhận đã ghé xong để tiếp tục sang trường tiếp theo"
                               >
                                 <CheckCircle className="w-3.5 h-3.5" />
@@ -543,7 +610,7 @@ export const BottomSheet: React.FC<BottomSheetProps> = ({
                             {onRemoveRestStop && (
                               <button
                                 onClick={() => onRemoveRestStop(node.waypoint!.id)}
-                                className="bg-slate-100 hover:bg-red-50 text-slate-600 hover:text-red-600 py-1.5 px-2.5 rounded-xl text-xs font-semibold flex items-center gap-1 transition"
+                                className="bg-slate-100 hover:bg-red-50 text-slate-600 hover:text-red-600 py-1.5 px-2.5 rounded-[5px] text-xs font-semibold flex items-center gap-1 transition cursor-pointer"
                                 title="Xóa quán khỏi lộ trình"
                               >
                                 ✕ Xóa
@@ -554,21 +621,21 @@ export const BottomSheet: React.FC<BottomSheetProps> = ({
                           <>
                             <button
                               onClick={() => onNavigate(node.waypoint!)}
-                              className="bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white py-1.5 px-3 rounded-xl text-xs font-bold flex items-center gap-1 shadow-xs transition"
+                              className="bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white py-1.5 px-3 rounded-[5px] text-xs font-bold flex items-center gap-1 shadow-xs transition cursor-pointer"
                             >
                               <Navigation className="w-3.5 h-3.5" />
                               Chỉ đường
                             </button>
                             <button
                               onClick={() => onCheckIn(node.waypoint!)}
-                              className="bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white py-1.5 px-3 rounded-xl text-xs font-bold flex items-center gap-1 shadow-xs transition"
+                              className="bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white py-1.5 px-3 rounded-[5px] text-xs font-bold flex items-center gap-1 shadow-xs transition cursor-pointer"
                             >
                               <CheckCircle className="w-3.5 h-3.5" />
                               Check-in
                             </button>
                             <button
                               onClick={() => onSelectWaypoint(node.waypoint!)}
-                              className="bg-slate-100 hover:bg-slate-200 text-slate-700 py-1.5 px-2.5 rounded-xl text-xs font-semibold flex items-center gap-1 transition"
+                              className="bg-slate-100 hover:bg-slate-200 text-slate-700 py-1.5 px-2.5 rounded-[5px] text-xs font-semibold flex items-center gap-1 transition cursor-pointer"
                             >
                               <Info className="w-3.5 h-3.5" />
                               Chi tiết
@@ -614,7 +681,7 @@ export const BottomSheet: React.FC<BottomSheetProps> = ({
               return (
                 <div
                   key={wp.id}
-                  className="p-3 bg-slate-50 rounded-2xl border border-slate-200/80 flex items-center justify-between gap-2"
+                  className="p-3 bg-slate-50 rounded-[5px] border border-slate-200/80 flex items-center justify-between gap-2"
                 >
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5">
@@ -634,7 +701,7 @@ export const BottomSheet: React.FC<BottomSheetProps> = ({
                             : 'Đã hoàn tất check-in')}
                     </p>
                     {!isRestStop && waypointTickets[wp.id] !== undefined && waypointTickets[wp.id] > 0 && (
-                      <span className="text-[10px] text-emerald-700 font-bold bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200 inline-block mt-1">
+                      <span className="text-[10px] text-emerald-700 font-bold bg-emerald-50 px-1.5 py-0.5 rounded-[5px] border border-emerald-200 inline-block mt-1">
                         🎫 {waypointTickets[wp.id]} phiếu thu thập
                       </span>
                     )}
@@ -644,7 +711,7 @@ export const BottomSheet: React.FC<BottomSheetProps> = ({
                   {!isRestStop && (
                     <button
                       onClick={() => onSelectWaypoint(wp)}
-                      className="px-2.5 py-1.5 rounded-lg bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 text-xs font-semibold shrink-0"
+                      className="px-2.5 py-1.5 rounded-[5px] bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 text-xs font-semibold shrink-0 cursor-pointer"
                     >
                       Xem
                     </button>
@@ -655,7 +722,9 @@ export const BottomSheet: React.FC<BottomSheetProps> = ({
           )}
         </div>
       )}
-    </div>
+    </>
+  )}
+</div>
   );
 };
 

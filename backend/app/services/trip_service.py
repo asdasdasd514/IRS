@@ -4,7 +4,7 @@ Sử dụng collection `campaign_waypoints` để quản lý các điểm dừng
 và tự động tham chiếu thông tin hồ sơ trường từ collection `schools`.
 """
 
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from datetime import datetime, timezone
 from math import radians, sin, cos, sqrt, atan2
 import uuid
@@ -206,17 +206,37 @@ class TripService:
                 cursor = db.campaign_waypoints.find({"trip_id": trip_id, "is_deleted": {"$ne": True}}).sort("visit_order", 1)
                 waypoints = await cursor.to_list(length=1000)
 
-        # Tham chiếu thông tin trường học từ schools nếu có school_id
+        # 1. Batch load toàn bộ thông tin trường học từ schools nếu có school_id (Tránh N+1 query)
+        school_ids = [w["school_id"] for w in waypoints if w.get("school_id")]
+        school_map = {}
+        if school_ids:
+            unique_ids = list(set(school_ids))
+            schools_cursor = db.schools.find({
+                "$or": [
+                    {"id": {"$in": unique_ids}},
+                    {"code": {"$in": unique_ids}}
+                ],
+                "is_deleted": {"$ne": True}
+            })
+            schools_list = await schools_cursor.to_list(length=len(unique_ids) + 10)
+            for s in schools_list:
+                s.pop("_id", None)
+                if s.get("id"):
+                    school_map[s["id"]] = s
+                if s.get("code"):
+                    school_map[s["code"]] = s
+
         for w in waypoints:
             w.pop("_id", None)
-            if w.get("school_id"):
-                school = await db.schools.find_one({
-                    "$or": [{"id": w["school_id"]}, {"code": w["school_id"]}],
-                    "is_deleted": {"$ne": True}
-                })
-                if school:
-                    school.pop("_id", None)
-                    w["school"] = school
+            sid = w.get("school_id")
+            if sid and sid in school_map:
+                w["school"] = school_map[sid]
+            # Tính sẵn tổng số phiếu thu thập của waypoint để frontend có dữ liệu tức thì
+            w["tickets_count"] = sum(
+                t.get("tickets_collected", 0)
+                for t in w.get("tickets", [])
+                if not t.get("is_deleted")
+            )
 
         trip.pop("_id", None)
         trip["waypoints"] = waypoints
@@ -238,20 +258,46 @@ class TripService:
 
         cursor = db.admission_trips.find(query).sort("created_at", -1)
         trips = await cursor.to_list(length=1000)
+        if not trips:
+            return []
+
+        trip_ids = [t["id"] for t in trips if "id" in t]
+
+        # 2. Batch load toàn bộ waypoints của tất cả các chuyến đi trong 1 câu truy vấn duy nhất (Tránh N+1 query)
+        wps_cursor = db.campaign_waypoints.find({
+            "trip_id": {"$in": trip_ids},
+            "is_deleted": {"$ne": True}
+        })
+        all_wps = await wps_cursor.to_list(length=len(trip_ids) * 100)
+
+        wps_by_trip: Dict[str, list] = {}
+        for wp in all_wps:
+            tid = wp.get("trip_id")
+            if tid:
+                wps_by_trip.setdefault(tid, []).append(wp)
+
+        # Fallback waypoints cũ nếu cần
+        missing_trip_ids = [tid for tid in trip_ids if tid not in wps_by_trip]
+        if missing_trip_ids:
+            legacy_cursor = db.waypoints.find({
+                "trip_id": {"$in": missing_trip_ids},
+                "is_deleted": {"$ne": True}
+            })
+            legacy_wps = await legacy_cursor.to_list(length=len(missing_trip_ids) * 100)
+            for wp in legacy_wps:
+                tid = wp.get("trip_id")
+                if tid:
+                    wps_by_trip.setdefault(tid, []).append(wp)
 
         for trip in trips:
             trip.pop("_id", None)
-            wps_cursor = db.campaign_waypoints.find({"trip_id": trip["id"], "is_deleted": {"$ne": True}})
-            wps = await wps_cursor.to_list(length=1000)
-            if not wps:
-                wps_legacy = db.waypoints.find({"trip_id": trip["id"], "is_deleted": {"$ne": True}})
-                wps = await wps_legacy.to_list(length=1000)
-            
+            wps = wps_by_trip.get(trip["id"], [])
+
             trip["total_waypoints"] = len(wps)
             trip["visited_count"] = sum(1 for w in wps if w.get("is_visited"))
             trip["school_count"] = sum(1 for w in wps if w.get("type") == WaypointType.SCHOOL.value)
             trip["school_visited_count"] = sum(1 for w in wps if w.get("type") == WaypointType.SCHOOL.value and w.get("is_visited"))
-            
+
             trip["total_tickets"] = sum(
                 t.get("tickets_collected", 0)
                 for w in wps

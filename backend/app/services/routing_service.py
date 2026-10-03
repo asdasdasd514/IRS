@@ -24,6 +24,45 @@ class RoutingService:
     def __init__(self):
         self.serpapi_key = settings.SERPAPI_KEY
     
+    async def get_osrm_single_source_table(
+        self,
+        origin: Tuple[float, float],
+        targets: List[Tuple[float, float]]
+    ) -> Optional[List[float]]:
+        """
+        Tính toán khoảng cách đường bộ 1-đến-N (từ vị trí hiện tại đến toàn bộ danh sách mục tiêu)
+        chỉ bằng 1 request async duy nhất qua OSRM Table Service (sources=0).
+        Giảm số lần gọi HTTP từ N xuống 1, không block event loop của FastAPI.
+        """
+        if not targets:
+            return []
+
+        # Cache key làm tròn 3 chữ số thập phân (~100m) để hấp thụ GPS jitter
+        cache_key = "osrm_source0:" + f"{round(origin[0], 3)},{round(origin[1], 3)};" + ";".join(
+            f"{round(p[0], 3)},{round(p[1], 3)}" for p in targets
+        )
+        cached = distance_matrix_cache.get(cache_key)
+        if cached is not None:
+            return cached
+
+        try:
+            import httpx
+            coords_str = f"{origin[1]},{origin[0]};" + ";".join(f"{p[1]},{p[0]}" for p in targets)
+            url = f"http://router.project-osrm.org/table/v1/driving/{coords_str}?sources=0&annotations=distance"
+
+            async with httpx.AsyncClient(timeout=2.5) as client:
+                resp = await client.get(url, headers={"User-Agent": "IRS-Admissions-App/1.0"})
+                if resp.status_code == 200:
+                    data = resp.json()
+                    if data.get("code") == "Ok" and "distances" in data and len(data["distances"]) > 0:
+                        row = data["distances"][0]
+                        dist_list = [float(d) if d is not None else None for d in row[1:]]
+                        distance_matrix_cache.set(cache_key, dist_list, ttl=600)
+                        return dist_list
+        except Exception as e:
+            logger.debug(f"OSRM Table single-source skipped: {e}")
+        return None
+
     async def find_next_hop(
         self,
         current_lat: float,
@@ -34,24 +73,37 @@ class RoutingService:
             return None, []
 
         candidates = []
+        target_coords: List[Tuple[float, float]] = []
+        parsed_wps = []
+
         for wp in unvisited_waypoints:
             try:
                 lat = float(wp.get("lat") if isinstance(wp, dict) else getattr(wp, "lat", 0.0))
                 lng = float(wp.get("lng") if isinstance(wp, dict) else getattr(wp, "lng", 0.0))
+                parsed_wps.append((wp, lat, lng))
+                target_coords.append((lat, lng))
+            except Exception as e:
+                logger.warning(f"Error parsing waypoint {wp}: {e}")
 
-                # Tính toán lộ trình thực tế từ vị trí hiện tại đến điểm dừng qua OSRM
-                single_leg = self.get_osrm_single_leg_optimized((current_lat, current_lng), (lat, lng))
-                if single_leg and single_leg.get("distance_meters"):
-                    dist_m = float(single_leg["distance_meters"])
-                    dur_s = int(single_leg["duration_seconds"])
-                    dist_txt = single_leg["distance_text"]
-                    dur_txt = single_leg["duration_text"]
-                else:
+        if not parsed_wps:
+            return None, []
+
+        # 1. Gọi 1 request duy nhất tới OSRM Table Service cho tất cả các điểm cùng lúc (non-blocking)
+        osrm_distances = await self.get_osrm_single_source_table((current_lat, current_lng), target_coords)
+
+        for idx, (wp, lat, lng) in enumerate(parsed_wps):
+            try:
+                dist_m = None
+                if osrm_distances and idx < len(osrm_distances) and osrm_distances[idx] is not None:
+                    dist_m = float(osrm_distances[idx])
+                
+                # Fallback nhanh nếu OSRM không khả dụng hoặc timeout:
+                if dist_m is None or dist_m <= 0:
                     dist_m = self._haversine(current_lat, current_lng, lat, lng) * 1.25
-                    speed_mps = 25.5 * 1000 / 3600
-                    dur_s = int(dist_m / speed_mps)
-                    dist_txt = f"{dist_m / 1000:.1f} km" if dist_m >= 1000 else f"{int(dist_m)} m"
-                    dur_txt = self._format_duration_text(dur_s)
+
+                dur_s = self.calculate_vietnam_travel_duration_seconds(dist_m)
+                dist_txt = f"{dist_m / 1000:.1f} km" if dist_m >= 1000 else f"{int(dist_m)} m"
+                dur_txt = self._format_duration_text(dur_s)
 
                 wp_resp = WaypointResponse.model_validate(wp) if not isinstance(wp, WaypointResponse) else wp
                 candidate = NextHopCandidate(

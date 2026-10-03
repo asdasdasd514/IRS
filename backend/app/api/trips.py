@@ -224,9 +224,9 @@ async def get_next_hop(
             message="Đã hoàn thành tất cả các điểm dừng!"
         )
     
-    # Kiểm tra Cache 5 phút cho yêu cầu cùng chuyến đi, cùng vị trí GPS và cùng danh sách điểm chưa đi
+    # Kiểm tra Cache 5 phút cho yêu cầu cùng chuyến đi, cùng vị trí GPS (~100m) và cùng danh sách điểm chưa đi
     unvisited_ids = ",".join(sorted(w.get("id") if isinstance(w, dict) else w.id for w in unvisited))
-    cache_key = f"nexthop:{trip_id}:{round(request.current_lat, 4)},{round(request.current_lng, 4)}:{unvisited_ids}"
+    cache_key = f"nexthop:{trip_id}:{round(request.current_lat, 3)},{round(request.current_lng, 3)}:{unvisited_ids}"
     cached_response = api_response_cache.get(cache_key)
     if cached_response is not None:
         logger.info(f"⚡ [Cache Hit Next-Hop]: {cache_key}")
