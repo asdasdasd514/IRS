@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -24,8 +24,21 @@ import {
 } from 'lucide-react';
 
 import { useAppStore } from '../../store/useAppStore';
-import { campaignApi, authApi } from '../../services/api';
+import { campaignApi, authApi, tripApi } from '../../services/api';
 import { buildGoogleMapsDirectionsUrl } from '../../utils';
+
+const formatDateDisplay = (dateStr?: string) => {
+  if (!dateStr) return null;
+  try {
+    const parts = dateStr.split('T')[0].split('-');
+    if (parts.length === 3) {
+      return `${parts[2]}/${parts[1]}/${parts[0]}`;
+    }
+    return dateStr;
+  } catch {
+    return dateStr;
+  }
+};
 
 // Fix icon Leaflet mặc định
 // @ts-ignore
@@ -106,6 +119,7 @@ function MapController({
 }) {
   const map = useMap();
   useEffect(() => {
+    map.invalidateSize();
     if (center && !isNaN(center[0]) && !isNaN(center[1])) {
       map.flyTo(center, zoom || 15, { duration: 0.8 });
     } else if (bounds) {
@@ -122,6 +136,7 @@ function MapController({
 export function StaffCampaignsPage() {
   const navigate = useNavigate();
   const { user } = useAppStore();
+  const mapContainerRef = useRef<HTMLDivElement | null>(null);
 
   const [loading, setLoading] = useState(true);
   const [campaigns, setCampaigns] = useState<any[]>([]);
@@ -135,7 +150,7 @@ export function StaffCampaignsPage() {
   // Chiến dịch và Điểm trường đang chọn để focus trên bản đồ
   const [selectedCampaignId, setSelectedCampaignId] = useState<string | null>(null);
   const [activeStop, setActiveStop] = useState<any | null>(null);
-  const [expandedCampaignIds, setExpandedCampaignIds] = useState<Record<string, boolean>>({});
+  const [expandedCampaignId, setExpandedCampaignId] = useState<string | null>(null);
 
   // GPS vị trí hiện tại của cán bộ
   const [myLocation, setMyLocation] = useState<[number, number] | null>(null);
@@ -143,12 +158,54 @@ export function StaffCampaignsPage() {
 
   const isAdmin = user?.role === 'admin' || user?.is_admin;
 
-  // Tải dữ liệu từ backend
+  // Tải dữ liệu từ backend (ưu tiên lấy từ admission_trips để hiển thị đầy đủ các chuyến đi thực tế đã phân bổ)
   const loadData = async () => {
     try {
       setLoading(true);
-      const allCamps = await campaignApi.getAll();
-      setCampaigns(Array.isArray(allCamps) ? allCamps : []);
+      const [tripsData, campsData] = await Promise.all([
+        tripApi.getTrips(),
+        campaignApi.getAll().catch(() => [])
+      ]);
+
+      const tripsList = Array.isArray(tripsData) ? tripsData : [];
+      const campsList = Array.isArray(campsData) ? campsData : [];
+
+      // Định dạng các chuyến đi lấy từ bảng admission_trips
+      const formattedTrips = tripsList.map((t: any) => {
+        const parentCamp = campsList.find(
+          (c) => c.id === t.campaign_id || c._id === t.campaign_id
+        );
+        const effectiveRouteGeom =
+          t.route_geometry && Array.isArray(t.route_geometry) && t.route_geometry.length > 1
+            ? t.route_geometry
+            : parentCamp?.route_geometry && Array.isArray(parentCamp.route_geometry) && parentCamp.route_geometry.length > 1
+            ? parentCamp.route_geometry
+            : undefined;
+
+        return {
+          ...t,
+          deployed_trip_id: t.trip_code || t.id,
+          trip_id: t.id,
+          start_point: t.start_point || parentCamp?.start_point,
+          route_geometry: effectiveRouteGeom,
+          polyline: t.polyline || parentCamp?.polyline,
+          destinations: (t.destinations && t.destinations.length > 0) ? t.destinations : parentCamp?.destinations,
+        };
+      });
+
+      // Lấy danh sách các campaign_id đã được triển khai thành chuyến đi
+      const deployedCampIds = new Set(tripsList.map((t) => t.campaign_id).filter(Boolean));
+
+      // Thêm các chiến dịch có phân công nhân sự nhưng chưa triển khai thành chuyến đi (nếu có)
+      const unlinkedCamps = campsList.filter(
+        (c) =>
+          !deployedCampIds.has(c.id) &&
+          !deployedCampIds.has(c._id) &&
+          (Boolean(c.team?.leader_name) || c.status === 'assigned')
+      );
+
+      const allItems = [...formattedTrips, ...unlinkedCamps];
+      setCampaigns(allItems);
 
       // Nếu là Admin, lấy danh sách cán bộ để có thể chọn xem theo góc nhìn của từng người
       if (isAdmin) {
@@ -283,23 +340,32 @@ export function StaffCampaignsPage() {
       if (!q) return true;
 
       const nameMatch = (camp.name || '').toLowerCase().includes(q);
-      const codeMatch = (camp.deployed_trip_id || camp.id || '').toLowerCase().includes(q);
+      const codeMatch = (camp.trip_code || camp.deployed_trip_id || camp.id || '').toLowerCase().includes(q);
+      const leaderMatch = (camp.team?.leader_name || '').toLowerCase().includes(q);
+      const memberMatch = (camp.team?.members || []).some((m: any) => (m.name || '').toLowerCase().includes(q));
       const schoolMatch = (camp.destinations || []).some((d: any) =>
         (d.name || '').toLowerCase().includes(q) || (d.address || '').toLowerCase().includes(q)
       );
 
-      return nameMatch || codeMatch || schoolMatch;
+      return nameMatch || codeMatch || leaderMatch || memberMatch || schoolMatch;
     });
   }, [allocatedCampaignsForStaff, statusFilter, searchQuery]);
 
-  // Chọn chiến dịch: mở dropdown chi tiết và mở bản đồ tương ứng
+  // Chọn chiến dịch: mở dropdown chi tiết và mở bản đồ tương ứng (tự động ẩn các chiến dịch khác)
   const handleSelectCampaign = (cId: string) => {
     if (selectedCampaignId === cId) {
-      toggleExpand(cId);
+      setExpandedCampaignId((prev) => (prev === cId ? null : cId));
     } else {
       setSelectedCampaignId(cId);
-      setExpandedCampaignIds((prev) => ({ ...prev, [cId]: true }));
+      // Khi chọn chiến dịch khác: mở chiến dịch này và TỰ ĐỘNG ẨN chiến dịch cũ
+      setExpandedCampaignId(cId);
       setActiveStop(null);
+      // Nếu trên màn hình nhỏ (mobile), tự động cuộn mượt lên vị trí bản đồ ở trên cùng
+      if (typeof window !== 'undefined' && window.innerWidth < 1024) {
+        setTimeout(() => {
+          mapContainerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }, 60);
+      }
     }
   };
 
@@ -494,19 +560,17 @@ export function StaffCampaignsPage() {
   };
 
   const toggleExpand = (cId: string) => {
-    setExpandedCampaignIds((prev) => ({
-      ...prev,
-      [cId]: !prev[cId],
-    }));
+    // Chỉ mở duy nhất chiến dịch này, tự động ẩn tất cả các chiến dịch khác
+    setExpandedCampaignId((prev) => (prev === cId ? null : cId));
   };
 
   return (
     <div className="space-y-5 animate-fade-in pb-12">
       {/* 1. Header Banner & Profile Card */}
       {/* 3. Bố cục chính: Cột trái Danh sách Chiến dịch & Cột phải Bản đồ tương tác */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-        {/* CỘT TRÁI: DANH SÁCH CHIẾN DỊCH & ĐỊA ĐIỂM (5 CỘT) */}
-        <div className={`${currentCampaign ? 'lg:col-span-5' : 'lg:col-span-12 w-full'} space-y-4`}>
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+        {/* CỘT DANH SÁCH CHIẾN DỊCH & ĐỊA ĐIỂM (5 CỘT TRÊN DESKTOP, NẰM DƯỚI BẢN ĐỒ TRÊN MOBILE) */}
+        <div className={`${currentCampaign ? 'lg:col-span-5' : 'lg:col-span-12 w-full'} order-2 lg:order-1 space-y-4`}>
           {/* Thanh tìm kiếm & Dropdown chọn chiến dịch */}
           <div className="bg-white p-3.5 rounded-[5px] border border-slate-200/80 shadow-xs space-y-3">
             <div className="flex flex-col sm:flex-row gap-2.5 items-stretch sm:items-center">
@@ -519,6 +583,7 @@ export function StaffCampaignsPage() {
                     const val = e.target.value;
                     if (!val) {
                       setSelectedCampaignId(null);
+                      setExpandedCampaignId(null);
                       setActiveStop(null);
                     } else {
                       handleSelectCampaign(val);
@@ -529,10 +594,11 @@ export function StaffCampaignsPage() {
                   <option value="">▼ Chọn chiến dịch xem bản đồ...</option>
                   {filteredCampaigns.map((camp) => {
                     const cId = camp.id || camp._id;
+                    const codeText = camp.trip_code ? ` [${camp.trip_code}]` : (camp.deployed_trip_id ? ` [${camp.deployed_trip_id}]` : '');
                     const leaderText = camp.team?.leader_name ? ` (Trưởng đoàn: ${camp.team.leader_name})` : '';
                     return (
                       <option key={cId} value={cId}>
-                        {camp.name}{leaderText}
+                        {camp.name}{codeText}{leaderText}
                       </option>
                     );
                   })}
@@ -565,6 +631,7 @@ export function StaffCampaignsPage() {
                   type="button"
                   onClick={() => {
                     setSelectedCampaignId(null);
+                    setExpandedCampaignId(null);
                     setActiveStop(null);
                   }}
                   className="text-[11px] font-bold text-red-600 hover:text-red-700 hover:underline shrink-0 ml-2 cursor-pointer flex items-center gap-1"
@@ -587,7 +654,7 @@ export function StaffCampaignsPage() {
               {filteredCampaigns.map((camp) => {
                 const cId = camp.id || camp._id;
                 const isSelected = currentCampaign && (currentCampaign.id === cId || currentCampaign._id === cId);
-                const isExpanded = Boolean(expandedCampaignIds[cId]);
+                const isExpanded = expandedCampaignId === cId;
                 const destinations = camp.destinations || [];
                 const members = camp.team?.members || [];
                 const isLeader =
@@ -616,9 +683,9 @@ export function StaffCampaignsPage() {
                       <div className="flex items-start justify-between gap-2 mb-2">
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-1.5 flex-wrap mb-1">
-                            {camp.deployed_trip_id && (
+                            {(camp.trip_code || camp.deployed_trip_id) && (
                               <span className="px-1.5 py-0.5 rounded bg-blue-50 text-[#0f3b7d] font-mono text-[10px] font-bold">
-                                {camp.deployed_trip_id.slice(0, 10).toUpperCase()}
+                                {camp.trip_code || camp.deployed_trip_id}
                               </span>
                             )}
                             {isLeader && (
@@ -661,10 +728,8 @@ export function StaffCampaignsPage() {
                         <div className="flex items-center gap-1.5 text-[11px]">
                           <Calendar className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                           <span className="truncate">
-                            {camp.start_date
-                              ? new Date(camp.start_date).toLocaleDateString('vi-VN')
-                              : 'Chưa đặt ngày'}
-                            {camp.end_date ? ` - ${new Date(camp.end_date).toLocaleDateString('vi-VN')}` : ''}
+                            {formatDateDisplay(camp.start_date) || 'Chưa đặt ngày'}
+                            {camp.end_date ? ` - ${formatDateDisplay(camp.end_date)}` : ''}
                           </span>
                         </div>
 
@@ -682,7 +747,14 @@ export function StaffCampaignsPage() {
                           </div>
                         )}
 
-                        <div className="flex items-center gap-1.5 text-[11px]">
+                        <div
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleExpand(cId);
+                          }}
+                          className="flex items-center gap-1.5 text-[11px] cursor-pointer hover:text-[#0f3b7d] transition"
+                          title="Bấm để xem danh sách thành viên đoàn"
+                        >
                           <Users className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                           <span className="truncate">
                             Đoàn: {members.length > 0 ? `${members.length} người` : 'Chưa xếp'}
@@ -691,7 +763,7 @@ export function StaffCampaignsPage() {
                       </div>
                     </div>
 
-                    {/* Danh sách các điểm dừng dạng accordion */}
+                    {/* Danh sách các thành viên & điểm dừng dạng accordion */}
                     <div className="border-t border-slate-100 bg-slate-50/60">
                       <button
                         type="button"
@@ -703,7 +775,7 @@ export function StaffCampaignsPage() {
                       >
                         <span className="flex items-center gap-1.5">
                           <Building2 className="w-3.5 h-3.5 text-blue-600" />
-                          Xem danh sách các điểm dừng ({destinations.length + (camp.start_point ? 1 : 0)})
+                          Xem thành viên đoàn & các điểm dừng ({destinations.length + (camp.start_point ? 1 : 0)})
                         </span>
                         {isExpanded ? (
                           <ChevronUp className="w-4 h-4 text-slate-400" />
@@ -713,7 +785,43 @@ export function StaffCampaignsPage() {
                       </button>
 
                       {isExpanded && (
-                        <div className="px-3.5 pb-3 pt-1 space-y-1.5 divide-y divide-slate-100">
+                        <div className="px-3.5 pb-3 pt-1 space-y-2">
+                          {/* Khối hiển thị Thành viên đoàn công tác */}
+                          {(camp.team?.leader_name || (members && members.length > 0)) && (
+                            <div className="pt-2 pb-2.5 border-b border-slate-200/80 space-y-1.5 bg-blue-50/40 -mx-3.5 px-3.5">
+                              <div className="flex items-center gap-1.5 text-slate-600 text-[11px] font-bold">
+                                <Users className="w-3.5 h-3.5 text-[#0f3b7d]" />
+                                <span>Thành viên đoàn công tác ({members.length > 0 ? members.length : 1} người):</span>
+                              </div>
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                {camp.team?.leader_name && (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-[4px] bg-amber-100 text-amber-900 border border-amber-300 text-[10px] font-bold">
+                                    <Award className="w-3 h-3 text-amber-700" />
+                                    Trưởng đoàn: {camp.team.leader_name}
+                                  </span>
+                                )}
+                                {members.map((m: any, mIdx: number) => {
+                                  const mName = typeof m === 'string' ? m : (m.name || m.full_name || 'Thành viên');
+                                  if (mName === camp.team?.leader_name) return null;
+                                  const isMe = (m.id && m.id === activeStaff?.id) || mName === activeStaff?.full_name;
+                                  return (
+                                    <span
+                                      key={mIdx}
+                                      className={`px-2 py-0.5 rounded-[4px] text-[10px] font-medium border ${
+                                        isMe
+                                          ? 'bg-amber-100/90 text-amber-900 border-amber-300 font-bold'
+                                          : 'bg-white text-slate-700 border-slate-200'
+                                      }`}
+                                    >
+                                      {mName} {isMe ? '⭐ (Bạn)' : ''}
+                                    </span>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
+
+                          <div className="space-y-1.5 divide-y divide-slate-100">
                           {/* Điểm xuất phát nếu có */}
                           {camp.start_point && (
                             <div
@@ -840,6 +948,7 @@ export function StaffCampaignsPage() {
                               </div>
                             );
                           })}
+                          </div>
                         </div>
                       )}
                     </div>
@@ -848,7 +957,14 @@ export function StaffCampaignsPage() {
                     <div className="px-3.5 py-2.5 bg-slate-50 border-t border-slate-100 flex items-center justify-between gap-2">
                       <button
                         type="button"
-                        onClick={() => handleSelectCampaign(cId)}
+                        onClick={() => {
+                          handleSelectCampaign(cId);
+                          if (typeof window !== 'undefined' && window.innerWidth < 1024) {
+                            setTimeout(() => {
+                              mapContainerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                            }, 60);
+                          }
+                        }}
                         className={`text-xs font-bold flex items-center gap-1.5 py-1 px-2.5 rounded-[5px] transition cursor-pointer ${
                           isSelected
                             ? 'bg-[#0f3b7d] text-white'
@@ -860,19 +976,15 @@ export function StaffCampaignsPage() {
                       </button>
 
                       {/* Nút mở chuyến đi thực tế để check-in và ghi chú */}
-                      {camp.deployed_trip_id ? (
-                        <button
-                          type="button"
-                          onClick={() => navigate(`/trips/${camp.deployed_trip_id}`)}
-                          className="px-2.5 py-1 rounded-[5px] bg-[#0f3b7d] hover:bg-[#0c2f64] text-white text-xs font-bold flex items-center gap-1 shadow-2xs transition cursor-pointer"
-                          title="Mở ứng dụng điều hướng thực địa"
-                        >
-                          <Play className="w-3 h-3 fill-current" />
-                          <span>Vào công tác</span>
-                        </button>
-                      ) : (
-                        <span className="text-[11px] text-slate-400 italic">Chờ kích hoạt</span>
-                      )}
+                      <button
+                        type="button"
+                        onClick={() => navigate(`/trips/${camp.id || camp.deployed_trip_id}`)}
+                        className="px-2.5 py-1 rounded-[5px] bg-[#0f3b7d] hover:bg-[#0c2f64] text-white text-xs font-bold flex items-center gap-1 shadow-2xs transition cursor-pointer"
+                        title="Mở ứng dụng điều hướng thực địa"
+                      >
+                        <Play className="w-3 h-3 fill-current" />
+                        <span>Vào công tác</span>
+                      </button>
                     </div>
                   </div>
                 );
@@ -881,10 +993,13 @@ export function StaffCampaignsPage() {
           )}
         </div>
 
-        {/* CỘT PHẢI: BẢN ĐỒ LỘ TRÌNH VÀ CÁC ĐỊA ĐIỂM (CHỈ HIỂN THỊ KHI ĐÃ CHỌN CHIẾN DỊCH) */}
+        {/* CỘT BẢN ĐỒ LỘ TRÌNH (7 CỘT STICKY TRÊN DESKTOP, HIỆN TRÊN CÙNG TRÊN MOBILE) */}
         {currentCampaign && (
-          <div className="lg:col-span-7 flex flex-col gap-3">
-          <div className="bg-white rounded-[5px] border border-slate-200/80 shadow-xs overflow-hidden flex flex-col h-[650px] lg:h-[720px] relative">
+          <div
+            ref={mapContainerRef}
+            className="order-1 lg:order-2 lg:col-span-7 lg:sticky lg:top-2 lg:self-start flex flex-col gap-3 z-10"
+          >
+          <div className="bg-white rounded-[5px] border border-slate-200/80 shadow-xs overflow-hidden flex flex-col h-[360px] sm:h-[440px] lg:h-[calc(100vh-6.5rem)] lg:min-h-[580px] relative">
             {/* Top Bar bên trên Bản đồ */}
             <div className="px-4 py-3 bg-white border-b border-slate-100 flex items-center justify-between gap-3 shrink-0 z-10">
               <div className="min-w-0">
@@ -929,6 +1044,7 @@ export function StaffCampaignsPage() {
                   type="button"
                   onClick={() => {
                     setSelectedCampaignId(null);
+                    setExpandedCampaignId(null);
                     setActiveStop(null);
                   }}
                   className="px-2.5 py-1.5 rounded-[5px] bg-red-50 hover:bg-red-100 text-red-600 text-xs font-semibold flex items-center gap-1 transition cursor-pointer"
@@ -1160,7 +1276,7 @@ export function StaffCampaignsPage() {
               </MapContainer>
 
               {/* Chú giải Map (Legend) ở góc dưới bản đồ */}
-              <div className="absolute bottom-3 left-3 z-[1000] bg-white/90 backdrop-blur-md p-2.5 rounded-[5px] border border-slate-200 shadow-sm text-xs space-y-1.5 pointer-events-auto">
+              <div className="absolute bottom-3 left-3 z-[1000] bg-white/90 backdrop-blur-md p-2.5 rounded-[5px] border border-slate-200 shadow-sm text-xs space-y-1.5 pointer-events-auto hidden sm:block">
                 <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Chú thích điểm dừng</p>
                 <div className="flex items-center gap-2">
                   <span className="w-4 h-4 rounded-full bg-[#0f3b7d] text-white flex items-center justify-center text-[9px] font-bold">
@@ -1184,7 +1300,7 @@ export function StaffCampaignsPage() {
 
               {/* Chi tiết điểm đang chọn hiển thị nổi bật dạng Floating Panel */}
               {activeStop && (
-                <div className="absolute top-3 right-3 z-[1000] max-w-sm w-full bg-white/95 backdrop-blur-md p-3.5 rounded-[5px] border border-slate-200 shadow-lg text-xs animate-scale-up">
+                <div className="absolute top-3 right-3 z-[1000] max-w-[calc(100%-1.5rem)] sm:max-w-sm w-full bg-white/95 backdrop-blur-md p-3.5 rounded-[5px] border border-slate-200 shadow-lg text-xs animate-scale-up max-h-[240px] sm:max-h-[320px] overflow-y-auto">
                   <div className="flex items-start justify-between gap-2 mb-1">
                     <div className="flex items-center gap-1.5">
                       <span className="px-1.5 py-0.5 rounded bg-blue-100 text-[#0f3b7d] text-[10px] font-bold uppercase">

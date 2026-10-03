@@ -102,3 +102,22 @@ async def get_current_admin_user(current_user: dict = Depends(get_current_user))
             detail="Chỉ quản trị viên (Admin) mới có quyền truy cập chức năng này"
         )
     return current_user
+
+
+async def get_current_user_optional(token: Optional[str] = Depends(OAuth2PasswordBearer(tokenUrl="/api/auth/login", auto_error=False))) -> Optional[dict]:
+    """Lấy user nếu có token hợp lệ, nếu không có trả về None (không raise error)"""
+    if not token:
+        return None
+    try:
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[ALGORITHM])
+        username: str = payload.get("sub")
+        if username is None:
+            return None
+        db = get_database()
+        if db is None:
+            return None
+        user = await db.users.find_one({"username": username, "is_deleted": {"$ne": True}})
+        return user
+    except Exception:
+        return None
+

@@ -295,6 +295,22 @@ async def create_campaign(
                 logger.warning(f"Error calculating initial route for campaign: {e}")
 
     await db.campaigns.insert_one(camp_doc)
+
+    try:
+        from app.services.log_service import log_system_activity
+        dests_count = len(camp_doc.get("destinations", []))
+        await log_system_activity(
+            action_type="CAMPAIGN_SESSION",
+            session_title="Quản lý chiến dịch tuyển sinh",
+            sub_action="CREATE_CAMPAIGN",
+            sub_label="Tạo chiến dịch",
+            description=f"Đã tạo chiến dịch tuyển sinh mới '{camp_doc.get('name')}' qua {dests_count} địa điểm",
+            actor_user=current_user,
+            details={"campaign_id": camp_id, "destinations_count": dests_count}
+        )
+    except Exception as log_err:
+        pass
+
     return format_campaign_response(camp_doc)
 
 
@@ -315,9 +331,46 @@ async def update_campaign(
     if "status" in update_dict and hasattr(update_dict["status"], "value"):
         update_dict["status"] = update_dict["status"].value
 
+    # Tự động snapshot tọa độ & địa chỉ trường nếu destination có school_id
+    if update_dict.get("destinations"):
+        for dest in update_dict["destinations"]:
+            if dest.get("school_id"):
+                school = await db.schools.find_one({
+                    "$or": [{"id": dest["school_id"]}, {"code": dest["school_id"]}],
+                    "is_deleted": {"$ne": True}
+                })
+                if school:
+                    if not dest.get("name") or dest.get("name") == "string":
+                        dest["name"] = school.get("name", dest.get("name"))
+                    if not dest.get("address"):
+                        dest["address"] = school.get("address")
+                    if not dest.get("lat") and school.get("lat"):
+                        dest["lat"] = school.get("lat")
+                    if not dest.get("lng") and school.get("lng"):
+                        dest["lng"] = school.get("lng")
+            if not dest.get("id"):
+                dest["id"] = str(uuid.uuid4())
+
     update_dict["updated_at"] = now
     await db.campaigns.update_one({"id": campaign_id}, {"$set": update_dict})
+
     updated_camp = await db.campaigns.find_one({"id": campaign_id})
+
+    # Ghi nhật ký hệ thống: Chỉnh sửa chiến dịch
+    try:
+        from app.services.log_service import log_system_activity
+        await log_system_activity(
+            action_type="CAMPAIGN_SESSION",
+            session_title="Quản lý chiến dịch tuyển sinh",
+            sub_action="UPDATE_CAMPAIGN",
+            sub_label="Chỉnh sửa chiến dịch",
+            description=f"Đã cập nhật thông tin chiến dịch '{updated_camp.get('name')}'",
+            actor_user=current_user,
+            details={"campaign_id": campaign_id, "updated_fields": list(update_dict.keys())}
+        )
+    except Exception as log_err:
+        logger.warning(f"Error logging update_campaign: {log_err}")
+
     return format_campaign_response(updated_camp)
 
 
@@ -770,6 +823,20 @@ async def deploy_campaign_route(
     trip_doc["waypoints"] = campaign_waypoints_docs
     trip_doc["total_waypoints"] = len(campaign_waypoints_docs)
 
+    try:
+        from app.services.log_service import log_system_activity
+        await log_system_activity(
+            action_type="CAMPAIGN_SESSION",
+            session_title="Quản lý chiến dịch tuyển sinh",
+            sub_action="DEPLOY_CAMPAIGN",
+            sub_label="Triển khai chuyến đi",
+            description=f"Đã triển khai chiến dịch '{updated_camp.get('name')}' thành chuyến đi thực địa '{trip_doc.get('name')}' ({len(campaign_waypoints_docs)} điểm dừng)",
+            actor_user=current_user,
+            details={"campaign_id": campaign_id, "trip_id": trip_id, "trip_name": trip_doc.get("name")}
+        )
+    except Exception as log_err:
+        pass
+
     return CampaignDeployResponse(
         campaign=format_campaign_response(updated_camp),
         trip=trip_doc,
@@ -813,3 +880,17 @@ async def delete_campaign(
         {"campaign_id": campaign_id, "is_deleted": {"$ne": True}},
         {"$set": {"is_deleted": True, "deleted_at": now, "updated_at": now}}
     )
+
+    try:
+        from app.services.log_service import log_system_activity
+        await log_system_activity(
+            action_type="CAMPAIGN_SESSION",
+            session_title="Quản lý chiến dịch tuyển sinh",
+            sub_action="DELETE_CAMPAIGN",
+            sub_label="Xóa chiến dịch",
+            description=f"Đã xóa chiến dịch tuyển sinh '{camp.get('name')}'",
+            actor_user=current_user,
+            details={"campaign_id": campaign_id, "name": camp.get("name")}
+        )
+    except Exception as log_err:
+        pass

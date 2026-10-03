@@ -107,6 +107,14 @@ class CampaignUpdate(BaseModel):
     team: Optional[TripTeam] = None
     destinations: Optional[List[CampaignDestination]] = None
     start_point: Optional[dict] = None
+    route_geometry: Optional[List[List[float]]] = None
+    polyline: Optional[str] = None
+    estimated_distance_km: Optional[float] = None
+    estimated_duration_minutes: Optional[int] = None
+    estimated_duration_text: Optional[str] = None
+
+    class Config:
+        extra = "ignore"
 
 
 class CampaignAllocationRequest(BaseModel):

@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from app.api import auth, trips, upload, waypoint_info, campaigns, schools, users, route_plans
+from app.api import auth, trips, upload, waypoint_info, campaigns, schools, users, route_plans, system_logs
 
 api_router = APIRouter(prefix="/api")
 
@@ -11,3 +11,4 @@ api_router.include_router(waypoint_info.router)
 api_router.include_router(campaigns.router)
 api_router.include_router(schools.router)
 api_router.include_router(route_plans.router)
+api_router.include_router(system_logs.router)

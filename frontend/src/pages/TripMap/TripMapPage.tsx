@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, RefreshCw, MapPin, Menu, Utensils, Search, X } from 'lucide-react';
 import polyline from '@mapbox/polyline';
 
-import { MapView, BottomSheet, WaypointInfoModal } from '../../components';
+import { MapView, BottomSheet, WaypointInfoModal, TripAuditHistoryModal } from '../../components';
 import { tripApi, ticketApi, reportApi } from '../../services/api';
 import { useAppStore } from '../../store/useAppStore';
 import { useWatchPosition } from '../../hooks';
@@ -40,6 +40,7 @@ export const TripMapPage: React.FC = () => {
   } = useAppStore();
 
   const [menuOpen, setMenuOpen] = useState(false);
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [route, setRoute] = useState<{ lat: number; lng: number }[] | null>(null);
   const [showVisitedSheet, setShowVisitedSheet] = useState(false);
   const [waypointTickets, setWaypointTickets] = useState<Record<string, number>>({});
@@ -923,6 +924,17 @@ export const TripMapPage: React.FC = () => {
               </button>
 
               <button
+                onClick={() => {
+                  setShowHistoryModal(true);
+                  setMenuOpen(false);
+                }}
+                className="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-gray-100 text-left"
+              >
+                <span>📜</span>
+                <span>Lịch sử chỉnh sửa lộ trình</span>
+              </button>
+
+              <button
                 onClick={async () => {
                   setMenuOpen(false);
 
@@ -1162,6 +1174,14 @@ export const TripMapPage: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Modal Lịch sử chỉnh sửa lộ trình */}
+      <TripAuditHistoryModal
+        tripId={tripId!}
+        isOpen={showHistoryModal}
+        onClose={() => setShowHistoryModal(false)}
+        tripName={mapName}
+      />
     </div>
   );
 };

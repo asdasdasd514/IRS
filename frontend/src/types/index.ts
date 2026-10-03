@@ -15,7 +15,18 @@ export interface Trip {
 export interface TripListItem {
   id: string;
   name: string;
-  status: 'active' | 'paused' | 'completed';
+  status: 'active' | 'paused' | 'completed' | string;
+  campaign_id?: string;
+  trip_code?: string;
+  start_date?: string;
+  end_date?: string;
+  team?: any;
+  destinations?: any[];
+  start_point?: any;
+  route_geometry?: any[];
+  polyline?: string;
+  estimated_distance_km?: number;
+  estimated_duration_minutes?: number;
   total_waypoints: number;
   visited_count: number;
   school_count: number;  // Tổng số trường (chỉ SCHOOL)
@@ -328,4 +339,42 @@ export interface LoginResponse {
   token_type: string;
   user?: User;
 }
+
+// System Activity Log Types (Mô hình Cha - Con)
+export interface LogSubActivity {
+  id: string;
+  action: string;
+  label: string;
+  description: string;
+  timestamp: string;
+  details?: Record<string, any>;
+}
+
+export interface SystemLogActor {
+  user_id?: string;
+  username?: string;
+  full_name?: string;
+  role?: string;
+}
+
+export interface SystemLog {
+  id: string;
+  category?: 'TRIP' | 'SYSTEM' | string;
+  action_type: string;
+  title: string;
+  trip_id?: string;
+  trip_code?: string;
+  trip_name?: string;
+  actor: SystemLogActor;
+  total_actions: number;
+  activities: LogSubActivity[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SystemLogListResponse {
+  total: number;
+  items: SystemLog[];
+}
+
 

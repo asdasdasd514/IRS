@@ -113,6 +113,20 @@ async def create_school(
     }
     await db.waypoints.insert_one(waypoint_doc)
 
+    try:
+        from app.services.log_service import log_system_activity
+        await log_system_activity(
+            action_type="LOCATION_SESSION",
+            session_title="Quản lý địa điểm & trường học",
+            sub_action="CREATE_SCHOOL",
+            sub_label="Thêm địa điểm",
+            description=f"Đã thêm địa điểm/trường học mới '{school_doc.get('name')}' (Mã: {code})",
+            actor_user=current_user,
+            details={"school_id": school_id, "code": code, "address": school_doc.get("address")}
+        )
+    except Exception as log_err:
+        pass
+
     return school_doc
 
 
@@ -144,6 +158,21 @@ async def update_school(
     updated_school = await db.schools.find_one({"_id": school["_id"]})
     if "id" not in updated_school or not updated_school["id"]:
         updated_school["id"] = str(updated_school["_id"])
+
+    try:
+        from app.services.log_service import log_system_activity
+        await log_system_activity(
+            action_type="LOCATION_SESSION",
+            session_title="Quản lý địa điểm & trường học",
+            sub_action="UPDATE_SCHOOL",
+            sub_label="Cập nhật địa điểm",
+            description=f"Đã cập nhật thông tin địa điểm/trường '{school.get('name')}'",
+            actor_user=current_user,
+            details={"school_id": school_id, "updated_fields": list(update_dict.keys())}
+        )
+    except Exception as log_err:
+        pass
+
     return updated_school
 
 
@@ -159,6 +188,20 @@ async def delete_school(school_id: str, current_user: dict = Depends(get_current
         {"_id": school["_id"]},
         {"$set": {"is_deleted": True, "deleted_at": now, "updated_at": now}}
     )
+
+    try:
+        from app.services.log_service import log_system_activity
+        await log_system_activity(
+            action_type="LOCATION_SESSION",
+            session_title="Quản lý địa điểm & trường học",
+            sub_action="DELETE_SCHOOL",
+            sub_label="Xóa địa điểm",
+            description=f"Đã xóa địa điểm/trường '{school.get('name')}' (Mã: {school.get('code')})",
+            actor_user=current_user,
+            details={"school_id": school_id, "name": school.get("name")}
+        )
+    except Exception as log_err:
+        pass
 
 
 def slugify_folder_name(text: str) -> str:
@@ -212,6 +255,20 @@ async def upload_school_image(
             "$push": {"media_library": image_item}
         }
     )
+
+    try:
+        from app.services.log_service import log_system_activity
+        await log_system_activity(
+            action_type="LOCATION_SESSION",
+            session_title="Quản lý địa điểm & trường học",
+            sub_action="UPLOAD_IMAGE",
+            sub_label="Tải ảnh",
+            description=f"Đã tải lên ảnh mới cho trường '{school.get('name')}'",
+            actor_user=current_user,
+            details={"school_id": school_id, "image_url": image_url}
+        )
+    except Exception as log_err:
+        pass
 
     return {
         "success": True,

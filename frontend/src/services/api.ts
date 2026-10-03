@@ -14,6 +14,8 @@ import type {
   User,
   LoginResponse,
   RegisterInput,
+  SystemLog,
+  SystemLogListResponse,
 } from '../types';
 
 // Auto-detect API URL based on browser location
@@ -572,6 +574,26 @@ export const campaignApi = {
   },
   delete: async (id: string): Promise<void> => {
     await api.delete(`/campaigns/${id}`);
+  },
+};
+
+// System Activity Log API
+export const logApi = {
+  getLogs: async (params?: {
+    trip_id?: string;
+    action_type?: string;
+    category?: string;
+    user_id?: string;
+    search?: string;
+    page?: number;
+    page_size?: number;
+  }): Promise<SystemLogListResponse> => {
+    const { data } = await api.get('/logs', { params });
+    return data;
+  },
+  getTripLogs: async (tripId: string): Promise<SystemLog[]> => {
+    const { data } = await api.get(`/logs/trips/${tripId}`);
+    return data;
   },
 };
 

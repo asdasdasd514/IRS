@@ -19,7 +19,7 @@ from app.schemas import (
 from app.services.trip_service import trip_service
 from app.services.routing_service import routing_service
 from app.services.maps_service import parse_google_maps_link, GoogleMapsParseError
-from app.services.auth_service import get_current_user
+from app.services.auth_service import get_current_user, get_current_user_optional
 from app.services.places_service import places_service
 from app.services import report_service
 from app.core.cache import api_response_cache
@@ -136,7 +136,7 @@ async def update_trip(
     trip_data: TripUpdate,
     current_user: dict = Depends(get_current_user)
 ):
-    trip = await trip_service.update_trip(trip_id, trip_data)
+    trip = await trip_service.update_trip(trip_id, trip_data, actor_user=current_user)
     if not trip:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -163,9 +163,10 @@ async def delete_trip(
 @router.post("/{trip_id}/waypoints", response_model=WaypointResponse, status_code=status.HTTP_201_CREATED)
 async def add_waypoint(
     trip_id: str,
-    waypoint_data: WaypointCreate
+    waypoint_data: WaypointCreate,
+    current_user: Optional[dict] = Depends(get_current_user_optional)
 ):
-    waypoint = await trip_service.add_waypoint(trip_id, waypoint_data)
+    waypoint = await trip_service.add_waypoint(trip_id, waypoint_data, actor_user=current_user)
     if not waypoint:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -179,9 +180,10 @@ async def add_waypoint(
 async def update_waypoint(
     trip_id: str,
     waypoint_id: str,
-    waypoint_data: WaypointUpdate
+    waypoint_data: WaypointUpdate,
+    current_user: Optional[dict] = Depends(get_current_user_optional)
 ):
-    waypoint = await trip_service.update_waypoint(waypoint_id, waypoint_data)
+    waypoint = await trip_service.update_waypoint(waypoint_id, waypoint_data, actor_user=current_user)
     if not waypoint:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -194,9 +196,10 @@ async def update_waypoint(
 @router.delete("/{trip_id}/waypoints/{waypoint_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_waypoint(
     trip_id: str,
-    waypoint_id: str
+    waypoint_id: str,
+    current_user: Optional[dict] = Depends(get_current_user_optional)
 ):
-    success = await trip_service.delete_waypoint(waypoint_id)
+    success = await trip_service.delete_waypoint(waypoint_id, actor_user=current_user)
     if not success:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -254,9 +257,10 @@ async def get_next_hop(
 @router.post("/{trip_id}/check-in", response_model=CheckInResponse)
 async def check_in(
     trip_id: str,
-    request: CheckInRequest
+    request: CheckInRequest,
+    current_user: Optional[dict] = Depends(get_current_user_optional)
 ):
-    result = await trip_service.check_in(trip_id, request)
+    result = await trip_service.check_in(trip_id, request, actor_user=current_user)
     if not result:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -273,7 +277,7 @@ async def undo_check_in(
     waypoint_id: str = Query(..., description="ID của waypoint cần undo"),
     current_user: dict = Depends(get_current_user)
 ):
-    result = await trip_service.undo_check_in(trip_id, waypoint_id)
+    result = await trip_service.undo_check_in(trip_id, waypoint_id, actor_user=current_user)
     if not result:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

@@ -361,6 +361,9 @@ export function AdminCampaignsPage() {
   const [selectedCampaignForView, setSelectedCampaignForView] = useState<any | null>(null);
   const [activeSchoolInView, setActiveSchoolInView] = useState<any | null>(null);
 
+  // ID chiến dịch đang chỉnh sửa trong 4-step wizard (null nếu đang tạo mới)
+  const [editingCampaignId, setEditingCampaignId] = useState<string | null>(null);
+
   // Danh sách tài khoản nhân sự hệ thống để gợi ý phân công
   const [systemUsers, setSystemUsers] = useState<any[]>([]);
 
@@ -443,6 +446,7 @@ export function AdminCampaignsPage() {
 
   const resetWizard = () => {
     setWizardStep(1);
+    setEditingCampaignId(null);
     setCampaignName('');
     setCampaignNotes('');
     setSchoolSearch('');
@@ -612,41 +616,91 @@ export function AdminCampaignsPage() {
   };
 
   // CHỈ LƯU VÀO DATABASE KHI NGƯỜI DÙNG BẤM NÚT XÁC NHẬN NÀY Ở BƯỚC 4
-  const handleConfirmCreateCampaign = async () => {
+  // XÁC NHẬN TẠO MỚI HOẶC LƯU CHỈNH SỬA CHIẾN DỊCH Ở BƯỚC 4 CỦA WIZARD
+  // (Chỉ chỉnh sửa bảng campaigns và route_plans, tuyệt đối KHÔNG can thiệp bảng phân công chuyến đi)
+  const handleConfirmSaveCampaign = async () => {
     if (!campaignName.trim() || selectedDestinations.length === 0 || !startPoint) {
-      alert('Vui lòng hoàn tất thông tin chiến dịch trước khi tạo.');
+      alert('Vui lòng hoàn tất thông tin chiến dịch trước khi xác nhận.');
       return;
     }
 
     setWizardLoading(true);
     try {
-      const created = await campaignApi.create({
+      const payload: any = {
         name: campaignName.trim(),
         description: campaignNotes.trim() || undefined,
         notes: campaignNotes.trim() || undefined,
         destinations: routePreview?.destinations || selectedDestinations,
         start_point: startPoint ? {
+          school_id: startPoint.school_id || startPoint.id,
+          id: startPoint.id || startPoint.school_id,
           lat: Number(startPoint.lat),
           lng: Number(startPoint.lng),
           name: startPoint.name,
           address: startPoint.address,
         } : undefined,
-      });
+      };
 
-      // Lưu kết quả định tuyến vào route_plans
-      await campaignApi.optimizeRoute(created.id, {
-        lat: Number(startPoint.lat),
-        lng: Number(startPoint.lng),
-        name: startPoint.name,
-        address: startPoint.address,
-      });
+      if (routePreview) {
+        if (routePreview.route_geometry) payload.route_geometry = routePreview.route_geometry;
+        if (routePreview.polyline) payload.polyline = routePreview.polyline;
+        if (routePreview.estimated_distance_km != null) payload.estimated_distance_km = routePreview.estimated_distance_km;
+        if (routePreview.estimated_duration_minutes != null) payload.estimated_duration_minutes = routePreview.estimated_duration_minutes;
+        if (routePreview.estimated_duration_text) payload.estimated_duration_text = routePreview.estimated_duration_text;
+      }
 
-      setIsModalOpen(false);
-      resetWizard();
-      await loadCampaigns();
-      setActionMessage(`Đã tạo thành công chiến dịch "${created.name}" với lộ trình tối ưu!`);
+      if (editingCampaignId) {
+        // Chỉnh sửa chiến dịch: CHỈ cập nhật chiến dịch, không sửa bảng phân công
+        await campaignApi.update(editingCampaignId, payload);
+
+        // Lưu / cập nhật kết quả định tuyến vào route_plans
+        if (startPoint) {
+          try {
+            await campaignApi.optimizeRoute(editingCampaignId, {
+              lat: Number(startPoint.lat),
+              lng: Number(startPoint.lng),
+              name: startPoint.name,
+              address: startPoint.address,
+            });
+          } catch (optErr) {
+            console.warn('optimizeRoute warning:', optErr);
+          }
+        }
+
+        const updatedId = editingCampaignId;
+        setIsModalOpen(false);
+        resetWizard();
+        await loadCampaigns();
+
+        if (selectedCampaignForView && (selectedCampaignForView.id === updatedId || selectedCampaignForView._id === updatedId)) {
+          try {
+            const fresh = await campaignApi.getById(updatedId);
+            setSelectedCampaignForView(fresh);
+          } catch {
+            // ignore
+          }
+        }
+
+        setActionMessage(`Đã cập nhật thành công chiến dịch "${payload.name}"!`);
+      } else {
+        // Tạo mới chiến dịch
+        const created = await campaignApi.create(payload);
+
+        // Lưu kết quả định tuyến vào route_plans
+        await campaignApi.optimizeRoute(created.id, {
+          lat: Number(startPoint.lat),
+          lng: Number(startPoint.lng),
+          name: startPoint.name,
+          address: startPoint.address,
+        });
+
+        setIsModalOpen(false);
+        resetWizard();
+        await loadCampaigns();
+        setActionMessage(`Đã tạo thành công chiến dịch "${created.name}" với lộ trình tối ưu!`);
+      }
     } catch (err: any) {
-      alert(err.response?.data?.detail || 'Không thể tạo chiến dịch');
+      alert(err.response?.data?.detail || 'Không thể lưu chiến dịch');
     } finally {
       setWizardLoading(false);
     }
@@ -682,6 +736,67 @@ export function AdminCampaignsPage() {
     } finally {
       setActionLoading(null);
     }
+  };
+
+  // MỞ 4-BƯỚC WIZARD ĐỂ CHỈNH SỬA CHIẾN DỊCH (Y hệt như lúc tạo mới chiến dịch)
+  const openEditCampaign = async (camp: any) => {
+    resetWizard();
+    await loadSchools();
+
+    const campId = camp.id || camp._id;
+    setEditingCampaignId(campId);
+    setCampaignName(camp.name || '');
+    setCampaignNotes(camp.notes || camp.description || '');
+
+    // Parse danh sách các trường mục tiêu
+    const parsedDests = Array.isArray(camp.destinations)
+      ? camp.destinations.map((d: any) => ({
+          school_id: d.school_id || d.id,
+          id: d.id || d.school_id,
+          name: d.name,
+          address: d.address || 'Không có địa chỉ',
+          lat: Number(d.lat),
+          lng: Number(d.lng),
+          notes: d.notes || '',
+          priority: d.priority,
+          preferred_visit_time: d.preferred_visit_time || d.preferred_time,
+          visit_duration_minutes: d.visit_duration_minutes || 60,
+        }))
+      : [];
+    setSelectedDestinations(parsedDests);
+
+    // Parse điểm xuất phát
+    if (camp.start_point && camp.start_point.lat != null && camp.start_point.lng != null) {
+      setStartPoint({
+        school_id: camp.start_point.school_id || camp.start_point.id,
+        id: camp.start_point.id || camp.start_point.school_id,
+        name: camp.start_point.name || 'Điểm xuất phát',
+        address: camp.start_point.address || '',
+        lat: Number(camp.start_point.lat),
+        lng: Number(camp.start_point.lng),
+      });
+    } else {
+      setStartPoint(null);
+    }
+
+    // Nạp trước dữ liệu định tuyến nếu chiến dịch đã có
+    if (camp.route_geometry || parsedDests.length > 0) {
+      setRoutePreview({
+        destinations: parsedDests,
+        route_geometry: camp.route_geometry,
+        polyline: camp.polyline,
+        estimated_distance_km: camp.estimated_distance_km,
+        estimated_duration_minutes: camp.estimated_duration_minutes,
+        estimated_duration_text: camp.estimated_duration_text,
+        total_destinations: parsedDests.length,
+        optimized_order: parsedDests.map((d: any) => d.name),
+      });
+    } else {
+      setRoutePreview(null);
+    }
+
+    setWizardStep(1);
+    setIsModalOpen(true);
   };
 
   const extractStopAssignments = (camp: any) => {
@@ -1560,7 +1675,7 @@ export function AdminCampaignsPage() {
                     </div>
                   </div>
 
-                  {/* Action buttons trên Card: Xem chi tiết & Lộ trình, Xóa (Đã bỏ nút Triển khai) */}
+                  {/* Action buttons trên Card: Xem chi tiết & Lộ trình, Sửa, Xóa (Đã bỏ nút Triển khai) */}
                   <div className="mt-5 pt-3 border-t border-slate-100 flex items-center gap-2">
                     <button
                       type="button"
@@ -1569,6 +1684,15 @@ export function AdminCampaignsPage() {
                     >
                       <Eye className="w-3.5 h-3.5" />
                       <span>Xem chi tiết & Lộ trình</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => openEditCampaign(camp)}
+                      title="Chỉnh sửa chiến dịch"
+                      className="p-2 rounded-[5px] border border-slate-200 text-slate-600 hover:text-blue-700 hover:bg-blue-50 hover:border-blue-200 transition text-xs cursor-pointer"
+                    >
+                      <Edit className="w-3.5 h-3.5" />
                     </button>
 
                     <button
@@ -1639,6 +1763,14 @@ export function AdminCampaignsPage() {
                             >
                               <Eye className="w-3.5 h-3.5" />
                               <span>Xem chi tiết</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => openEditCampaign(camp)}
+                              title="Chỉnh sửa chiến dịch"
+                              className="p-1.5 rounded-[5px] border border-slate-200 text-slate-600 hover:text-blue-700 hover:bg-blue-50 hover:border-blue-200 transition cursor-pointer"
+                            >
+                              <Edit className="w-3.5 h-3.5" />
                             </button>
                             <button
                               type="button"
@@ -2098,6 +2230,14 @@ export function AdminCampaignsPage() {
               <div className="flex items-center gap-2">
                 <button
                   type="button"
+                  onClick={() => openEditCampaign(selectedCampaignForView)}
+                  className="py-1.5 px-3 rounded-[5px] bg-[#0f3b7d] hover:bg-[#0c2f64] text-white text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow-2xs"
+                >
+                  <Edit className="w-3.5 h-3.5" />
+                  <span>Chỉnh sửa</span>
+                </button>
+                <button
+                  type="button"
                   onClick={() => {
                     setSelectedCampaignForView(null);
                     setActiveSchoolInView(null);
@@ -2326,6 +2466,8 @@ export function AdminCampaignsPage() {
         </div>
       )}
 
+
+
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/50 backdrop-blur-xs">
           <div className="bg-white rounded-[5px] max-w-5xl w-full max-h-[92vh] flex flex-col shadow-2xl border border-slate-200 animate-slide-up overflow-hidden">
@@ -2333,10 +2475,10 @@ export function AdminCampaignsPage() {
             <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-white shrink-0">
               <div>
                 <h3 className="text-lg font-black text-slate-900">
-                  {stepTitles[wizardStep - 1]}
+                  {editingCampaignId ? `Chỉnh sửa chiến dịch - ${stepTitles[wizardStep - 1]}` : stepTitles[wizardStep - 1]}
                 </h3>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  Bước {wizardStep}/4 - Thiết lập thông tin chiến dịch tuyển sinh
+                  Bước {wizardStep}/4 - {editingCampaignId ? 'Cập nhật thông tin chiến dịch tuyển sinh' : 'Thiết lập thông tin chiến dịch tuyển sinh'}
                 </p>
               </div>
               <button
@@ -2345,7 +2487,7 @@ export function AdminCampaignsPage() {
                   setIsModalOpen(false);
                   resetWizard();
                 }}
-                className="text-slate-400 hover:text-slate-700 p-1.5 rounded-lg hover:bg-slate-100 text-sm font-semibold transition"
+                className="text-slate-400 hover:text-slate-700 p-1.5 rounded-lg hover:bg-slate-100 text-sm font-semibold transition cursor-pointer"
               >
                 ✕ Đóng
               </button>
@@ -2364,7 +2506,19 @@ export function AdminCampaignsPage() {
                   const isCompleted = wizardStep > item.step;
                   return (
                     <div key={item.step} className="flex items-center flex-1 last:flex-none">
-                      <div className="flex flex-col items-center">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (item.step === 1) setWizardStep(1);
+                          else if (item.step === 2 && campaignName.trim()) setWizardStep(2);
+                          else if (item.step === 3 && campaignName.trim() && selectedDestinations.length > 0) setWizardStep(3);
+                          else if (item.step === 4 && campaignName.trim() && selectedDestinations.length > 0 && startPoint) {
+                            if (routePreview) setWizardStep(4);
+                            else handlePreviewRoute();
+                          }
+                        }}
+                        className="flex flex-col items-center cursor-pointer hover:opacity-85 transition bg-transparent border-0 outline-hidden"
+                      >
                         <div
                           className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-200 ${
                             isCompleted
@@ -2387,7 +2541,7 @@ export function AdminCampaignsPage() {
                         >
                           {item.title}
                         </span>
-                      </div>
+                      </button>
                       {idx < 3 && (
                         <div
                           className={`h-0.5 flex-1 mx-3 -mt-3.5 transition-colors duration-200 ${
@@ -2631,6 +2785,20 @@ export function AdminCampaignsPage() {
                     />
                   </div>
 
+                  {startPoint && (
+                    <div className="p-2.5 bg-blue-50 border border-blue-200 rounded-[5px] flex items-center justify-between text-xs">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <MapPin className="w-4 h-4 text-[#0f3b7d] shrink-0" />
+                        <span className="text-slate-600 font-semibold">Điểm xuất phát:</span>
+                        <span className="font-bold text-[#0f3b7d] truncate">{startPoint.name}</span>
+                        {startPoint.address && <span className="text-slate-500 truncate text-[11px]">({startPoint.address})</span>}
+                      </div>
+                      <span className="text-[10px] font-bold bg-[#0f3b7d] text-white px-2 py-0.5 rounded shrink-0">
+                        Đang chọn
+                      </span>
+                    </div>
+                  )}
+
                   {/* Hiển thị dạng LIST cố định chiều cao 380px để không co giãn khi tìm kiếm */}
                   <div className="h-[380px] overflow-y-auto space-y-2 pr-1 border border-slate-100 rounded-[5px] p-1 bg-slate-50/30">
                     {schools.filter((school) => {
@@ -2659,7 +2827,11 @@ export function AdminCampaignsPage() {
                           );
                         })
                         .map((school) => {
-                          const isSelected = startPoint?.school_id === school.id;
+                          const isSelected = Boolean(
+                            (startPoint?.school_id && startPoint.school_id === school.id) ||
+                            (startPoint?.id && startPoint.id === school.id) ||
+                            (startPoint?.lat != null && startPoint?.lng != null && Math.abs(Number(startPoint.lat) - Number(school.lat)) < 0.0001 && Math.abs(Number(startPoint.lng) - Number(school.lng)) < 0.0001)
+                          );
                           return (
                             <div
                               key={school.id}
@@ -2873,11 +3045,11 @@ export function AdminCampaignsPage() {
               ) : (
                 <button
                   type="button"
-                  onClick={handleConfirmCreateCampaign}
+                  onClick={handleConfirmSaveCampaign}
                   disabled={wizardLoading}
-                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-[5px] bg-[#0f3b7d] text-white font-semibold text-sm hover:bg-[#0c2f64] transition disabled:opacity-60 shadow-sm"
+                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-[5px] bg-[#0f3b7d] text-white font-semibold text-sm hover:bg-[#0c2f64] transition disabled:opacity-60 shadow-sm cursor-pointer"
                 >
-                  {wizardLoading ? 'Đang lưu...' : 'Xác nhận tạo chiến dịch'}
+                  {wizardLoading ? 'Đang lưu...' : (editingCampaignId ? 'Lưu thay đổi chiến dịch' : 'Xác nhận tạo chiến dịch')}
                 </button>
               )}
             </div>

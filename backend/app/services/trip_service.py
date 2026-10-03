@@ -18,6 +18,10 @@ from app.schemas import (
 from app.services.routing_service import routing_service
 from app.core.cache import api_response_cache
 from app.services.school_counter_service import increment_school_visit, decrement_school_visit
+from app.services.log_service import log_trip_activity
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def calculate_distance(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
@@ -257,8 +261,12 @@ class TripService:
 
         return trips
 
-    async def update_trip(self, trip_id: str, trip_data: TripUpdate) -> Optional[dict]:
+    async def update_trip(self, trip_id: str, trip_data: TripUpdate, actor_user: Optional[dict] = None) -> Optional[dict]:
         db = get_database()
+        old_trip = await db.admission_trips.find_one({"id": trip_id, "is_deleted": {"$ne": True}})
+        if not old_trip:
+            return None
+
         update_dict = trip_data.model_dump(exclude_unset=True)
         if not update_dict:
             return await self.get_trip(trip_id)
@@ -268,6 +276,38 @@ class TripService:
 
         update_dict["updated_at"] = datetime.now(timezone.utc)
         await db.admission_trips.update_one({"id": trip_id, "is_deleted": {"$ne": True}}, {"$set": update_dict})
+
+        # Ghi nhật ký hệ thống nếu có thay đổi tên hoặc trạng thái
+        try:
+            if "name" in update_dict and update_dict["name"] != old_trip.get("name"):
+                await log_trip_activity(
+                    action_type="TRIP_EDIT_SESSION",
+                    session_title="Chỉnh sửa lộ trình chuyến đi",
+                    sub_action="UPDATE_NAME",
+                    sub_label="Đổi tên chuyến đi",
+                    description=f"Đã đổi tên chuyến đi từ '{old_trip.get('name')}' thành '{update_dict['name']}'",
+                    trip_id=trip_id,
+                    trip_name=update_dict["name"],
+                    trip_code=old_trip.get("trip_code"),
+                    actor_user=actor_user,
+                    details={"old_name": old_trip.get("name"), "new_name": update_dict["name"]}
+                )
+            if "status" in update_dict and update_dict["status"] != old_trip.get("status"):
+                await log_trip_activity(
+                    action_type="TRIP_EDIT_SESSION",
+                    session_title="Cập nhật trạng thái chuyến đi",
+                    sub_action="UPDATE_STATUS",
+                    sub_label="Thay đổi trạng thái",
+                    description=f"Chuyển trạng thái chuyến đi thành '{update_dict['status']}'",
+                    trip_id=trip_id,
+                    trip_name=old_trip.get("name"),
+                    trip_code=old_trip.get("trip_code"),
+                    actor_user=actor_user,
+                    details={"old_status": old_trip.get("status"), "new_status": update_dict["status"]}
+                )
+        except Exception as log_err:
+            logger.warning(f"Error logging trip update: {log_err}")
+
         return await self.get_trip(trip_id)
 
     async def delete_trip(self, trip_id: str) -> bool:
@@ -290,7 +330,7 @@ class TripService:
             return True
         return False
 
-    async def add_waypoint(self, trip_id: str, waypoint_data: WaypointCreate) -> Optional[dict]:
+    async def add_waypoint(self, trip_id: str, waypoint_data: WaypointCreate, actor_user: Optional[dict] = None) -> Optional[dict]:
         db = get_database()
         trip = await db.admission_trips.find_one({"id": trip_id, "is_deleted": {"$ne": True}})
         if not trip:
@@ -389,10 +429,29 @@ class TripService:
         # Xóa cache next-hop của trip để tính toán đề xuất điểm dừng chân màu ĐỎ ngay lập tức
         api_response_cache.clear_prefix(f"nexthop:{trip_id}")
 
+        # Ghi nhật ký hệ thống: Thêm điểm dừng (gom vào session nếu đang trong đợt chỉnh sửa)
+        try:
+            is_food = str(cw_doc.get("type", "")).upper() == "REST_STOP"
+            sub_label = "Thêm quán ăn dừng chân" if is_food else "Thêm điểm dừng vào lộ trình"
+            await log_trip_activity(
+                action_type="TRIP_EDIT_SESSION",
+                session_title="Chỉnh sửa lộ trình chuyến đi",
+                sub_action="ADD_WAYPOINT",
+                sub_label=sub_label,
+                description=f"Đã thêm điểm dừng '{cw_doc['name']}' ({'Quán ăn' if is_food else 'Trường học'}) vào lộ trình",
+                trip_id=trip_id,
+                trip_name=trip.get("name"),
+                trip_code=trip.get("trip_code"),
+                actor_user=actor_user,
+                details={"waypoint_id": cw_id, "name": cw_doc["name"], "address": cw_doc.get("address", "")}
+            )
+        except Exception as log_err:
+            logger.warning(f"Error logging add_waypoint: {log_err}")
+
         cw_doc.pop("_id", None)
         return cw_doc
 
-    async def update_waypoint(self, waypoint_id: str, waypoint_data: WaypointUpdate) -> Optional[dict]:
+    async def update_waypoint(self, waypoint_id: str, waypoint_data: WaypointUpdate, actor_user: Optional[dict] = None) -> Optional[dict]:
         db = get_database()
         update_dict = waypoint_data.model_dump(exclude_unset=True)
         now = datetime.now(timezone.utc)
@@ -419,14 +478,36 @@ class TripService:
 
         if updated_wp and updated_wp.get("school_id"):
             await sync_waypoint_to_school(db, updated_wp["school_id"], update_dict)
-            
+
+        # Ghi nhật ký hệ thống: Cập nhật điểm dừng
+        try:
+            if updated_wp:
+                t_id = updated_wp.get("trip_id")
+                if t_id:
+                    await log_trip_activity(
+                        action_type="TRIP_EDIT_SESSION",
+                        session_title="Chỉnh sửa lộ trình chuyến đi",
+                        sub_action="UPDATE_WAYPOINT",
+                        sub_label="Cập nhật điểm dừng",
+                        description=f"Đã cập nhật thông tin/tọa độ điểm dừng '{updated_wp.get('name')}'",
+                        trip_id=t_id,
+                        actor_user=actor_user,
+                        details={"waypoint_id": waypoint_id, "name": updated_wp.get("name")}
+                    )
+        except Exception as log_err:
+            logger.warning(f"Error logging update_waypoint: {log_err}")
+
         if updated_wp:
             updated_wp.pop("_id", None)
         return updated_wp
 
-    async def delete_waypoint(self, waypoint_id: str) -> bool:
+    async def delete_waypoint(self, waypoint_id: str, actor_user: Optional[dict] = None) -> bool:
         """Xóa mềm điểm dừng nguyên tử"""
         db = get_database()
+        wp_to_delete = await db.campaign_waypoints.find_one({"id": waypoint_id})
+        if not wp_to_delete:
+            wp_to_delete = await db.waypoints.find_one({"id": waypoint_id})
+
         now = datetime.now(timezone.utc)
         res = await db.campaign_waypoints.update_one(
             {"id": waypoint_id, "is_deleted": {"$ne": True}},
@@ -438,9 +519,28 @@ class TripService:
                 {"$set": {"is_deleted": True, "deleted_at": now, "updated_at": now}}
             )
         api_response_cache.clear()
+
+        # Ghi nhật ký hệ thống: Xóa điểm dừng
+        try:
+            if wp_to_delete:
+                t_id = wp_to_delete.get("trip_id")
+                if t_id:
+                    await log_trip_activity(
+                        action_type="TRIP_EDIT_SESSION",
+                        session_title="Chỉnh sửa lộ trình chuyến đi",
+                        sub_action="DELETE_WAYPOINT",
+                        sub_label="Xóa điểm dừng",
+                        description=f"Đã xóa điểm dừng '{wp_to_delete.get('name')}' khỏi lộ trình",
+                        trip_id=t_id,
+                        actor_user=actor_user,
+                        details={"waypoint_id": waypoint_id, "name": wp_to_delete.get("name")}
+                    )
+        except Exception as log_err:
+            logger.warning(f"Error logging delete_waypoint: {log_err}")
+
         return res.modified_count > 0
 
-    async def check_in(self, trip_id: str, checkin_data: CheckInRequest, max_distance: float = 30.0) -> CheckInResponse:
+    async def check_in(self, trip_id: str, checkin_data: CheckInRequest, max_distance: float = 30.0, actor_user: Optional[dict] = None) -> CheckInResponse:
         db = get_database()
         waypoint = await db.campaign_waypoints.find_one({
             "id": checkin_data.waypoint_id,
@@ -508,13 +608,28 @@ class TripService:
         # Xóa cache next-hop để tính toán điểm đến tiếp theo ngay lập tức
         api_response_cache.clear_prefix(f"nexthop:{trip_id}")
 
+        # Ghi nhật ký hệ thống: Check-in thực địa
+        try:
+            await log_trip_activity(
+                action_type="CHECKIN_SESSION",
+                session_title="Check-in thực địa",
+                sub_action="CHECK_IN",
+                sub_label="Check-in điểm dừng",
+                description=f"Đoàn đã check-in làm việc tại '{updated_wp['name']}'",
+                trip_id=trip_id,
+                actor_user=actor_user,
+                details={"waypoint_id": checkin_data.waypoint_id, "name": updated_wp["name"]}
+            )
+        except Exception as log_err:
+            logger.warning(f"Error logging check_in: {log_err}")
+
         return CheckInResponse(
             success=True,
             waypoint=updated_wp,
             message=f"Đã check-in tại {updated_wp['name']}"
         )
 
-    async def undo_check_in(self, trip_id: str, waypoint_id: str) -> CheckInResponse:
+    async def undo_check_in(self, trip_id: str, waypoint_id: str, actor_user: Optional[dict] = None) -> CheckInResponse:
         db = get_database()
         waypoint = await db.campaign_waypoints.find_one({"id": waypoint_id, "trip_id": trip_id})
         if not waypoint:
@@ -553,6 +668,21 @@ class TripService:
             await decrement_school_visit(db, school_id)
 
         api_response_cache.clear_prefix(f"nexthop:{trip_id}")
+
+        # Ghi nhật ký hệ thống: Hoàn tác check-in
+        try:
+            await log_trip_activity(
+                action_type="CHECKIN_SESSION",
+                session_title="Check-in thực địa",
+                sub_action="UNDO_CHECK_IN",
+                sub_label="Hoàn tác check-in",
+                description=f"Đoàn đã hoàn tác check-in tại '{waypoint.get('name')}'",
+                trip_id=trip_id,
+                actor_user=actor_user,
+                details={"waypoint_id": waypoint_id, "name": waypoint.get("name")}
+            )
+        except Exception as log_err:
+            logger.warning(f"Error logging undo_check_in: {log_err}")
 
         return CheckInResponse(
             success=True,

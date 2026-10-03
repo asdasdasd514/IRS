@@ -118,6 +118,22 @@ async def create_user(
     }
 
     await db.users.insert_one(user_doc)
+
+    try:
+        from app.services.log_service import log_system_activity
+        role_label = "Quản trị viên" if is_admin else "Cán bộ thực địa"
+        await log_system_activity(
+            action_type="USER_SESSION",
+            session_title="Quản lý tài khoản người dùng",
+            sub_action="CREATE_USER",
+            sub_label="Tạo tài khoản",
+            description=f"Đã tạo tài khoản mới '{user_data.username}' ({user_data.full_name or 'Chưa đặt họ tên'}) vai trò {role_label}",
+            actor_user=current_admin,
+            details={"user_id": user_id, "username": user_data.username, "role": user_data.role.value}
+        )
+    except Exception as log_err:
+        pass
+
     return user_doc
 
 
@@ -221,6 +237,37 @@ async def update_user(
         update_dict["updated_at"] = now
         await db.users.update_one({"id": target_id}, {"$set": update_dict})
 
+        try:
+            from app.services.log_service import log_system_activity
+            changes = []
+            if user_update.full_name is not None:
+                changes.append(f"họ tên: '{user_update.full_name}'")
+            if user_update.role is not None:
+                r_lbl = "Quản trị viên" if user_update.role == UserRole.ADMIN else "Cán bộ thực địa"
+                changes.append(f"vai trò: {r_lbl}")
+            if user_update.is_active is not None:
+                changes.append("kích hoạt" if user_update.is_active else "vô hiệu hóa")
+            if user_update.password:
+                changes.append("đổi mật khẩu")
+            if user_update.email is not None:
+                changes.append(f"email: {user_update.email}")
+
+            desc = f"Đã cập nhật tài khoản '{user.get('username')}'"
+            if changes:
+                desc += f" ({', '.join(changes)})"
+
+            await log_system_activity(
+                action_type="USER_SESSION",
+                session_title="Quản lý tài khoản người dùng",
+                sub_action="UPDATE_USER",
+                sub_label="Cập nhật tài khoản",
+                description=desc,
+                actor_user=current_admin,
+                details={"user_id": target_id, "username": user.get("username"), "changes": list(update_dict.keys())}
+            )
+        except Exception as log_err:
+            pass
+
     updated_user = await db.users.find_one({"id": target_id})
     if "role" not in updated_user:
         updated_user["role"] = UserRole.ADMIN if updated_user.get("is_admin") else UserRole.STAFF
@@ -272,6 +319,20 @@ async def delete_user(
             "updated_at": now
         }}
     )
+
+    try:
+        from app.services.log_service import log_system_activity
+        await log_system_activity(
+            action_type="USER_SESSION",
+            session_title="Quản lý tài khoản người dùng",
+            sub_action="DELETE_USER",
+            sub_label="Xóa tài khoản",
+            description=f"Đã xóa tài khoản '{user.get('username')}' ({user.get('full_name') or 'Chưa đặt họ tên'})",
+            actor_user=current_admin,
+            details={"user_id": target_id, "username": user.get("username")}
+        )
+    except Exception as log_err:
+        pass
 
     return {
         "success": True,
