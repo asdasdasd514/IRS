@@ -55,7 +55,7 @@ async def search_places_along_route(
                 "message": "Cần cung cấp dữ liệu hình học tuyến đường (route_geometry) để tìm quán ăn dọc đường."
             }
 
-        places = places_service.search_places_along_route(
+        places = await places_service.search_places_along_route(
             route_geometry=route_geom,
             query=request.query,
             max_distance_from_route_meters=request.max_distance_meters,
@@ -84,7 +84,7 @@ async def search_nearby_places(
     current_user: dict = Depends(get_current_user)
 ):
     try:
-        places = places_service.search_nearby_places(lat, lng, query, radius)
+        places = await places_service.search_nearby_places(lat, lng, query, radius)
         return {
             "success": True,
             "total": len(places),

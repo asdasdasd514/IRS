@@ -38,6 +38,10 @@ async def ensure_database_indexes(db):
         await db.schools.create_index([("id", 1), ("is_deleted", 1)])
         await db.schools.create_index([("code", 1), ("is_deleted", 1)])
 
+        # 5. cached_places index (Persistent Cache cho SerpAPI)
+        await db.cached_places.create_index([("cache_key", 1)], unique=True)
+        await db.cached_places.create_index([("expires_at", 1)], expireAfterSeconds=0)
+
         logging.info("⚡ [MongoDB]: Đã tối ưu hóa tất cả Indexes cho hệ thống.")
     except Exception as e:
         logging.warning(f"⚠️ [MongoDB]: Lỗi khi tạo indexes hiệu năng: {e}")

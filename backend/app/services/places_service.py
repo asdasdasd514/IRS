@@ -7,11 +7,13 @@ Uses SerpAPI Google Local Search with caching and geometric corridor filtering.
 """
 import logging
 import math
+from datetime import datetime, timezone, timedelta
 from concurrent.futures import ThreadPoolExecutor
 from typing import List, Dict, Optional, Tuple
 from serpapi import GoogleSearch
 from app.core.config import settings
 from app.core.cache import places_cache
+from app.core.database import get_database
 
 logger = logging.getLogger(__name__)
 
@@ -83,7 +85,7 @@ class PlacesService:
                     break
         return min_dist
 
-    def search_places_along_route(
+    async def search_places_along_route(
         self,
         route_geometry: List[List[float]],
         query: str = "đồ ăn",
@@ -97,6 +99,7 @@ class PlacesService:
         - LỌC NGHIÊM NGẶT: Chỉ giữ lại các địa điểm có khoảng cách vuông góc đến tim đường <= max_distance_from_route_meters
           (mặc định <= 250m), loại bỏ hoàn toàn các quán nằm sâu trong ngõ hẻm/khu dân cư.
         - Chạy đa luồng song song để tốc độ phản hồi nhanh tức thì.
+        - Cơ chế Cache 2 tầng: RAM + MongoDB Persistent Cache (hạn 7 ngày).
         """
         if not route_geometry or len(route_geometry) < 2:
             return []
@@ -105,10 +108,24 @@ class PlacesService:
         start_pt = route_geometry[0]
         end_pt = route_geometry[-1]
         cache_key = f"along_route:{round(start_pt[0], 3)},{round(start_pt[1], 3)}->{round(end_pt[0], 3)},{round(end_pt[1], 3)}:{query.strip().lower()}:{max_distance_from_route_meters}"
+        
+        # Tầng 1: In-memory cache (RAM)
         cached = places_cache.get(cache_key)
         if cached is not None:
-            logger.info(f"⚡ [Cache Hit Places Along Route]: {cache_key} ({len(cached)} quán ăn)")
+            logger.info(f"⚡ [RAM Cache Hit Places Along Route]: {cache_key} ({len(cached)} quán ăn)")
             return cached
+
+        # Tầng 2: MongoDB Persistent Cache
+        db = get_database()
+        if db is not None:
+            try:
+                doc = await db.cached_places.find_one({"cache_key": cache_key})
+                if doc and "places" in doc and doc["places"]:
+                    places_cache.set(cache_key, doc["places"], ttl=86400)
+                    logger.info(f"⚡ [MongoDB Cache Hit Places Along Route]: {cache_key} ({len(doc['places'])} quán ăn)")
+                    return doc["places"]
+            except Exception as mongo_err:
+                logger.warning(f"Error checking places MongoDB cache: {mongo_err}")
 
         if not self.serpapi_key:
             logger.warning("SerpAPI key not configured - cannot search places along route")
@@ -206,22 +223,58 @@ class PlacesService:
         result = filtered_places[:limit]
 
         logger.info(f"🛣️ [Search Along Route]: Tìm thấy {len(result)} quán bán đồ ăn sát đường (<= {max_distance_from_route_meters}m)")
-        places_cache.set(cache_key, result, ttl=300)
+        
+        # Lưu Tầng 1 (RAM)
+        places_cache.set(cache_key, result, ttl=86400)
+
+        # Lưu Tầng 2 (MongoDB Persistent Cache - hạn 7 ngày)
+        if db is not None:
+            try:
+                now = datetime.now(timezone.utc)
+                expires_at = now + timedelta(days=7)
+                await db.cached_places.update_one(
+                    {"cache_key": cache_key},
+                    {"$set": {
+                        "cache_key": cache_key,
+                        "places": result,
+                        "created_at": now,
+                        "expires_at": expires_at
+                    }},
+                    upsert=True
+                )
+                logger.info(f"💾 [MongoDB Saved Places Cache]: {cache_key}")
+            except Exception as save_err:
+                logger.warning(f"Failed to persist places cache to MongoDB: {save_err}")
+
         return result
 
-    def search_nearby_places(
+    async def search_nearby_places(
         self, 
         lat: float, 
         lng: float, 
         query: str = "quán ăn nhà hàng khách sạn",
         radius_meters: int = 5000
     ) -> List[Dict]:
-        """Tìm kiếm quán ăn quanh 1 tọa độ cụ thể"""
+        """Tìm kiếm quán ăn quanh 1 tọa độ cụ thể (Hỗ trợ Cache 2 tầng RAM + MongoDB)"""
         cache_key = f"{round(lat, 3)},{round(lng, 3)}:{query.strip().lower()}:{radius_meters}"
+        
+        # Tầng 1: In-memory cache (RAM)
         cached_places = places_cache.get(cache_key)
         if cached_places is not None:
-            logger.info(f"⚡ [Cache Hit Places]: {cache_key} ({len(cached_places)} địa điểm)")
+            logger.info(f"⚡ [RAM Cache Hit Nearby Places]: {cache_key} ({len(cached_places)} địa điểm)")
             return cached_places
+
+        # Tầng 2: MongoDB Persistent Cache
+        db = get_database()
+        if db is not None:
+            try:
+                doc = await db.cached_places.find_one({"cache_key": cache_key})
+                if doc and "places" in doc and doc["places"]:
+                    places_cache.set(cache_key, doc["places"], ttl=86400)
+                    logger.info(f"⚡ [MongoDB Cache Hit Nearby Places]: {cache_key} ({len(doc['places'])} địa điểm)")
+                    return doc["places"]
+            except Exception as mongo_err:
+                logger.warning(f"Error checking nearby places MongoDB cache: {mongo_err}")
 
         if not self.serpapi_key:
             logger.warning("SerpAPI key not configured - cannot search places")
@@ -264,7 +317,29 @@ class PlacesService:
                     places.append(place_data)
 
             logger.info(f"Found {len(places)} places near location")
-            places_cache.set(cache_key, places, ttl=300)
+            
+            # Lưu Tầng 1 (RAM)
+            places_cache.set(cache_key, places, ttl=86400)
+
+            # Lưu Tầng 2 (MongoDB Persistent Cache - hạn 7 ngày)
+            if db is not None:
+                try:
+                    now = datetime.now(timezone.utc)
+                    expires_at = now + timedelta(days=7)
+                    await db.cached_places.update_one(
+                        {"cache_key": cache_key},
+                        {"$set": {
+                            "cache_key": cache_key,
+                            "places": places,
+                            "created_at": now,
+                            "expires_at": expires_at
+                        }},
+                        upsert=True
+                    )
+                    logger.info(f"💾 [MongoDB Saved Nearby Places Cache]: {cache_key}")
+                except Exception as save_err:
+                    logger.warning(f"Failed to persist nearby places cache to MongoDB: {save_err}")
+
             return places
 
         except Exception as e:

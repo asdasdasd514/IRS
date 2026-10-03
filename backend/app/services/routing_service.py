@@ -4,7 +4,6 @@ Thuật toán định tuyến bước kế tiếp động cho tuyển sinh
 Uses SerpAPI for Google Maps data
 """
 
-from serpapi import GoogleSearch
 from typing import List, Optional, Tuple, Dict, Any
 from app.core.config import settings
 from app.core.cache import distance_matrix_cache, directions_cache
@@ -190,18 +189,16 @@ class RoutingService:
                 results = distance_matrix_cache.get(cache_key)
                 
                 if results is None:
-                    params = {
-                        "engine": "google_maps_directions",
-                        "start_coords": f"{origin_lat},{origin_lng}",
-                        "end_coords": f"{lat},{lng}",
-                        "api_key": self.serpapi_key,
-                        "hl": "vi",
-                        "gl": "vn"
+                    # Dùng Haversine fallback tính khoảng cách an toàn, không tốn credit SerpAPI
+                    dist_m = self._haversine(origin_lat, origin_lng, lat, lng) * 1.25
+                    dur_s = self.calculate_vietnam_travel_duration_seconds(dist_m)
+                    results = {
+                        "directions": [{
+                            "duration": dur_s,
+                            "distance": dist_m
+                        }]
                     }
-                    
-                    search = GoogleSearch(params)
-                    results = search.get_dict()
-                    distance_matrix_cache.set(cache_key, results, ttl=300)
+                    distance_matrix_cache.set(cache_key, results, ttl=600)
                 else:
                     logger.info(f"⚡ [Cache Hit Distance Matrix]: {cache_key}")
                 
@@ -763,64 +760,26 @@ class RoutingService:
         dest_lat: float,
         dest_lng: float
     ) -> Optional[dict]:
-        # Kiểm tra Cache 5 phút cho yêu cầu chỉ đường cùng cặp tọa độ
-        cache_key = f"{round(origin_lat, 4)},{round(origin_lng, 4)}->{round(dest_lat, 4)},{round(dest_lng, 4)}"
+        # Cache key làm tròn 3 chữ số thập phân (~100m) để hấp thụ GPS jitter và tăng tối đa tỷ lệ trúng cache
+        cache_key = f"{round(origin_lat, 3)},{round(origin_lng, 3)}->{round(dest_lat, 3)},{round(dest_lng, 3)}"
         cached_result = directions_cache.get(cache_key)
         if cached_result is not None:
             logger.info(f"⚡ [Cache Hit Directions]: {cache_key}")
             return cached_result
         
-        # 1. Định tuyến đường bộ OSRM (độ chính xác cao với hàng trăm tọa độ uốn lượn theo đường phố thực tế)
+        # Định tuyến đường bộ OSRM (100% miễn phí, vẽ chính xác uốn lượn theo mạng lưới đường sá)
         osrm_res = self.get_osrm_multi_route([(origin_lat, origin_lng), (dest_lat, dest_lng)])
         
-        # 2. Nếu có SerpAPI, lấy thêm các bước chỉ dẫn (steps) văn bản chi tiết
-        steps = []
-        duration_text = osrm_res["duration_text"] if osrm_res else None
-        distance_text = f"{osrm_res['distance_meters'] / 1000:.1f} km" if (osrm_res and osrm_res['distance_meters'] >= 1000) else (f"{int(osrm_res['distance_meters'])} m" if osrm_res else None)
-
-        if self.serpapi_key:
-            try:
-                params = {
-                    "engine": "google_maps_directions",
-                    "start_coords": f"{origin_lat},{origin_lng}",
-                    "end_coords": f"{dest_lat},{dest_lng}",
-                    "api_key": self.serpapi_key,
-                    "hl": "vi",
-                    "gl": "vn"
-                }
-                search = GoogleSearch(params)
-                results = search.get_dict()
-                if "directions" in results and len(results["directions"]) > 0:
-                    direction = results["directions"][0]
-                    duration_text = (
-                        direction.get("formatted_duration")
-                        or direction.get("duration_text")
-                        or duration_text
-                    )
-                    distance_text = (
-                        direction.get("formatted_distance")
-                        or direction.get("distance_text")
-                        or distance_text
-                    )
-                    for trip in direction.get("trips", []):
-                        for step in trip.get("details", []):
-                            steps.append({
-                                "instruction": step.get("title") or step.get("action") or "",
-                                "distance": step.get("formatted_distance") or str(step.get("distance", "")),
-                                "duration": step.get("formatted_duration") or str(step.get("duration", ""))
-                            })
-            except Exception as e:
-                logger.warning(f"SerpAPI directions steps query skipped: {e}")
-
         if osrm_res:
             direction_result = {
                 "polyline": osrm_res["polyline"],
                 "route_geometry": osrm_res["route_geometry"],
-                "duration_text": duration_text or osrm_res["duration_text"],
-                "distance_text": distance_text or (f"{osrm_res['distance_meters'] / 1000:.1f} km" if osrm_res['distance_meters'] >= 1000 else f"{int(osrm_res['distance_meters'])} m"),
-                "steps": steps
+                "duration_text": osrm_res["duration_text"],
+                "distance_text": f"{osrm_res['distance_meters'] / 1000:.1f} km" if osrm_res['distance_meters'] >= 1000 else f"{int(osrm_res['distance_meters'])} m",
+                "steps": []
             }
-            directions_cache.set(cache_key, direction_result, ttl=300)
+            # Lưu cache 1 giờ (3600 giây)
+            directions_cache.set(cache_key, direction_result, ttl=3600)
             return direction_result
 
         return None

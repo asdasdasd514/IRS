@@ -107,11 +107,11 @@ class TTLMemoryCache:
 # 1. Cache tính toán Distance Matrix giữa các điểm trường (Next-Hop candidate)
 distance_matrix_cache = TTLMemoryCache(default_ttl_seconds=300, max_size=3000, name="distance_matrix")
 
-# 2. Cache lộ trình chỉ đường Google Maps Directions (Polyline, Steps, Distance, Duration)
-directions_cache = TTLMemoryCache(default_ttl_seconds=300, max_size=1500, name="directions")
+# 2. Cache lộ trình chỉ đường (Polyline, Distance, Duration) - TTL = 1 giờ
+directions_cache = TTLMemoryCache(default_ttl_seconds=3600, max_size=1500, name="directions")
 
-# 3. Cache tìm kiếm quán ăn/nhà hàng/khách sạn tiện ích xung quanh
-places_cache = TTLMemoryCache(default_ttl_seconds=300, max_size=500, name="places")
+# 3. Cache tìm kiếm quán ăn/nhà hàng/khách sạn tiện ích xung quanh (SerpAPI) - TTL = 24 giờ
+places_cache = TTLMemoryCache(default_ttl_seconds=86400, max_size=500, name="places")
 
 # 4. Cache bóc tách tọa độ từ link Google Maps
 maps_link_cache = TTLMemoryCache(default_ttl_seconds=300, max_size=1000, name="maps_link")
