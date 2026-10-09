@@ -316,6 +316,16 @@ export const tripApi = {
     });
     return data;
   },
+
+  completeTrip: async (tripId: string): Promise<{ success: boolean; trip_id: string; campaign_id?: string; report_id: string }> => {
+    const { data } = await api.post(`/trips/${tripId}/complete`);
+    return data;
+  },
+
+  createNextTrip: async (tripId: string): Promise<{ success: boolean; message: string; trip: Trip; trip_id: string; trip_code: string }> => {
+    const { data } = await api.post(`/trips/${tripId}/create-next-trip`);
+    return data;
+  },
 };
 
 // ==================== 3 PHẦN THÔNG TIN WAYPOINT MỚI ====================
@@ -462,6 +472,28 @@ export const reportApi = {
   deleteReport: async (reportId: string): Promise<void> => {
     await api.delete(`/trips/reports/${reportId}`);
   },
+
+  // Export Excel
+  getExportExcelUrl: (reportId: string): string => {
+    return `${API_BASE_URL}/trips/reports/${reportId}/export-excel`;
+  },
+
+  downloadExcel: async (reportId: string, customFilename?: string): Promise<void> => {
+    const response = await api.get(`/trips/reports/${reportId}/export-excel`, {
+      responseType: 'blob',
+    });
+    const blob = new Blob([response.data], {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = customFilename || `Bao_cao_tuyen_sinh_${reportId.slice(0, 8)}.xlsx`;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    a.remove();
+  },
 };
 
 // School API
@@ -574,6 +606,22 @@ export const campaignApi = {
   },
   delete: async (id: string): Promise<void> => {
     await api.delete(`/campaigns/${id}`);
+  },
+  complete: async (campaignId: string): Promise<any> => {
+    const { data } = await api.post(`/campaigns/${campaignId}/complete`);
+    return data;
+  },
+  getReports: async (campaignId: string): Promise<Report[]> => {
+    const { data } = await api.get(`/campaigns/${campaignId}/reports`);
+    return data;
+  },
+  getSummaryReport: async (campaignId: string): Promise<any> => {
+    const { data } = await api.get(`/campaigns/${campaignId}/summary-report`);
+    return data;
+  },
+  generateReport: async (campaignId: string): Promise<Report> => {
+    const { data } = await api.post(`/campaigns/${campaignId}/reports`);
+    return data;
   },
 };
 

@@ -11,6 +11,7 @@ import {
   CheckCircle2,
   ArrowUpDown,
   Utensils,
+  FileSpreadsheet,
 } from 'lucide-react';
 import type { NextHopCandidate, Waypoint, Location } from '../../types';
 import { calculateDistance } from '../../utils';
@@ -28,6 +29,7 @@ interface BottomSheetProps {
   onSelectWaypoint: (waypoint: Waypoint) => void;
   onCompleteRestStop?: (waypoint: Waypoint) => void;
   onRemoveRestStop?: (waypointId: string) => void;
+  onCompleteTripAndReport?: () => void;
   currentLocation: Location | null;
   allWaypoints?: Waypoint[];
   visitedWaypoints?: Waypoint[];
@@ -67,6 +69,7 @@ export const BottomSheet: React.FC<BottomSheetProps> = ({
   onSelectWaypoint,
   onCompleteRestStop,
   onRemoveRestStop,
+  onCompleteTripAndReport,
   currentLocation,
   allWaypoints = [],
   visitedWaypoints = [],
@@ -384,13 +387,25 @@ export const BottomSheet: React.FC<BottomSheetProps> = ({
                 <p className="text-xs text-slate-500 font-medium">Tất cả {visitedWaypoints.length} điểm đã check-in</p>
               </div>
             </div>
-            <button
-              onClick={onToggle}
-              className="px-3 py-1.5 bg-[#0F3A66] hover:bg-[#0c2e52] text-white rounded-[5px] text-xs font-bold transition flex items-center gap-1 cursor-pointer shrink-0 shadow-2xs"
-            >
-              <span>Xem lộ trình</span>
-              <ChevronUp className="w-4 h-4" />
-            </button>
+            <div className="flex items-center gap-2 shrink-0">
+              {onCompleteTripAndReport && (
+                <button
+                  onClick={onCompleteTripAndReport}
+                  className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-[5px] text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs active:scale-[0.98]"
+                  title="Hoàn thành chuyến đi và lập báo cáo tổng kết"
+                >
+                  <FileSpreadsheet className="w-3.5 h-3.5" />
+                  <span>Tạo báo cáo</span>
+                </button>
+              )}
+              <button
+                onClick={onToggle}
+                className="px-3 py-1.5 bg-[#0F3A66] hover:bg-[#0c2e52] text-white rounded-[5px] text-xs font-bold transition flex items-center gap-1 cursor-pointer shrink-0 shadow-2xs"
+              >
+                <span>Xem lộ trình</span>
+                <ChevronUp className="w-4 h-4" />
+              </button>
+            </div>
           </div>
         )
       ) : (
@@ -414,6 +429,18 @@ export const BottomSheet: React.FC<BottomSheetProps> = ({
 
             {/* Nút hành động góc phải */}
             <div className="flex items-center gap-1 shrink-0 ml-1">
+              {/* Nút Hoàn thành & Báo cáo nhanh trong thẻ mở rộng */}
+              {onCompleteTripAndReport && (
+                <button
+                  onClick={onCompleteTripAndReport}
+                  className="p-1.5 px-2.5 rounded-[5px] bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1.5 transition shadow-xs cursor-pointer mr-1"
+                  title="Hoàn thành chuyến đi & Lập báo cáo tuyển sinh"
+                >
+                  <FileSpreadsheet className="w-3.5 h-3.5" />
+                  <span className="text-[11px] hidden sm:inline">Báo cáo & Excel</span>
+                </button>
+              )}
+
               {/* Nút đảo chiều thứ tự hiển thị (Dưới lên / Trên xuống) */}
               {!showVisitedSheet && (
                 <button

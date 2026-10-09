@@ -3,11 +3,14 @@ Campaign API Endpoints - Quản lý Chiến dịch Tuyển sinh & Tối ưu hóa
 Sử dụng thuật toán Dynamic Next-Hop Routing và lưu trữ kết quả trong route_plans & campaign_waypoints
 """
 
+import logging
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timezone
 import uuid
 from pydantic import BaseModel
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+
+logger = logging.getLogger(__name__)
 
 from app.core.database import get_database
 from app.schemas import (
@@ -894,3 +897,110 @@ async def delete_campaign(
         )
     except Exception as log_err:
         pass
+
+
+@router.post("/{campaign_id}/complete")
+async def complete_campaign(
+    campaign_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Đánh dấu chiến dịch hoàn thành, đồng thời cập nhật chuyến đi liên quan thành completed
+    và sinh báo cáo tổng kết.
+    """
+    db = get_database()
+    now = datetime.now(timezone.utc)
+    camp = await db.campaigns.find_one({"id": campaign_id, "is_deleted": {"$ne": True}})
+    if not camp:
+        raise HTTPException(status_code=404, detail="Chiến dịch tuyển sinh không tồn tại")
+
+    await db.campaigns.update_one(
+        {"id": campaign_id},
+        {"$set": {"status": CampaignStatus.COMPLETED.value, "updated_at": now}}
+    )
+
+    trip_id = camp.get("deployed_trip_id")
+    if not trip_id:
+        active_trip = await db.admission_trips.find_one({"campaign_id": campaign_id, "is_deleted": {"$ne": True}})
+        if active_trip:
+            trip_id = active_trip["id"]
+
+    report_id = None
+    if trip_id:
+        from app.schemas import TripStatus
+        await db.admission_trips.update_one(
+            {"id": trip_id},
+            {"$set": {"status": TripStatus.COMPLETED.value, "updated_at": now}}
+        )
+        try:
+            from app.services import report_service
+            report = await report_service.generate_trip_report(trip_id)
+            report_id = report["id"]
+        except Exception as e:
+            logger.warning(f"Could not auto-generate report on campaign complete: {e}")
+
+    return {
+        "success": True,
+        "campaign_id": campaign_id,
+        "status": "completed",
+        "trip_id": trip_id,
+        "report_id": report_id
+    }
+
+
+@router.get("/{campaign_id}/reports")
+async def get_campaign_reports(
+    campaign_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Lấy danh sách các báo cáo thuộc chiến dịch"""
+    db = get_database()
+    cursor = db.trip_reports.find({"campaign_id": campaign_id, "is_deleted": {"$ne": True}}).sort("created_at", -1)
+    reports = await cursor.to_list(length=100)
+    
+    # Nếu chưa có báo cáo gắn campaign_id, tìm qua deployed_trip_id
+    if not reports:
+        camp = await db.campaigns.find_one({"id": campaign_id})
+        if camp and camp.get("deployed_trip_id"):
+            cursor = db.trip_reports.find({"trip_id": camp["deployed_trip_id"], "is_deleted": {"$ne": True}}).sort("created_at", -1)
+            reports = await cursor.to_list(length=100)
+
+    for r in reports:
+        r.pop("_id", None)
+    return reports
+
+
+@router.post("/{campaign_id}/reports")
+async def generate_campaign_report(
+    campaign_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Tạo báo cáo tổng kết cho chiến dịch"""
+    db = get_database()
+    camp = await db.campaigns.find_one({"id": campaign_id, "is_deleted": {"$ne": True}})
+    if not camp:
+        raise HTTPException(status_code=404, detail="Chiến dịch không tồn tại")
+
+    trip_id = camp.get("deployed_trip_id")
+    if not trip_id:
+        active_trip = await db.admission_trips.find_one({"campaign_id": campaign_id, "is_deleted": {"$ne": True}})
+        if active_trip:
+            trip_id = active_trip["id"]
+
+    if not trip_id:
+        raise HTTPException(status_code=400, detail="Chiến dịch chưa được triển khai thành chuyến đi thực địa để tạo báo cáo")
+
+    from app.services import report_service
+    report = await report_service.generate_trip_report(trip_id)
+    return report
+
+
+@router.get("/{campaign_id}/summary-report")
+async def get_campaign_summary_report(
+    campaign_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Lấy báo cáo tổng kết toàn chiến dịch tổng hợp tự động qua tất cả các đợt (Real-time)"""
+    from app.services import report_service
+    summary = await report_service.get_campaign_summary_report(campaign_id)
+    return summary

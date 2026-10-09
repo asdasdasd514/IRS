@@ -33,6 +33,7 @@ import {
   Calendar,
   Edit,
   GripVertical,
+  FileSpreadsheet,
 } from 'lucide-react';
 import { campaignApi, schoolApi, authApi, tripApi } from '../../../services/api';
 
@@ -1688,6 +1689,15 @@ export function AdminCampaignsPage() {
 
                     <button
                       type="button"
+                      onClick={() => navigate('/reports')}
+                      title="Báo cáo tuyển sinh & Xuất Excel"
+                      className="p-2 rounded-[5px] border border-emerald-200 text-emerald-700 hover:bg-emerald-50 hover:border-emerald-300 transition text-xs cursor-pointer flex items-center gap-1"
+                    >
+                      <FileSpreadsheet className="w-3.5 h-3.5" />
+                    </button>
+
+                    <button
+                      type="button"
                       onClick={() => openEditCampaign(camp)}
                       title="Chỉnh sửa chiến dịch"
                       className="p-2 rounded-[5px] border border-slate-200 text-slate-600 hover:text-blue-700 hover:bg-blue-50 hover:border-blue-200 transition text-xs cursor-pointer"
@@ -1763,6 +1773,15 @@ export function AdminCampaignsPage() {
                             >
                               <Eye className="w-3.5 h-3.5" />
                               <span>Xem chi tiết</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => navigate('/reports')}
+                              className="py-1.5 px-2 rounded-[5px] border border-emerald-200 text-emerald-700 hover:bg-emerald-50 text-xs font-semibold flex items-center gap-1 transition cursor-pointer"
+                              title="Báo cáo tuyển sinh & Xuất Excel"
+                            >
+                              <FileSpreadsheet className="w-3.5 h-3.5" />
+                              <span className="hidden lg:inline">Báo cáo</span>
                             </button>
                             <button
                               type="button"
@@ -4017,18 +4036,33 @@ export function AdminCampaignsPage() {
                 Đóng
               </button>
 
-              <button
-                type="button"
-                onClick={() => {
-                  const camp = viewingAllocatedTrip;
-                  setViewingAllocatedTrip(null);
-                  openAllocationModal(camp);
-                }}
-                className="w-9 h-9 rounded-[5px] bg-[#0f3b7d] hover:bg-[#0c2f64] text-white transition shadow-xs flex items-center justify-center cursor-pointer"
-                title="Chỉnh sửa phân bổ"
-              >
-                <Edit className="w-4 h-4" />
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setViewingAllocatedTrip(null);
+                    navigate('/reports');
+                  }}
+                  className="px-3.5 py-2 rounded-[5px] bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition shadow-xs flex items-center gap-1.5 cursor-pointer"
+                  title="Xem báo cáo chuyến đi và xuất Excel"
+                >
+                  <FileSpreadsheet className="w-3.5 h-3.5" />
+                  <span>Báo cáo & Xuất Excel</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const camp = viewingAllocatedTrip;
+                    setViewingAllocatedTrip(null);
+                    openAllocationModal(camp);
+                  }}
+                  className="w-9 h-9 rounded-[5px] bg-[#0f3b7d] hover:bg-[#0c2f64] text-white transition shadow-xs flex items-center justify-center cursor-pointer"
+                  title="Chỉnh sửa phân bổ"
+                >
+                  <Edit className="w-4 h-4" />
+                </button>
+              </div>
             </div>
           </div>
         </div>

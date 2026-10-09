@@ -21,6 +21,7 @@ import {
   Layers,
   Award,
   X,
+  FileSpreadsheet,
 } from 'lucide-react';
 
 import { useAppStore } from '../../store/useAppStore';
@@ -145,7 +146,7 @@ export function StaffCampaignsPage() {
   // Lọc theo người dùng (Mặc định là người dùng đang đăng nhập)
   const [selectedStaffId] = useState<string>(() => user?.id || '');
   const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter] = useState<'all' | 'assigned' | 'active' | 'completed'>('all');
+  const [activeTab, setActiveTab] = useState<'deploying' | 'completed'>('deploying');
 
   // Chiến dịch và Điểm trường đang chọn để focus trên bản đồ
   const [selectedCampaignId, setSelectedCampaignId] = useState<string | null>(null);
@@ -327,15 +328,23 @@ export function StaffCampaignsPage() {
     });
   }, [campaigns, user, isAdmin]);
 
-  // Lọc theo tìm kiếm và trạng thái
+  // Số lượng chuyến đi theo từng tab
+  const deployingCount = useMemo(() => {
+    return allocatedCampaignsForStaff.filter((c) => c.status !== 'completed').length;
+  }, [allocatedCampaignsForStaff]);
+
+  const completedCount = useMemo(() => {
+    return allocatedCampaignsForStaff.filter((c) => c.status === 'completed').length;
+  }, [allocatedCampaignsForStaff]);
+
+  // Lọc theo Tab (Triển khai | Hoàn thành) và tìm kiếm
   const filteredCampaigns = useMemo(() => {
     return allocatedCampaignsForStaff.filter((camp) => {
-      if (statusFilter !== 'all') {
-        if (statusFilter === 'assigned' && camp.status !== 'assigned') return false;
-        if (statusFilter === 'active' && camp.status !== 'active' && camp.status !== 'deployed') return false;
-        if (statusFilter === 'completed' && camp.status !== 'completed') return false;
-      }
+      // 1. Phân loại theo 2 tab rõ rệt
+      if (activeTab === 'deploying' && camp.status === 'completed') return false;
+      if (activeTab === 'completed' && camp.status !== 'completed') return false;
 
+      // 2. Tìm kiếm theo từ khóa
       const q = searchQuery.trim().toLowerCase();
       if (!q) return true;
 
@@ -349,7 +358,7 @@ export function StaffCampaignsPage() {
 
       return nameMatch || codeMatch || leaderMatch || memberMatch || schoolMatch;
     });
-  }, [allocatedCampaignsForStaff, statusFilter, searchQuery]);
+  }, [allocatedCampaignsForStaff, activeTab, searchQuery]);
 
   // Chọn chiến dịch: mở dropdown chi tiết và mở bản đồ tương ứng (tự động ẩn các chiến dịch khác)
   const handleSelectCampaign = (cId: string) => {
@@ -571,6 +580,61 @@ export function StaffCampaignsPage() {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
         {/* CỘT DANH SÁCH CHIẾN DỊCH & ĐỊA ĐIỂM (5 CỘT TRÊN DESKTOP, NẰM DƯỚI BẢN ĐỒ TRÊN MOBILE) */}
         <div className={`${currentCampaign ? 'lg:col-span-5' : 'lg:col-span-12 w-full'} order-2 lg:order-1 space-y-4`}>
+          {/* TAB CHUYỂN ĐỔI: TRIỂN KHAI | HOÀN THÀNH */}
+          <div className="bg-white p-1.5 rounded-[5px] border border-slate-200/80 shadow-xs flex gap-1.5">
+            <button
+              type="button"
+              onClick={() => {
+                setActiveTab('deploying');
+                setSelectedCampaignId(null);
+                setExpandedCampaignId(null);
+                setActiveStop(null);
+              }}
+              className={`flex-1 py-2.5 px-3 rounded-[5px] text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer ${
+                activeTab === 'deploying'
+                  ? 'bg-[#0f3b7d] text-white shadow-xs'
+                  : 'bg-transparent text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+              }`}
+            >
+              <span>🚀 Triển khai</span>
+              <span
+                className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
+                  activeTab === 'deploying'
+                    ? 'bg-white/20 text-white'
+                    : 'bg-slate-200 text-slate-700'
+                }`}
+              >
+                {deployingCount}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setActiveTab('completed');
+                setSelectedCampaignId(null);
+                setExpandedCampaignId(null);
+                setActiveStop(null);
+              }}
+              className={`flex-1 py-2.5 px-3 rounded-[5px] text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer ${
+                activeTab === 'completed'
+                  ? 'bg-emerald-600 text-white shadow-xs'
+                  : 'bg-transparent text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+              }`}
+            >
+              <span>✅ Hoàn thành</span>
+              <span
+                className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
+                  activeTab === 'completed'
+                    ? 'bg-white/20 text-white'
+                    : 'bg-slate-200 text-slate-700'
+                }`}
+              >
+                {completedCount}
+              </span>
+            </button>
+          </div>
+
           {/* Thanh tìm kiếm & Dropdown chọn chiến dịch */}
           <div className="bg-white p-3.5 rounded-[5px] border border-slate-200/80 shadow-xs space-y-3">
             <div className="flex flex-col sm:flex-row gap-2.5 items-stretch sm:items-center">
@@ -591,7 +655,9 @@ export function StaffCampaignsPage() {
                   }}
                   className="w-full px-3 py-2 text-xs font-semibold rounded-[5px] bg-blue-50/80 border border-blue-200 text-[#0f3b7d] focus:bg-white focus:border-[#0f3b7d] focus:ring-1 focus:ring-[#0f3b7d] outline-hidden transition cursor-pointer"
                 >
-                  <option value="">▼ Chọn chiến dịch xem bản đồ...</option>
+                  <option value="">
+                    ▼ Chọn xem bản đồ ({activeTab === 'deploying' ? 'Đang triển khai' : 'Đã hoàn thành'})...
+                  </option>
                   {filteredCampaigns.map((camp) => {
                     const cId = camp.id || camp._id;
                     const codeText = camp.trip_code ? ` [${camp.trip_code}]` : (camp.deployed_trip_id ? ` [${camp.deployed_trip_id}]` : '');
@@ -647,7 +713,25 @@ export function StaffCampaignsPage() {
           {loading ? (
             <div className="p-12 bg-white rounded-[5px] border border-slate-200 flex flex-col items-center justify-center text-slate-400">
               <div className="w-8 h-8 border-3 border-blue-600/30 border-t-[#0f3b7d] rounded-full animate-spin mb-3" />
-              <p className="text-xs font-semibold">Đang tải danh sách chiến dịch phân bổ...</p>
+              <p className="text-xs font-semibold">Đang tải danh sách chuyến đi...</p>
+            </div>
+          ) : filteredCampaigns.length === 0 ? (
+            <div className="p-10 bg-white rounded-[5px] border border-slate-200 text-center space-y-2.5">
+              <div className="w-12 h-12 rounded-full bg-slate-100 text-slate-400 mx-auto flex items-center justify-center text-xl">
+                {activeTab === 'deploying' ? '🚀' : '✅'}
+              </div>
+              <h4 className="text-sm font-bold text-slate-700">
+                {activeTab === 'deploying'
+                  ? 'Không có chuyến đi nào đang triển khai'
+                  : 'Chưa có chuyến đi nào hoàn thành'}
+              </h4>
+              <p className="text-xs text-slate-500 max-w-sm mx-auto">
+                {searchQuery
+                  ? 'Thử thay đổi từ khóa tìm kiếm để xem kết quả phù hợp.'
+                  : activeTab === 'deploying'
+                  ? 'Tất cả các chuyến đi phân bổ của bạn đã hoàn tất 100% hoặc chưa có chuyến mới.'
+                  : 'Các chuyến đi thực địa sau khi hoàn tất 100% và tạo báo cáo sẽ tự động lưu trữ tại tab này.'}
+              </p>
             </div>
           ) : (
             <div className="space-y-3">
@@ -975,16 +1059,28 @@ export function StaffCampaignsPage() {
                         <span>{isSelected ? 'Đang xem bản đồ' : 'Xem lộ trình trên bản đồ'}</span>
                       </button>
 
-                      {/* Nút mở chuyến đi thực tế để check-in và ghi chú */}
-                      <button
-                        type="button"
-                        onClick={() => navigate(`/trips/${camp.id || camp.deployed_trip_id}`)}
-                        className="px-2.5 py-1 rounded-[5px] bg-[#0f3b7d] hover:bg-[#0c2f64] text-white text-xs font-bold flex items-center gap-1 shadow-2xs transition cursor-pointer"
-                        title="Mở ứng dụng điều hướng thực địa"
-                      >
-                        <Play className="w-3 h-3 fill-current" />
-                        <span>Vào công tác</span>
-                      </button>
+                      {/* Nút hành động */}
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => navigate(`/reports?campaign_id=${camp.id || camp._id}`)}
+                          className="px-2.5 py-1 rounded-[5px] bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 text-xs font-bold flex items-center gap-1 transition cursor-pointer"
+                          title="Xem báo cáo chuyến đi và xuất file Excel"
+                        >
+                          <FileSpreadsheet className="w-3 h-3 text-emerald-600" />
+                          <span>Báo cáo</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => navigate(`/trips/${camp.id || camp.deployed_trip_id}`)}
+                          className="px-2.5 py-1 rounded-[5px] bg-[#0f3b7d] hover:bg-[#0c2f64] text-white text-xs font-bold flex items-center gap-1 shadow-2xs transition cursor-pointer"
+                          title="Mở ứng dụng điều hướng thực địa"
+                        >
+                          <Play className="w-3 h-3 fill-current" />
+                          <span>Vào công tác</span>
+                        </button>
+                      </div>
                     </div>
                   </div>
                 );

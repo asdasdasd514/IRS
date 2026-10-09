@@ -450,16 +450,39 @@ async def delete_visit_log(log_id: str):
 
 @router.get("/{waypoint_id}/tickets", response_model=List[TicketResponse])
 async def get_tickets(waypoint_id: str):
-    """Lấy danh sách phiếu thu trực tiếp của điểm dừng"""
+    """Lấy danh sách phiếu thu của điểm dừng và lịch sử phiếu của trường học từ trước tới nay"""
     db = get_database()
     wp, _ = await find_any_point(db, waypoint_id)
     if not wp:
         raise HTTPException(status_code=404, detail="Không tìm thấy điểm dừng")
 
-    tickets = wp.get("tickets", [])
-    active_tickets = [t for t in tickets if not t.get("is_deleted")]
-    active_tickets.sort(key=lambda x: x.get("collection_date") or x.get("created_at") or datetime.min, reverse=True)
-    return [TicketResponse.model_validate(t) for t in active_tickets]
+    school_id = wp.get("school_id")
+    tickets = []
+    seen_ids = set()
+
+    # 1. Phiếu của điểm dừng hiện tại
+    for t in wp.get("tickets", []):
+        t_id = t.get("id")
+        if not t.get("is_deleted") and t_id not in seen_ids:
+            seen_ids.add(t_id)
+            tickets.append(t)
+
+    # 2. Phiếu thu từ các chuyến đi / đợt tiếp cận khác của cùng trường này
+    if school_id:
+        related_wps = await db.campaign_waypoints.find({
+            "school_id": school_id,
+            "id": {"$ne": waypoint_id},
+            "is_deleted": {"$ne": True}
+        }).to_list(length=100)
+        for r_wp in related_wps:
+            for t in r_wp.get("tickets", []):
+                t_id = t.get("id")
+                if not t.get("is_deleted") and t_id not in seen_ids:
+                    seen_ids.add(t_id)
+                    tickets.append(t)
+
+    tickets.sort(key=lambda x: x.get("collection_date") or x.get("created_at") or datetime.min, reverse=True)
+    return [TicketResponse.model_validate(t) for t in tickets]
 
 
 @router.post("/{waypoint_id}/tickets", response_model=TicketResponse, status_code=status.HTTP_201_CREATED)

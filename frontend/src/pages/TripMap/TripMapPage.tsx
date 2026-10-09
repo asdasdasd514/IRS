@@ -92,6 +92,8 @@ export const TripMapPage: React.FC = () => {
     return [];
   }, [trip]);
 
+  const isTripCompleted = trip?.status === 'completed';
+
   const displayWaypoints = useMemo(() => {
     return rawWaypointsSource
       .map((waypoint: any, index: number) => {
@@ -106,11 +108,12 @@ export const TripMapPage: React.FC = () => {
           lng,
           type: waypoint.type || 'SCHOOL',
           visit_order: waypoint.visit_order || waypoint.order || (index + 1),
+          is_visited: isTripCompleted ? true : Boolean(waypoint.is_visited || waypoint.visited),
         };
       })
       .filter((waypoint: any) => Number.isFinite(waypoint.lat) && Number.isFinite(waypoint.lng))
       .sort((a: any, b: any) => (a.visit_order || 0) - (b.visit_order || 0));
-  }, [rawWaypointsSource]);
+  }, [rawWaypointsSource, isTripCompleted]);
 
   // Giải mã toàn bộ tuyến đường tổng thể (Trip Route Polyline)
   const tripRoute = useMemo(() => {
@@ -162,6 +165,11 @@ export const TripMapPage: React.FC = () => {
   // Fetch next hop when location changes
   const fetchNextHop = useCallback(async () => {
     if (!tripId || !currentLocation) return;
+    if (isTripCompleted) {
+      setNextHop(null as any, []);
+      setRoute(null);
+      return;
+    }
 
     setIsLoadingNextHop(true);
     try {
@@ -212,14 +220,19 @@ export const TripMapPage: React.FC = () => {
     } finally {
       setIsLoadingNextHop(false);
     }
-  }, [tripId, currentLocation, setIsLoadingNextHop, setNextHop]);
+  }, [tripId, currentLocation, setIsLoadingNextHop, setNextHop, isTripCompleted]);
 
   // Fetch on initial load only (not on every location change)
   useEffect(() => {
+    if (isTripCompleted) {
+      setNextHop(null as any, []);
+      setRoute(null);
+      return;
+    }
     if (currentLocation && trip && !nextHop) {
       fetchNextHop();
     }
-  }, [currentLocation, trip, nextHop, fetchNextHop]);
+  }, [currentLocation, trip, nextHop, fetchNextHop, isTripCompleted, setNextHop]);
 
   // Fetch tickets for visited waypoints (ưu tiên dữ liệu embedded trong waypoint để tránh spam API)
   useEffect(() => {
@@ -568,6 +581,81 @@ export const TripMapPage: React.FC = () => {
     }
   }, [tripId, queryClient, refetchTrip, fetchNextHop, setBottomSheetExpanded]);
 
+  const handleCompleteTripAndReport = async () => {
+    if (!tripId) return;
+    if (!window.confirm('Xác nhận hoàn thành chuyến đi và lập báo cáo tổng kết tuyển sinh?')) {
+      return;
+    }
+
+    const loadingToast = document.createElement('div');
+    loadingToast.id = 'report-loading-toast';
+    loadingToast.className = 'fixed top-4 right-4 z-[9999] bg-[#0F3A66] text-white px-5 py-3.5 rounded-[5px] shadow-lg flex items-center gap-3 text-xs max-w-sm';
+    loadingToast.innerHTML = `
+      <div class="animate-spin rounded-full h-4 w-4 border-2 border-white/30 border-t-white"></div>
+      <div>
+        <div class="font-bold">Đang hoàn thành & lập báo cáo...</div>
+        <div class="opacity-80 text-[11px]">Vui lòng đợi trong giây lát</div>
+      </div>
+    `;
+    document.body.appendChild(loadingToast);
+
+    try {
+      const res = await tripApi.completeTrip(tripId);
+      loadingToast.remove();
+      if (res && res.report_id) {
+        navigate(`/reports/${res.report_id}`);
+      } else {
+        navigate('/reports');
+      }
+    } catch (err: any) {
+      console.error('Failed to complete trip & create report:', err);
+      try {
+        const { job_id } = await reportApi.generateReport(tripId);
+        const jobStatus = await reportApi.getJobStatus(job_id);
+        loadingToast.remove();
+        if (jobStatus.result_report_id) {
+          navigate(`/reports/${jobStatus.result_report_id}`);
+        } else {
+          navigate('/reports');
+        }
+      } catch (e) {
+        loadingToast.remove();
+        alert('Có lỗi khi tạo báo cáo. Vui lòng kiểm tra trong danh sách báo cáo.');
+        navigate('/reports');
+      }
+    }
+  };
+
+  // Tạo chuyến đi mới tiếp theo cho đợt tuyển sinh tiếp theo
+  const [isCreatingNextTrip, setIsCreatingNextTrip] = useState(false);
+  const handleCreateNextTrip = async () => {
+    if (!tripId) return;
+    const confirmed = window.confirm(
+      'Tạo chuyến đi tiếp theo cho đợt tuyển sinh mới dựa trên danh sách các điểm trường của lộ trình này?\n\n(Hệ thống sẽ bảo lưu 100% chuyến đi và báo cáo hiện tại, đồng thời sinh chuyến đi mới với mã kế tiếp).'
+    );
+    if (!confirmed) return;
+
+    setIsCreatingNextTrip(true);
+    setMenuOpen(false);
+
+    try {
+      const res = await tripApi.createNextTrip(tripId);
+      if (res.success && res.trip_id) {
+        setAddSuccessToast(`🎉 Đã tạo chuyến đi mới [${res.trip_code || ''}]! Đang chuyển hướng...`);
+        setTimeout(() => {
+          navigate(`/trips/${res.trip_id}/map`);
+        }, 1200);
+      } else {
+        alert(res.message || 'Không thể tạo chuyến đi mới.');
+      }
+    } catch (err: any) {
+      console.error('Error creating next trip:', err);
+      alert(err?.response?.data?.detail || 'Lỗi khi tạo chuyến đi mới.');
+    } finally {
+      setIsCreatingNextTrip(false);
+    }
+  };
+
   // Handle waypoint marker click
   const handleWaypointClick = useCallback((waypoint: Waypoint) => {
     // Không mở modal thông tin trường học cho quán ăn / điểm dừng chân
@@ -901,6 +989,7 @@ export const TripMapPage: React.FC = () => {
           onSelectWaypoint={handleWaypointClick}
           onCompleteRestStop={handleCompleteRestStop}
           onRemoveRestStop={handleRemoveRestStop}
+          onCompleteTripAndReport={handleCompleteTripAndReport}
           currentLocation={currentLocation}
           allWaypoints={displayWaypoints}
           visitedWaypoints={visitedWaypoints}
@@ -934,7 +1023,7 @@ export const TripMapPage: React.FC = () => {
                   navigate(`/trips/${tripId}/edit`);
                   setMenuOpen(false);
                 }}
-                className="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-gray-100"
+                className="w-full flex items-center gap-3 p-3 rounded-[5px] hover:bg-gray-100"
               >
                 <span>✏️</span>
                 <span>Chỉnh sửa chuyến đi</span>
@@ -945,177 +1034,31 @@ export const TripMapPage: React.FC = () => {
                   setShowHistoryModal(true);
                   setMenuOpen(false);
                 }}
-                className="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-gray-100 text-left"
+                className="w-full flex items-center gap-3 p-3 rounded-[5px] hover:bg-gray-100 text-left"
               >
                 <span>📜</span>
                 <span>Lịch sử chỉnh sửa lộ trình</span>
               </button>
 
               <button
-                onClick={async () => {
+                onClick={() => {
                   setMenuOpen(false);
-
-                  if (!window.confirm('Tạo báo cáo cho chuyến đi này?\n\nQuá trình tạo báo cáo có thể mất 1-2 phút.')) return;
-
-                  // Show loading toast
-                  const loadingToast = document.createElement('div');
-                  loadingToast.id = 'report-loading-toast';
-                  loadingToast.className = 'fixed top-4 right-4 z-[9999] bg-blue-500 text-white px-6 py-4 rounded-lg shadow-lg flex items-center gap-3 max-w-sm';
-                  loadingToast.innerHTML = `
-                    <div class="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                    <div>
-                      <div class="font-semibold">Đang tạo báo cáo...</div>
-                      <div class="text-sm opacity-90">Vui lòng đợi trong giây lát</div>
-                    </div>
-                  `;
-                  document.body.appendChild(loadingToast);
-
-                  try {
-                    // Start background job - returns job_id immediately
-                    // Use client-side time for report creation
-                    const createdAt = new Date().toISOString();
-                    const { job_id } = await reportApi.generateReport(tripId!, createdAt);
-
-                    // Update toast to show we're polling
-                    const progressEl = document.createElement('div');
-                    progressEl.id = 'report-progress';
-                    progressEl.className = 'text-sm opacity-90';
-                    progressEl.textContent = '0%';
-                    loadingToast.querySelector('div:last-child')!.appendChild(progressEl);
-
-                    // Stop polling after 60 minutes max
-                    const timeoutId = setTimeout(() => {
-                      clearInterval(pollInterval);
-                      loadingToast.remove();
-                      alert('Timeout: Quá thời gian chờ (60p). Vui lòng kiểm tra lại trong danh sách báo cáo.');
-                    }, 3600000);
-
-                    // Poll for status every 2 seconds
-                    const pollInterval = setInterval(async () => {
-                      try {
-                        const jobStatus = await reportApi.getJobStatus(job_id);
-
-                        // Update progress
-                        const prog = document.getElementById('report-progress');
-                        if (prog) prog.textContent = `${jobStatus.progress}%`;
-
-                        if (jobStatus.status === 'completed') {
-                          clearInterval(pollInterval);
-                          clearTimeout(timeoutId); // Clear the timeout!
-                          loadingToast.remove();
-
-                          // Show success toast
-                          const successToast = document.createElement('div');
-                          successToast.id = 'report-success-toast';
-                          successToast.className = 'fixed top-4 right-4 z-[9999] bg-green-500 text-white px-6 py-4 rounded-lg shadow-lg max-w-md';
-                          successToast.innerHTML = `
-                            <div class="flex items-start gap-3">
-                              <svg class="w-6 h-6 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-                              </svg>
-                              <div class="flex-1">
-                                <div class="font-semibold mb-2">Tạo báo cáo thành công!</div>
-                                <div class="flex gap-2 flex-wrap">
-                                  <button onclick="window.location.href='/reports/${jobStatus.result_report_id}'" class="bg-white text-green-600 px-4 py-2 rounded font-medium hover:bg-green-50 transition-colors">
-                                    Xem báo cáo
-                                  </button>
-                                  <button onclick="this.closest('#report-success-toast').remove()" class="bg-green-600 text-white px-4 py-2 rounded font-medium hover:bg-green-700 border border-white transition-colors">
-                                    Tiếp tục
-                                  </button>
-                                </div>
-                              </div>
-                              <button onclick="this.closest('#report-success-toast').remove()" class="text-white hover:text-gray-200">
-                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-                                </svg>
-                              </button>
-                            </div>
-                          `;
-                          document.body.appendChild(successToast);
-                          setTimeout(() => successToast.remove(), 15000);
-
-                        } else if (jobStatus.status === 'failed') {
-                          clearInterval(pollInterval);
-                          clearTimeout(timeoutId); // Clear the timeout!
-                          loadingToast.remove();
-
-                          const errorToast = document.createElement('div');
-                          errorToast.className = 'fixed top-4 right-4 z-[9999] bg-red-500 text-white px-6 py-4 rounded-lg shadow-lg max-w-md';
-                          errorToast.innerHTML = `
-                            <div class="flex items-start gap-3">
-                              <svg class="w-6 h-6 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-                              </svg>
-                              <div class="flex-1">
-                                <div class="font-semibold mb-1">Lỗi tạo báo cáo</div>
-                                <div class="text-sm opacity-90">${jobStatus.error_message || 'Vui lòng thử lại'}</div>
-                              </div>
-                              <button onclick="this.parentElement.parentElement.remove()" class="text-white hover:text-gray-200">
-                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-                                </svg>
-                              </button>
-                            </div>
-                          `;
-                          document.body.appendChild(errorToast);
-                          setTimeout(() => errorToast.remove(), 8000);
-                        }
-                      } catch (pollError) {
-                        console.error('Poll error:', pollError);
-                      }
-                    }, 2000);
-
-                  } catch (error: any) {
-                    document.getElementById('report-loading-toast')?.remove();
-
-                    const errorToast = document.createElement('div');
-                    errorToast.className = 'fixed top-4 right-4 z-[9999] bg-red-500 text-white px-6 py-4 rounded-lg shadow-lg max-w-md';
-                    errorToast.innerHTML = `
-                      <div class="flex items-start gap-3">
-                        <svg class="w-6 h-6 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-                        </svg>
-                        <div class="flex-1">
-                          <div class="font-semibold mb-1">Lỗi tạo báo cáo</div>
-                          <div class="text-sm opacity-90">${error?.response?.data?.detail || error?.message || 'Vui lòng thử lại'}</div>
-                        </div>
-                        <button onclick="this.parentElement.parentElement.remove()" class="text-white hover:text-gray-200">
-                          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-                          </svg>
-                        </button>
-                      </div>
-                    `;
-                    document.body.appendChild(errorToast);
-                    setTimeout(() => errorToast.remove(), 8000);
-                  }
+                  handleCompleteTripAndReport();
                 }}
-                className="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-gray-100"
+                className="w-full flex items-center gap-3 p-3 rounded-[5px] hover:bg-emerald-50 text-emerald-800 text-left font-medium transition cursor-pointer"
               >
                 <span>📊</span>
-                <span>Tạo báo cáo</span>
+                <span>Hoàn thành & Báo cáo tuyển sinh</span>
               </button>
 
               <button
-                onClick={() => {
-                  navigate('/reports');
-                  setMenuOpen(false);
-                }}
-                className="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-gray-100"
+                onClick={handleCreateNextTrip}
+                disabled={isCreatingNextTrip}
+                className="w-full flex items-center gap-3 p-3 rounded-[5px] hover:bg-blue-50 text-[#0f3b7d] text-left font-bold transition cursor-pointer"
+                title="Tạo chuyến đi tiếp theo cho đợt tuyển sinh mới"
               >
-                <span>📋</span>
-                <span>Xem tất cả báo cáo</span>
-              </button>
-
-              <button
-                onClick={() => {
-                  navigate('/');
-                  setMenuOpen(false);
-                }}
-                className="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-gray-100"
-              >
-                <span>📋</span>
-                <span>Danh sách chuyến đi</span>
+                <span>🚗</span>
+                <span>{isCreatingNextTrip ? 'Đang tạo chuyến mới...' : 'Chuyến đi mới'}</span>
               </button>
             </div>
 

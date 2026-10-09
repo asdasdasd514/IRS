@@ -23,6 +23,7 @@ class CampaignStatus(str, Enum):
     ASSIGNED = "assigned"
     DEPLOYED = "deployed"
     IN_PROGRESS = "in_progress"
+    ACTIVE = "active"
     COMPLETED = "completed"
     PAUSED = "paused"
 
@@ -500,11 +501,14 @@ class ReportCreate(BaseModel):
 class ReportResponse(BaseModel):
     id: str
     trip_id: str
+    trip_name: Optional[str] = None
     campaign_id: Optional[str] = None
     report_content: str
     total_schools: int = 0
     schools_visited: int = 0
     total_tickets: int = 0
+    schools_data: Optional[List[dict]] = None
+    rest_stops_data: Optional[List[dict]] = None
     created_at: Optional[datetime] = None
 
     @field_serializer('created_at', when_used='json')

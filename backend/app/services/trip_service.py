@@ -770,5 +770,127 @@ class TripService:
         await db.admission_trips.update_one({"id": trip_id}, {"$set": update_dict})
         return await self.get_trip(trip_id)
 
+    async def create_next_trip(self, trip_id: str, actor_user: Optional[dict] = None) -> Optional[dict]:
+        """
+        Tạo chuyến đi mới tiếp theo cho đợt tuyển sinh tiếp theo:
+        - Nhân bản lộ trình gốc (các trường học mục tiêu)
+        - Sinh mã chuyến mới tăng dần (ví dụ TRIP-XXXXXX-02 -> TRIP-XXXXXX-03)
+        - Trạng thái 'assigned', tiến độ 0% sạch sẽ
+        - Loại bỏ các quán ăn/điểm dừng chân của ngày cũ
+        - Bảo lưu 100% chuyến đi và báo cáo cũ
+        """
+        db = get_database()
+        old_trip = await db.admission_trips.find_one({"id": trip_id, "is_deleted": {"$ne": True}})
+        if not old_trip:
+            return None
+
+        campaign_id = old_trip.get("campaign_id") or trip_id
+        now = datetime.now(timezone.utc)
+
+        # Đếm số chuyến đi đã có của chiến dịch này để sinh mã đợt tiếp theo
+        count = await db.admission_trips.count_documents({"campaign_id": campaign_id, "is_deleted": {"$ne": True}})
+        camp_code_prefix = campaign_id[:6].upper() if campaign_id else "IRS"
+        new_trip_code = f"TRIP-{camp_code_prefix}-{count + 1:02d}"
+        new_trip_id = str(uuid.uuid4())
+
+        # Lấy danh sách điểm dừng gốc từ old_trip
+        # Chỉ giữ các điểm trường SCHOOL (bỏ REST_STOP cũ của ngày trước) và reset is_visited = False
+        original_dests = old_trip.get("destinations", [])
+        new_dests = []
+        for d in original_dests:
+            if d.get("type") == "REST_STOP":
+                continue
+            d_copy = dict(d)
+            d_copy["id"] = str(uuid.uuid4())
+            d_copy["is_visited"] = False
+            d_copy["visited"] = False
+            d_copy["visited_at"] = None
+            d_copy["tickets_collected"] = 0
+            d_copy["tickets"] = []
+            d_copy["visit_logs"] = []
+            d_copy["order"] = len(new_dests) + 1
+            new_dests.append(d_copy)
+
+        new_trip_name = old_trip.get("name", "Chuyến đi tuyển sinh")
+        new_trip_doc = {
+            "id": new_trip_id,
+            "campaign_id": campaign_id,
+            "name": new_trip_name,
+            "trip_code": new_trip_code,
+            "status": "assigned",
+            "start_date": None,
+            "end_date": None,
+            "team": old_trip.get("team"),
+            "current_lat": old_trip.get("start_point", {}).get("lat") if old_trip.get("start_point") else None,
+            "current_lng": old_trip.get("start_point", {}).get("lng") if old_trip.get("start_point") else None,
+            "destinations": new_dests,
+            "start_point": old_trip.get("start_point"),
+            "route_geometry": old_trip.get("route_geometry"),
+            "polyline": old_trip.get("polyline"),
+            "estimated_distance_km": old_trip.get("estimated_distance_km"),
+            "estimated_duration_minutes": old_trip.get("estimated_duration_minutes"),
+            "is_deleted": False,
+            "created_at": now,
+            "updated_at": now
+        }
+        await db.admission_trips.insert_one(new_trip_doc)
+
+        # Tạo waypoints mới trong campaign_waypoints
+        cw_docs = []
+        for i, dest in enumerate(new_dests):
+            cw_doc = {
+                "id": dest["id"],
+                "trip_id": new_trip_id,
+                "campaign_id": campaign_id,
+                "school_id": dest.get("school_id") or dest.get("id"),
+                "name": dest.get("name") or f"Điểm dừng {i + 1}",
+                "lat": float(dest.get("lat", 0.0)),
+                "lng": float(dest.get("lng", 0.0)),
+                "address": dest.get("address") or "",
+                "type": "SCHOOL",
+                "visit_order": i + 1,
+                "is_visited": False,
+                "visited": False,
+                "visited_at": None,
+                "notes": dest.get("notes") or "",
+                "visit_logs": [],
+                "tickets": [],
+                "assigned_staff": dest.get("assigned_staff") or [],
+                "contact_name": dest.get("contact_name"),
+                "contact_phone": dest.get("contact_phone"),
+                "is_deleted": False,
+                "created_at": now,
+                "updated_at": now
+            }
+            cw_docs.append(cw_doc)
+
+        if cw_docs:
+            await db.campaign_waypoints.insert_many(cw_docs)
+
+        # Cập nhật campaign deployed_trip_id sang chuyến mới nhất
+        if campaign_id:
+            await db.campaigns.update_one(
+                {"id": campaign_id},
+                {"$set": {"deployed_trip_id": new_trip_id, "updated_at": now}}
+            )
+
+        try:
+            await log_trip_activity(
+                action_type="CREATE_NEXT_TRIP",
+                session_title="Khởi tạo chuyến đi mới kế thừa lộ trình",
+                sub_action="CLONE_TRIP",
+                sub_label="Tạo chuyến đi mới",
+                description=f"Đã tạo chuyến đi mới [{new_trip_code}] kế thừa từ lộ trình [{old_trip.get('trip_code')}]",
+                trip_id=new_trip_id,
+                trip_name=new_trip_name,
+                trip_code=new_trip_code,
+                actor_user=actor_user,
+                details={"source_trip_id": trip_id, "source_trip_code": old_trip.get("trip_code")}
+            )
+        except Exception as log_err:
+            logger.warning(f"Error logging create_next_trip: {log_err}")
+
+        return await self.get_trip(new_trip_id)
+
 
 trip_service = TripService()

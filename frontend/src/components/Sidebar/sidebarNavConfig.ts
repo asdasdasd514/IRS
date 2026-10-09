@@ -6,6 +6,7 @@ import {
   ClipboardList,
   Settings,
   Route,
+  FileSpreadsheet,
   LucideIcon
 } from 'lucide-react';
 import { UserRole } from '../../types';
@@ -42,6 +43,13 @@ export const NAV_GROUPS: NavGroupConfig[] = [
         label: 'Chiến dịch',
         path: '/staff/campaigns',
         icon: Route,
+        roles: ['admin', 'staff'],
+      },
+      {
+        id: 'reports',
+        label: 'Báo cáo',
+        path: '/reports',
+        icon: FileSpreadsheet,
         roles: ['admin', 'staff'],
       },
     ],

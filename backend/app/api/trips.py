@@ -4,8 +4,10 @@ Trip API Endpoints - Quản lý chuyến đi tuyển sinh (MongoDB IRS)
 
 import logging
 from typing import List, Optional
+from datetime import datetime, timezone
+from urllib.parse import quote
 from pydantic import BaseModel
-from fastapi import APIRouter, Depends, HTTPException, Query, status, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, Query, status, BackgroundTasks, Response
 
 logger = logging.getLogger(__name__)
 
@@ -14,7 +16,8 @@ from app.schemas import (
     WaypointCreate, WaypointUpdate, WaypointResponse,
     CheckInRequest, CheckInResponse,
     NextHopRequest, NextHopResponse,
-    ReportResponse, ReportListResponse, ReportCreate
+    ReportResponse, ReportListResponse, ReportCreate,
+    TripStatus, CampaignStatus
 )
 from app.services.trip_service import trip_service
 from app.services.routing_service import routing_service
@@ -215,6 +218,15 @@ async def get_next_hop(
     trip_id: str,
     request: NextHopRequest
 ):
+    trip = await trip_service.get_trip(trip_id)
+    if trip and (trip.get("status") == TripStatus.COMPLETED.value or trip.get("status") == "completed"):
+        return NextHopResponse(
+            recommended=None,
+            alternatives=[],
+            total_unvisited=0,
+            message="Chuyến đi đã hoàn thành 100%!"
+        )
+
     unvisited = await trip_service.get_unvisited_waypoints(trip_id)
     if not unvisited:
         return NextHopResponse(
@@ -367,6 +379,127 @@ async def get_report(
     if not report:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy báo cáo")
     return ReportResponse.model_validate(report)
+
+
+@router.get("/reports/{report_id}/export-excel")
+async def export_report_excel(
+    report_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    report = await report_service.get_report_by_id(report_id)
+    if not report:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy báo cáo")
+    
+    trip = await trip_service.get_trip(report.get("trip_id"))
+    excel_bytes = report_service.generate_report_excel_bytes(report, trip)
+    
+    trip_title = report.get("trip_name") or (trip.get("name") if trip else "Bao_cao")
+    clean_title = "".join(c for c in trip_title if c.isalnum() or c in ("-", "_", " ")).strip().replace(" ", "_")
+    filename = f"Bao_cao_tuyen_sinh_{clean_title}_{report_id[:8]}.xlsx"
+    encoded_filename = quote(filename)
+
+    return Response(
+        content=excel_bytes,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={
+            "Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}",
+            "Access-Control-Expose-Headers": "Content-Disposition"
+        }
+    )
+
+
+@router.post("/{trip_id}/complete")
+async def complete_trip(
+    trip_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Hoàn thành chuyến đi thực địa:
+    1. Cập nhật trạng thái chuyến đi thành 'completed'
+    2. Nếu chuyến đi gắn với chiến dịch, cập nhật chiến dịch thành 'completed'
+    3. Tự động sinh báo cáo tổng kết chuyến đi
+    """
+    from app.core.database import get_database
+    db = get_database()
+    now = datetime.now(timezone.utc)
+    
+    trip = await trip_service.get_trip(trip_id)
+    if not trip:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy chuyến đi")
+        
+    await db.admission_trips.update_one(
+        {"id": trip_id},
+        {"$set": {"status": TripStatus.COMPLETED.value, "updated_at": now}}
+    )
+
+    # Đánh dấu toàn bộ điểm dừng còn lại (kể cả REST_STOP) thành đã ghé xong
+    await db.campaign_waypoints.update_many(
+        {"trip_id": trip_id},
+        {"$set": {"is_visited": True, "visited": True, "visited_at": now}}
+    )
+    trip_doc = await db.admission_trips.find_one({"id": trip_id})
+    if trip_doc and "destinations" in trip_doc:
+        dests = trip_doc.get("destinations", [])
+        for d in dests:
+            d["is_visited"] = True
+            d["visited"] = True
+            if not d.get("visited_at"):
+                d["visited_at"] = now
+        await db.admission_trips.update_one(
+            {"id": trip_id},
+            {"$set": {"destinations": dests}}
+        )
+    api_response_cache.clear_prefix(f"nexthop:{trip_id}")
+    
+    campaign_id = trip.get("campaign_id")
+    if campaign_id:
+        await db.campaigns.update_one(
+            {"id": campaign_id},
+            {"$set": {"status": CampaignStatus.COMPLETED.value, "updated_at": now}}
+        )
+        
+    report = await report_service.generate_trip_report(trip_id)
+    
+    try:
+        from app.services.school_counter_service import sync_all_school_counters
+        await sync_all_school_counters()
+    except Exception as se:
+        logger.warning(f"Counter sync warning: {se}")
+
+    return {
+        "success": True,
+        "trip_id": trip_id,
+        "campaign_id": campaign_id,
+        "status": "completed",
+        "report_id": report["id"]
+    }
+
+
+@router.post("/{trip_id}/create-next-trip")
+async def create_next_trip(
+    trip_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Tạo chuyến đi mới tiếp theo cho đợt tuyển sinh tiếp theo:
+    - Lưu thêm 1 bản ghi mới vào admission_trips
+    - Sinh mã chuyến đi mới TRIP-XXXXXX-0X
+    - Giữ lại các điểm trường, loại bỏ các điểm dừng ăn uống cũ
+    - Bảo lưu nguyên vẹn đợt 1 và báo cáo cũ
+    """
+    new_trip = await trip_service.create_next_trip(trip_id, actor_user=current_user)
+    if not new_trip:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Không tìm thấy chuyến đi gốc để tạo chuyến tiếp theo"
+        )
+    return {
+        "success": True,
+        "message": "Đã tạo chuyến đi mới thành công!",
+        "trip": new_trip,
+        "trip_id": new_trip.get("id"),
+        "trip_code": new_trip.get("trip_code")
+    }
 
 
 @router.post("/{trip_id}/reports", response_model=dict, status_code=status.HTTP_201_CREATED)

@@ -26,6 +26,7 @@ export function Header({ onOpenMobileMenu, title, subtitle }: HeaderProps) {
     if (location.pathname.startsWith('/admin/members')) return 'Quản Lý Tài Khoản Nhân Sự';
     if (location.pathname.startsWith('/admin/logs')) return 'Nhật Ký Hệ Thống';
     if (location.pathname.startsWith('/admin/map')) return 'Bản Đồ Tuyển Sinh';
+    if (location.pathname.startsWith('/reports')) return 'Báo Cáo Tuyển Sinh';
     return userRole === 'admin' ? 'Bảng Quản Trị Hệ Thống' : 'Cổng Cán Bộ Thực Địa';
   };
 

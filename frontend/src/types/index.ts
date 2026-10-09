@@ -293,17 +293,26 @@ export interface Location {
 export interface Report {
   id: string;
   trip_id: string;
+  trip_code?: string;
+  trip_name?: string;
+  leader_name?: string;
+  campaign_id?: string;
   report_content: string;  // Markdown content
   total_schools: number;
   schools_visited: number;
   total_tickets: number;
+  schools_data?: any[];
+  rest_stops_data?: any[];
   created_at: string;
 }
 
 export interface ReportListItem {
   id: string;
   trip_id: string;
+  trip_code?: string;
   trip_name: string;
+  leader_name?: string;
+  campaign_id?: string;
   total_schools: number;
   schools_visited: number;
   total_tickets: number;

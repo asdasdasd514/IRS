@@ -259,22 +259,19 @@ function App() {
           </ProtectedRoute>
         }
       />
+      {/* Reports Module with shared Layout & Sidebar */}
       <Route
         path="/reports"
         element={
-          <ProtectedRoute>
-            <ReportsListPage />
-          </ProtectedRoute>
+          <PortalLayoutRoute>
+            <MainLayout />
+          </PortalLayoutRoute>
         }
-      />
-      <Route
-        path="/reports/:reportId"
-        element={
-          <ProtectedRoute>
-            <ReportPage />
-          </ProtectedRoute>
-        }
-      />
+      >
+        <Route index element={<ReportsListPage />} />
+        <Route path="summary/:campaignId" element={<ReportPage />} />
+        <Route path=":reportId" element={<ReportPage />} />
+      </Route>
       <Route
         path="/schools/:schoolId"
         element={
