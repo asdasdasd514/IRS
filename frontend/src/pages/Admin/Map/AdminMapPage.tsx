@@ -89,7 +89,7 @@ export function AdminMapPage() {
           Bản Đồ Quản Trị Hệ Thống (IRS Map)
         </h1>
         <p className="text-sm text-slate-500 mt-1">
-          Hiển thị trực quan toàn bộ các điểm trường THPT mục tiêu, tọa độ GPS từ Google Maps và hành trình thực địa.
+          Hiển thị trực quan toàn bộ các điểm trường mục tiêu, tọa độ GPS từ Google Maps và hành trình thực địa.
         </p>
       </div>
 
@@ -221,7 +221,7 @@ export function AdminMapPage() {
                         <div>
                           <div className="flex items-center gap-1 text-[10.5px] font-bold text-blue-700 uppercase">
                             <School className="w-3.5 h-3.5" />
-                            <span>{school.code || 'THPT'}</span>
+                            <span>{school.code || 'TRƯỜNG'}</span>
                           </div>
                           <h4 className="font-bold text-slate-900 text-sm mt-0.5 leading-snug">
                             {school.name}

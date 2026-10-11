@@ -1,5 +1,5 @@
-from pydantic import BaseModel, Field, field_serializer
-from typing import Optional, List, Dict, Any
+from pydantic import BaseModel, Field, field_serializer, field_validator
+from typing import Optional, List, Dict, Any, Union
 from datetime import datetime, timezone
 from enum import Enum
 
@@ -8,6 +8,8 @@ from enum import Enum
 class TripStatus(str, Enum):
     ASSIGNED = "assigned"
     ACTIVE = "active"
+    IN_PROGRESS = "in_progress"
+    DEPLOYED = "deployed"
     PAUSED = "paused"
     COMPLETED = "completed"
 
@@ -69,10 +71,25 @@ class TripTeam(BaseModel):
     leader_name: Optional[str] = None
     leader_phone: Optional[str] = None
     members_count: int = 1
-    members: List[TripTeamMember] = []
+    members: List[Union[TripTeamMember, str]] = []
     stop_assignments: Optional[dict] = None
     vehicle_plate: Optional[str] = None
     notes: Optional[str] = None
+
+    @field_validator("members", mode="before")
+    @classmethod
+    def normalize_members(cls, v):
+        if not v:
+            return []
+        normalized = []
+        for m in v:
+            if isinstance(m, str):
+                normalized.append(TripTeamMember(name=m))
+            elif isinstance(m, dict):
+                normalized.append(TripTeamMember(**m))
+            elif isinstance(m, TripTeamMember):
+                normalized.append(m)
+        return normalized
 
     class Config:
         extra = "ignore"
@@ -401,7 +418,7 @@ class TripCreate(TripBase):
 
 class TripUpdate(BaseModel):
     name: Optional[str] = None
-    status: Optional[TripStatus] = None
+    status: Optional[Union[TripStatus, str]] = None
     current_lat: Optional[float] = None
     current_lng: Optional[float] = None
     team: Optional[TripTeam] = None
@@ -411,7 +428,7 @@ class TripUpdate(BaseModel):
 
 class TripResponse(TripBase):
     id: str
-    status: TripStatus = TripStatus.ACTIVE
+    status: Union[TripStatus, str] = TripStatus.ACTIVE
     current_lat: Optional[float] = None
     current_lng: Optional[float] = None
     team: Optional[TripTeam] = None
@@ -429,7 +446,7 @@ class TripResponse(TripBase):
 
 class TripListResponse(TripBase):
     id: str
-    status: TripStatus = TripStatus.ACTIVE
+    status: Union[TripStatus, str] = TripStatus.ACTIVE
     total_waypoints: int = 0
     visited_count: int = 0
     school_count: int = 0
@@ -501,8 +518,15 @@ class ReportCreate(BaseModel):
 class ReportResponse(BaseModel):
     id: str
     trip_id: str
+    trip_code: Optional[str] = None
     trip_name: Optional[str] = None
+    leader_name: Optional[str] = None
     campaign_id: Optional[str] = None
+    status: Optional[str] = None
+    trip_status: Optional[str] = None
+    trip_created_at: Optional[datetime] = None
+    start_point: Optional[dict] = None
+    assigned_staff: Optional[List[dict]] = None
     report_content: str
     total_schools: int = 0
     schools_visited: int = 0
@@ -513,6 +537,14 @@ class ReportResponse(BaseModel):
 
     @field_serializer('created_at', when_used='json')
     def serialize_dt(self, dt: Optional[datetime]) -> Optional[str]:
+        if dt is None:
+            return None
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.isoformat()
+
+    @field_serializer('trip_created_at', when_used='json')
+    def serialize_trip_dt(self, dt: Optional[datetime]) -> Optional[str]:
         if dt is None:
             return None
         if dt.tzinfo is None:
@@ -543,5 +575,64 @@ class ReportListResponse(BaseModel):
     
     class Config:
         from_attributes = True
+
+
+# ==========================================
+# KHẢO SÁT TUYỂN SINH QUA MÃ QR (SURVEY SCHEMAS)
+# ==========================================
+
+DEFAULT_MAJORS_LIST = [
+    "Công nghệ thông tin",
+    "Kỹ thuật phần mềm",
+    "Quản trị kinh doanh",
+    "Marketing",
+    "Thiết kế đồ họa",
+    "Ngôn ngữ Anh",
+    "Kế toán - Tài chính",
+    "Logistics & Quản lý chuỗi cung ứng"
+]
+
+
+class SurveyConfigSchema(BaseModel):
+    title: str = "Khảo Sát Nguyện Vọng Tuyển Sinh 2026"
+    description: Optional[str] = "Vui lòng để lại thông tin để nhận tư vấn học bổng và chỉ tiêu tuyển sinh mới nhất."
+    majors: List[str] = Field(default_factory=lambda: list(DEFAULT_MAJORS_LIST))
+    fields_enabled: Dict[str, bool] = Field(default_factory=lambda: {
+        "student_name": True,
+        "phone": True,
+        "grade": True,
+        "email": False,
+        "notes": True
+    })
+
+
+class PublicSurveySubmitRequest(BaseModel):
+    trip_id: str
+    waypoint_id: str
+    student_name: str
+    phone: str
+    grade: Optional[str] = None
+    interested_majors: Optional[List[str]] = Field(default_factory=list)
+    answers: Optional[Dict[str, Any]] = Field(default_factory=dict)
+    notes: Optional[str] = None
+
+
+class SurveyResponseItem(BaseModel):
+    id: str
+    trip_id: Optional[str] = None
+    trip_name: Optional[str] = None
+    waypoint_id: Optional[str] = None
+    school_id: Optional[str] = None
+    school_name: Optional[str] = None
+    campaign_id: Optional[str] = None
+    campaign_name: Optional[str] = None
+    student_name: str
+    phone: str
+    grade: Optional[str] = ""
+    interested_majors: List[str] = Field(default_factory=list)
+    notes: Optional[str] = ""
+    source: Optional[str] = "QR_ONLINE"
+    created_at: Optional[str] = None
+
 
 

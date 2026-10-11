@@ -1501,7 +1501,7 @@ export function AdminSchoolDetailPage() {
                             value={selectedBlock.data?.targetGroups || ''}
                             onChange={(e) => handleUpdateBlockData('targetGroups', e.target.value)}
                             className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-xs"
-                            placeholder="VD: Học sinh THPT lớp 12, phụ huynh..."
+                            placeholder="VD: Học sinh lớp 12, sinh viên, phụ huynh..."
                           />
                         </div>
                         <div>

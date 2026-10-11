@@ -121,6 +121,46 @@ export const exportReportToExcel = (report: Report | any) => {
   ];
   XLSX.utils.book_append_sheet(wb, ws, 'Báo cáo chuyến đi');
 
+  // Kiểm tra nếu có dữ liệu học sinh nộp qua QR, xuất thêm Sheet 2: Danh bạ học sinh
+  const studentRows: any[][] = [
+    ['DANH SÁCH HỌC SINH THU THẬP TỪ MÃ QR ONLINE'],
+    [`Chuyến đi: ${tripName}`],
+    [],
+    ['STT', 'Họ và tên', 'Số điện thoại', 'Khối lớp', 'Ngành quan tâm', 'Điểm trường', 'Thời gian nộp'],
+  ];
+  let studentCount = 0;
+  schools.forEach((s: any) => {
+    const tickets = s.tickets || [];
+    tickets.forEach((t: any) => {
+      if (t.student_name || t.source === 'QR_ONLINE') {
+        studentCount++;
+        studentRows.push([
+          studentCount,
+          t.student_name || 'Khuyết danh',
+          t.phone || '',
+          t.grade || '12',
+          Array.isArray(t.interested_majors) ? t.interested_majors.join(', ') : (t.interested_majors || ''),
+          s.name || '',
+          t.created_at ? new Date(t.created_at).toLocaleString('vi-VN') : '',
+        ]);
+      }
+    });
+  });
+
+  if (studentCount > 0) {
+    const wsStudents = XLSX.utils.aoa_to_sheet(studentRows);
+    wsStudents['!cols'] = [
+      { wch: 6 },
+      { wch: 25 },
+      { wch: 15 },
+      { wch: 10 },
+      { wch: 35 },
+      { wch: 30 },
+      { wch: 20 },
+    ];
+    XLSX.utils.book_append_sheet(wb, wsStudents, 'Danh bạ học sinh (QR)');
+  }
+
   const safeTitle = tripName
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
@@ -265,3 +305,68 @@ export const exportCampaignSummaryToExcel = (summary: any) => {
 
   XLSX.writeFile(wb, filename);
 };
+
+/**
+ * Xuất file Excel Danh Sách Học Sinh Khảo Sát Tuyển Sinh
+ */
+export const exportSurveyResponsesToExcel = (responses: any[], title = 'Danh_sach_hoc_sinh_khao_sat') => {
+  const wb = XLSX.utils.book_new();
+
+  const rows: any[][] = [
+    ['DANH SÁCH HỌC SINH KHẢO SÁT & QUAN TÂM TUYỂN SINH'],
+    [`Thời điểm xuất: ${new Date().toLocaleString('vi-VN')}`],
+    [`Tổng số học sinh: ${responses.length}`],
+    [],
+    [
+      'STT',
+      'Họ và tên học sinh',
+      'Số điện thoại',
+      'Khối lớp',
+      'Ngành quan tâm',
+      'Điểm trường',
+      'Mã chiến dịch',
+      'Nguồn thu phiếu',
+      'Thời gian nộp',
+    ],
+  ];
+
+  responses.forEach((item, idx) => {
+    const majorsStr = Array.isArray(item.interested_majors)
+      ? item.interested_majors.join(', ')
+      : item.interested_majors || '';
+    const createdStr = item.created_at
+      ? new Date(item.created_at).toLocaleString('vi-VN')
+      : '';
+
+    rows.push([
+      idx + 1,
+      item.student_name || 'Khuyết danh',
+      item.phone || '',
+      item.grade || '12',
+      majorsStr,
+      item.school_name || '',
+      item.campaign_id || '',
+      item.source === 'QR_ONLINE' ? 'Mã QR Online' : 'Nhập tay',
+      createdStr,
+    ]);
+  });
+
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols'] = [
+    { wch: 6 },
+    { wch: 25 },
+    { wch: 15 },
+    { wch: 10 },
+    { wch: 35 },
+    { wch: 30 },
+    { wch: 16 },
+    { wch: 16 },
+    { wch: 20 },
+  ];
+  XLSX.utils.book_append_sheet(wb, ws, 'Danh sách học sinh');
+
+  const nowStr = new Date().toISOString().slice(0, 10);
+  const safeFilename = `${title.replace(/\s+/g, '_')}_${nowStr}.xlsx`;
+  XLSX.writeFile(wb, safeFilename);
+};
+

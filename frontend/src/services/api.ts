@@ -16,6 +16,8 @@ import type {
   RegisterInput,
   SystemLog,
   SystemLogListResponse,
+  FieldNote,
+  NotesListResponse,
 } from '../types';
 
 // Auto-detect API URL based on browser location
@@ -642,6 +644,111 @@ export const logApi = {
   getTripLogs: async (tripId: string): Promise<SystemLog[]> => {
     const { data } = await api.get(`/logs/trips/${tripId}`);
     return data;
+  },
+};
+
+// Survey & Lead Collection API
+export const surveyApi = {
+  // Public APIs for student survey form
+  getPublicSurveyInfo: async (tripId: string, waypointId: string): Promise<any> => {
+    const { data } = await api.get(`/surveys/public/${tripId}/${waypointId}`);
+    return data;
+  },
+  submitPublicSurvey: async (payload: {
+    trip_id: string;
+    waypoint_id: string;
+    student_name: string;
+    phone: string;
+    grade?: string;
+    interested_majors?: string[];
+    answers?: any;
+    notes?: string;
+  }): Promise<any> => {
+    const { data } = await api.post('/surveys/public/submit', payload);
+    return data;
+  },
+
+  // Campaign-level survey config & responses
+  getCampaignSurveyConfig: async (campaignId: string): Promise<any> => {
+    const { data } = await api.get(`/campaigns/${campaignId}/survey-config`);
+    return data;
+  },
+  updateCampaignSurveyConfig: async (campaignId: string, config: any): Promise<any> => {
+    const { data } = await api.put(`/campaigns/${campaignId}/survey-config`, config);
+    return data;
+  },
+  getCampaignSurveyResponses: async (campaignId: string): Promise<any> => {
+    const { data } = await api.get(`/campaigns/${campaignId}/survey-responses`);
+    return data;
+  },
+
+  // Central survey management (for /admin/surveys)
+  getAllSurveyResponses: async (params?: {
+    campaign_id?: string;
+    school_id?: string;
+    major?: string;
+    search?: string;
+  }): Promise<any> => {
+    const { data } = await api.get('/surveys/all', { params });
+    return data;
+  },
+};
+
+// Field Notes Management API
+export const noteApi = {
+  getNotes: async (params?: {
+    trip_id?: string;
+    campaign_id?: string;
+    school_id?: string;
+    category?: string;
+    search?: string;
+    limit?: number;
+    page?: number;
+  }): Promise<NotesListResponse> => {
+    const { data } = await api.get('/notes', { params });
+    return data;
+  },
+
+  createNote: async (payload: {
+    trip_id?: string;
+    trip_name?: string;
+    campaign_id?: string;
+    campaign_name?: string;
+    school_id?: string;
+    school_name?: string;
+    waypoint_id?: string;
+    category?: string;
+    content: string;
+    author_name?: string;
+  }): Promise<FieldNote> => {
+    const { data } = await api.post('/notes', payload);
+    return data;
+  },
+
+  updateNote: async (
+    noteId: string,
+    payload: {
+      content?: string;
+      category?: string;
+      school_name?: string;
+    }
+  ): Promise<FieldNote> => {
+    const { data } = await api.put(`/notes/${noteId}`, payload);
+    return data;
+  },
+
+  deleteNote: async (noteId: string): Promise<{ message: string; id: string }> => {
+    const { data } = await api.delete(`/notes/${noteId}`);
+    return data;
+  },
+
+  getExportExcelUrl: (params?: { trip_id?: string; campaign_id?: string; search?: string }): string => {
+    const query = new URLSearchParams();
+    if (params?.trip_id) query.append('trip_id', params.trip_id);
+    if (params?.campaign_id) query.append('campaign_id', params.campaign_id);
+    if (params?.search) query.append('search', params.search);
+    const qs = query.toString();
+    return `${api.defaults.baseURL}/notes/export/excel${qs ? `?${qs}` : ''}`;
   },
 };
 

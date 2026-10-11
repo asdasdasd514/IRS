@@ -7,7 +7,6 @@ import {
   Download,
   Layers,
   ChevronDown,
-  CheckCircle,
 } from 'lucide-react';
 import { reportApi, campaignApi } from '../../services/api';
 import { exportReportToExcel, exportCampaignSummaryToExcel } from '../../utils/reportExcelExporter';
@@ -67,6 +66,47 @@ export const ReportPage: React.FC = () => {
       minute: '2-digit',
       timeZone: 'Asia/Ho_Chi_Minh',
     });
+  };
+
+  // Định dạng ngày giờ chuẩn xác: DD/MM/YYYY HH:mm (như hình mẫu)
+  const formatDateTime = (dateString?: string) => {
+    if (!dateString) return '';
+    if (/^\d{2}\/\d{2}\/\d{4} \d{2}:\d{2}$/.test(dateString.trim())) return dateString.trim();
+    const d = new Date(dateString);
+    if (isNaN(d.getTime())) return dateString;
+    const pad = (n: number) => (n < 10 ? `0${n}` : `${n}`);
+    const day = pad(d.getDate());
+    const month = pad(d.getMonth() + 1);
+    const year = d.getFullYear();
+    const hours = pad(d.getHours());
+    const mins = pad(d.getMinutes());
+    return `${day}/${month}/${year} ${hours}:${mins}`;
+  };
+
+  // Định dạng điểm xuất phát (100% dữ liệu động từ API/Database)
+  const formatStartPoint = (point?: any) => {
+    if (!point) return 'Chưa cập nhật';
+    if (typeof point === 'string') return point;
+    const name = point.name?.trim();
+    const address = point.address?.trim();
+    if (name && address) {
+      if (address.toLowerCase().includes(name.toLowerCase())) return address;
+      return `${name} (${address})`;
+    }
+    return name || address || 'Chưa cập nhật';
+  };
+
+  // Định dạng danh sách cán bộ tuyển sinh (100% dữ liệu động từ API/Database)
+  const formatStaffList = (staff?: any, fallbackLeader?: string) => {
+    if (Array.isArray(staff) && staff.length > 0) {
+      const names = staff
+        .map((s: any) => (typeof s === 'string' ? s : s?.name))
+        .filter(Boolean);
+      if (names.length > 0) {
+        return Array.from(new Set(names)).join(', ');
+      }
+    }
+    return fallbackLeader || 'Chưa phân công';
   };
 
   const formatCampaignDateRange = (start?: string, end?: string, rounds?: any[]) => {
@@ -229,44 +269,63 @@ export const ReportPage: React.FC = () => {
             </span>
           </div>
 
-          {/* 1. Thông Tin Chung Chiến Dịch (Hiển thị như bên đợt) */}
-          <div className="space-y-2">
-            <h3 className="text-xs sm:text-sm font-bold text-slate-900 uppercase tracking-wide">
-              1. THÔNG TIN CHUNG CHIẾN DỊCH
+          {/* 1. THÔNG TIN CHUNG CHIẾN DỊCH (Hiển thị danh sách bullet chuẩn như Hình 2) */}
+          <div className="space-y-3">
+            <h3 className="text-base sm:text-lg font-bold text-slate-900 tracking-tight">
+              1. Thông Tin Chung Chiến Dịch
             </h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs bg-slate-50 border border-slate-200 rounded-[5px] p-4">
-              <div className="space-y-2">
-                <p>
-                  <strong className="text-slate-900">Mã:</strong>{' '}
-                  <code className="bg-white px-1.5 py-0.5 rounded border border-slate-200 text-slate-800 font-bold">
-                    {campaignSummary.campaign_code || campaignSummary.campaign_id}
-                  </code>
-                </p>
-                <p>
-                  <strong className="text-slate-900">Tên chiến dịch:</strong>{' '}
-                  <span className="text-slate-800 font-medium">{campaignSummary.campaign_name}</span>
-                </p>
-              </div>
-              <div className="space-y-2">
-                <p>
-                  <strong className="text-slate-900">Thời gian:</strong>{' '}
-                  <span className="text-slate-700 font-medium">
-                    {formatCampaignDateRange(campaignSummary.start_date, campaignSummary.end_date, campaignSummary.rounds_data)}
+            <ul className="list-disc pl-5 space-y-2 text-sm text-slate-800 marker:text-slate-900 leading-relaxed">
+              <li>
+                <strong className="font-bold text-slate-900">Tên chiến dịch:</strong>{' '}
+                <span className="text-slate-800">{campaignSummary.campaign_name || 'Chiến dịch tuyển sinh'}</span>
+              </li>
+              <li>
+                <strong className="font-bold text-slate-900">Mã chiến dịch:</strong>{' '}
+                <span className="inline-block px-2 py-0.5 bg-slate-100 text-slate-700 font-mono text-xs rounded border border-slate-200/80 align-middle">
+                  {campaignSummary.campaign_id}
+                </span>
+              </li>
+              {campaignSummary.campaign_code && campaignSummary.campaign_code !== campaignSummary.campaign_id && (
+                <li>
+                  <strong className="font-bold text-slate-900">Mã ký hiệu:</strong>{' '}
+                  <span className="inline-block px-2 py-0.5 bg-slate-100 text-slate-700 font-mono text-xs rounded border border-slate-200/80 align-middle">
+                    {campaignSummary.campaign_code}
                   </span>
-                </p>
-                {campaignSummary.leader_name ? (
-                  <p>
-                    <strong className="text-slate-900">Trưởng đoàn / Phụ trách:</strong>{' '}
-                    <span className="text-slate-800 font-bold">{campaignSummary.leader_name}</span>
-                  </p>
-                ) : (
-                  <p>
-                    <strong className="text-slate-900">Quy mô:</strong>{' '}
-                    <span className="text-slate-700 font-semibold">{campaignSummary.total_rounds} đợt công tác</span>
-                  </p>
-                )}
-              </div>
-            </div>
+                </li>
+              )}
+              <li>
+                <strong className="font-bold text-slate-900">Thời gian chiến dịch:</strong>{' '}
+                <span className="text-slate-800">
+                  {formatCampaignDateRange(campaignSummary.start_date, campaignSummary.end_date, campaignSummary.rounds_data)}
+                </span>
+              </li>
+              <li>
+                <strong className="font-bold text-slate-900">Thời điểm lập báo cáo:</strong>{' '}
+                <span className="text-slate-800">{formatDateTime(campaignSummary.created_at)}</span>
+              </li>
+              <li>
+                <strong className="font-bold text-slate-900">Trạng thái chiến dịch:</strong>{' '}
+                <span className="text-slate-800">{campaignSummary.status || 'completed'}</span>
+              </li>
+              {campaignSummary.campaign_created_at && (
+                <li>
+                  <strong className="font-bold text-slate-900">Thời gian khởi tạo:</strong>{' '}
+                  <span className="text-slate-800">
+                    {formatDateTime(campaignSummary.campaign_created_at)}
+                  </span>
+                </li>
+              )}
+              <li>
+                <strong className="font-bold text-slate-900">Điểm xuất phát:</strong>{' '}
+                <span className="text-slate-800">{formatStartPoint(campaignSummary.start_point)}</span>
+              </li>
+              <li>
+                <strong className="font-bold text-slate-900">Đoàn cán bộ tuyển sinh:</strong>{' '}
+                <span className="text-slate-800">
+                  {formatStaffList(campaignSummary.assigned_staff, campaignSummary.leader_name)}
+                </span>
+              </li>
+            </ul>
           </div>
 
           {/* 2. Kết Quả Thực Hiện (3 Thẻ Chỉ Số Cốt Lõi) */}
@@ -344,11 +403,10 @@ export const ReportPage: React.FC = () => {
                       <td className="py-2.5 px-3 text-center font-semibold text-slate-800">{rnd.schools_count} trường</td>
                       <td className="py-2.5 px-3 text-center font-bold text-purple-700 text-sm">{rnd.tickets_collected}</td>
                       <td className="py-2.5 px-3 text-center">
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold ${
-                          rnd.status === 'completed' || rnd.status === 'Hoàn thành'
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold ${rnd.status === 'completed' || rnd.status === 'Hoàn thành'
                             ? 'bg-emerald-100 text-emerald-800'
                             : 'bg-blue-100 text-blue-800'
-                        }`}>
+                          }`}>
                           {rnd.status === 'completed' ? 'Hoàn thành' : rnd.status}
                         </span>
                       </td>
@@ -457,34 +515,70 @@ export const ReportPage: React.FC = () => {
               {/* Header Báo Cáo Không Căn Giữa */}
               <div className="border-b border-slate-200 pb-4 flex items-center justify-between gap-3 flex-wrap">
                 <h1 className="text-lg sm:text-2xl font-black text-[#0f3b7d] uppercase tracking-wide">
-                  BÁO CÁO CÔNG TÁC TUYỂN SINH THỰC ĐỊA
+                  BÁO CÁO TỔNG KẾT CHIẾN DỊCH TUYỂN SINH
                 </h1>
                 <span className="px-2.5 py-0.5 rounded-[4px] bg-emerald-50 text-emerald-800 text-[11px] font-bold border border-emerald-200">
                   ✅ ĐÃ HOÀN THÀNH CÔNG TÁC
                 </span>
               </div>
 
-              {/* 1. Thông Tin Chuyến Đi */}
-              <div className="space-y-2">
-                <h3 className="text-xs sm:text-sm font-bold text-slate-900 uppercase tracking-wide">
-                  1. THÔNG TIN CHUNG CHUYẾN ĐI
+              {/* 1. THÔNG TIN CHUNG CHUYẾN ĐI (Hiển thị danh sách bullet chuẩn như Hình 2) */}
+              <div className="space-y-3">
+                <h3 className="text-base sm:text-lg font-bold text-slate-900 tracking-tight">
+                  1. Thông Tin Chung Chuyến Đi
                 </h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs bg-slate-50 border border-slate-200 rounded-[5px] p-4">
-                  <div className="space-y-2">
-                    <p><strong className="text-slate-900">Mã:</strong> <code className="bg-white px-1.5 py-0.5 rounded border border-slate-200 text-slate-800 font-bold">{currentReport.trip_code || currentReport.trip_id}</code></p>
-                    <p><strong className="text-slate-900">Tên lộ trình:</strong> <span className="text-slate-800 font-medium">{currentReport.trip_name}</span></p>
-                    {currentReport.campaign_id && (
-                      <p><strong className="text-slate-900">Chiến dịch liên kết:</strong> <span className="text-slate-700">{currentReport.campaign_id}</span></p>
-                    )}
-                  </div>
-                  <div className="space-y-2">
-                    <p><strong className="text-slate-900">Thời gian lập:</strong> <span className="text-slate-700">{formatDate(currentReport.created_at)}</span></p>
-                    {currentReport.leader_name && (
-                      <p><strong className="text-slate-900">Trưởng đoàn:</strong> <span className="text-slate-800 font-bold">{currentReport.leader_name}</span></p>
-                    )}
-                    <p><strong className="text-slate-900">Trạng thái:</strong> <span className="inline-flex items-center gap-1 font-bold text-emerald-700"><CheckCircle className="w-3.5 h-3.5 text-emerald-600" /> Đã hoàn thành</span></p>
-                  </div>
-                </div>
+                <ul className="list-disc pl-5 space-y-2 text-sm text-slate-800 marker:text-slate-900 leading-relaxed">
+                  <li>
+                    <strong className="font-bold text-slate-900">Tên chuyến đi / lộ trình:</strong>{' '}
+                    <span className="text-slate-800">{currentReport.trip_name || 'Chuyến đi tuyển sinh'}</span>
+                  </li>
+                  <li>
+                    <strong className="font-bold text-slate-900">Mã chuyến đi:</strong>{' '}
+                    <span className="inline-block px-2 py-0.5 bg-slate-100 text-slate-700 font-mono text-xs rounded border border-slate-200/80 align-middle">
+                      {currentReport.trip_id || currentReport.trip_code}
+                    </span>
+                  </li>
+                  {currentReport.trip_code && currentReport.trip_code !== currentReport.trip_id && (
+                    <li>
+                      <strong className="font-bold text-slate-900">Mã ký hiệu:</strong>{' '}
+                      <span className="inline-block px-2 py-0.5 bg-slate-100 text-slate-700 font-mono text-xs rounded border border-slate-200/80 align-middle">
+                        {currentReport.trip_code}
+                      </span>
+                    </li>
+                  )}
+                  {currentReport.campaign_id && (
+                    <li>
+                      <strong className="font-bold text-slate-900">Mã chiến dịch liên kết:</strong>{' '}
+                      <span className="inline-block px-2 py-0.5 bg-slate-100 text-slate-700 font-mono text-xs rounded border border-slate-200/80 align-middle">
+                        {currentReport.campaign_id}
+                      </span>
+                    </li>
+                  )}
+                  <li>
+                    <strong className="font-bold text-slate-900">Thời điểm lập báo cáo:</strong>{' '}
+                    <span className="text-slate-800">{formatDateTime(currentReport.created_at)}</span>
+                  </li>
+                  <li>
+                    <strong className="font-bold text-slate-900">Trạng thái chuyến đi:</strong>{' '}
+                    <span className="text-slate-800">{currentReport.status || currentReport.trip_status || 'completed'}</span>
+                  </li>
+                  <li>
+                    <strong className="font-bold text-slate-900">Thời gian khởi tạo:</strong>{' '}
+                    <span className="text-slate-800">
+                      {formatDateTime(currentReport.trip_created_at || currentReport.created_at)}
+                    </span>
+                  </li>
+                  <li>
+                    <strong className="font-bold text-slate-900">Điểm xuất phát:</strong>{' '}
+                    <span className="text-slate-800">{formatStartPoint(currentReport.start_point)}</span>
+                  </li>
+                  <li>
+                    <strong className="font-bold text-slate-900">Đoàn cán bộ tuyển sinh:</strong>{' '}
+                    <span className="text-slate-800">
+                      {formatStaffList(currentReport.assigned_staff, currentReport.leader_name)}
+                    </span>
+                  </li>
+                </ul>
               </div>
 
               {/* 2. Kết Quả Thực Hiện (KPIs Căn Đều) */}

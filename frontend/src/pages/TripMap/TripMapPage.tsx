@@ -1,10 +1,10 @@
 import React, { useEffect, useCallback, useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, RefreshCw, MapPin, Menu, Utensils, Search, X } from 'lucide-react';
+import { ArrowLeft, RefreshCw, MapPin, Menu, Utensils, Search, X, QrCode, StickyNote } from 'lucide-react';
 import polyline from '@mapbox/polyline';
 
-import { MapView, BottomSheet, WaypointInfoModal, TripAuditHistoryModal } from '../../components';
+import { MapView, BottomSheet, WaypointInfoModal, TripAuditHistoryModal, QuickNoteModal } from '../../components';
 import { tripApi, ticketApi, reportApi } from '../../services/api';
 import { useAppStore } from '../../store/useAppStore';
 import { useWatchPosition } from '../../hooks';
@@ -41,6 +41,7 @@ export const TripMapPage: React.FC = () => {
 
   const [menuOpen, setMenuOpen] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [showQuickNoteModal, setShowQuickNoteModal] = useState(false);
   const [route, setRoute] = useState<{ lat: number; lng: number }[] | null>(null);
   const [showVisitedSheet, setShowVisitedSheet] = useState(false);
   const [waypointTickets, setWaypointTickets] = useState<Record<string, number>>({});
@@ -696,7 +697,6 @@ export const TripMapPage: React.FC = () => {
     .sort((a: any, b: any) => new Date(b.visited_at!).getTime() - new Date(a.visited_at!).getTime());
   // Chỉ đếm trường chưa đi (SCHOOL), không tính các loại khác
   const unvisitedSchools = unvisitedWaypoints.filter((w: any) => w.type === 'SCHOOL');
-
   const tripCode = (trip as any)?.trip_code;
 
   return (
@@ -940,6 +940,24 @@ export const TripMapPage: React.FC = () => {
             <MapPin className="w-5 h-5 text-slate-700" />
           </button>
 
+          {/* Quick QR Survey Button - Điều hướng sang trang QR riêng */}
+          <button
+            onClick={() => navigate(`/trips/${tripId}/qr`)}
+            className="bg-white p-3 rounded-full shadow-lg hover:bg-indigo-50 active:bg-indigo-100 text-indigo-700 transition cursor-pointer"
+            title="Mở trang mã QR Khảo sát trường học"
+          >
+            <QrCode className="w-5 h-5" />
+          </button>
+
+          {/* Quick Field Note Button - Mở Modal Ghi chú nhanh thực địa */}
+          <button
+            onClick={() => setShowQuickNoteModal(true)}
+            className="bg-white p-3 rounded-full shadow-lg hover:bg-amber-50 active:bg-amber-100 text-amber-600 transition cursor-pointer"
+            title="Ghi chú nhanh thực địa"
+          >
+            <StickyNote className="w-5 h-5" />
+          </button>
+
           {/* Find nearby places button with active state & badge */}
           <div className="relative">
             <button
@@ -1043,6 +1061,17 @@ export const TripMapPage: React.FC = () => {
               <button
                 onClick={() => {
                   setMenuOpen(false);
+                  navigate(`/trips/${tripId}/qr`);
+                }}
+                className="w-full flex items-center gap-3 p-3 rounded-[5px] hover:bg-indigo-50 text-indigo-800 text-left font-medium transition cursor-pointer"
+              >
+                <span>📱</span>
+                <span>Mã QR Khảo sát tuyển sinh</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  setMenuOpen(false);
                   handleCompleteTripAndReport();
                 }}
                 className="w-full flex items-center gap-3 p-3 rounded-[5px] hover:bg-emerald-50 text-emerald-800 text-left font-medium transition cursor-pointer"
@@ -1134,6 +1163,20 @@ export const TripMapPage: React.FC = () => {
           </div>
         </div>
       )}
+
+
+
+      {/* Quick Field Note Modal */}
+      <QuickNoteModal
+        isOpen={showQuickNoteModal}
+        onClose={() => setShowQuickNoteModal(false)}
+        trip={trip}
+        currentWaypoint={nextHop || (displayWaypoints && displayWaypoints[0])}
+        allWaypoints={displayWaypoints}
+        onNoteSaved={() => {
+          queryClient.invalidateQueries({ queryKey: ['trip', tripId] });
+        }}
+      />
 
       {/* Modal Lịch sử chỉnh sửa lộ trình */}
       <TripAuditHistoryModal

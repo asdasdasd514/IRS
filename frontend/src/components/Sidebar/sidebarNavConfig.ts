@@ -4,9 +4,11 @@ import {
   Building2,
   Users,
   ClipboardList,
+  ClipboardCheck,
   Settings,
   Route,
   FileSpreadsheet,
+  StickyNote,
   LucideIcon
 } from 'lucide-react';
 import { UserRole } from '../../types';
@@ -78,6 +80,26 @@ export const NAV_GROUPS: NavGroupConfig[] = [
         path: '/admin/members',
         icon: Users,
         roles: ['admin'],
+      },
+    ],
+  },
+  {
+    id: 'field',
+    title: 'Thực địa',
+    items: [
+      {
+        id: 'surveys',
+        label: 'Phiếu khảo sát',
+        path: '/admin/surveys',
+        icon: ClipboardCheck,
+        roles: ['admin', 'staff'],
+      },
+      {
+        id: 'notes',
+        label: 'Ghi chú thực địa',
+        path: '/admin/notes',
+        icon: StickyNote,
+        roles: ['admin', 'staff'],
       },
     ],
   },

@@ -15,6 +15,10 @@ import { AdminLogsPage } from './pages/Admin/Logs/AdminLogsPage';
 import { ReportPage } from './pages/Report/ReportPage';
 import { ReportsListPage } from './pages/ReportsList/ReportsListPage';
 import { StaffCampaignsPage } from './pages/Staff/StaffCampaignsPage';
+import { PublicSurveyPage } from './pages/PublicSurvey/PublicSurveyPage';
+import { AdminSurveysPage } from './pages/Admin/Surveys/AdminSurveysPage';
+import { AdminNotesPage } from './pages/Admin/Notes/AdminNotesPage';
+import { TripQrPage } from './pages/TripQr/TripQrPage';
 import { MainLayout } from './layouts/MainLayout';
 import { useAppStore } from './store/useAppStore';
 import { authApi } from './services/api';
@@ -206,9 +210,14 @@ function App() {
             </AdminOnlyRoute>
           }
         />
+        <Route path="surveys" element={<AdminSurveysPage />} />
+        <Route path="notes" element={<AdminNotesPage />} />
         <Route path="logs" element={<AdminLogsPage />} />
         <Route path="settings" element={<AdminMembersPage />} />
       </Route>
+
+      {/* Alias cho /notes */}
+      <Route path="/notes" element={<Navigate to="/admin/notes" replace />} />
 
       {/* Staff Dedicated Module with shared Layout & Sidebar */}
       <Route
@@ -252,6 +261,22 @@ function App() {
         }
       />
       <Route
+        path="/trips/:tripId/map"
+        element={
+          <ProtectedRoute>
+            <TripMapPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/trips/:tripId/qr"
+        element={
+          <ProtectedRoute>
+            <TripQrPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
         path="/trips/:tripId/edit"
         element={
           <ProtectedRoute>
@@ -280,6 +305,9 @@ function App() {
           </ProtectedRoute>
         }
       />
+
+      {/* Public Student Survey Form via QR Code (Không yêu cầu đăng nhập) */}
+      <Route path="/survey/:tripId/:waypointId" element={<PublicSurveyPage />} />
 
       {/* Catch-all redirect */}
       <Route path="*" element={<Navigate to="/login" replace />} />

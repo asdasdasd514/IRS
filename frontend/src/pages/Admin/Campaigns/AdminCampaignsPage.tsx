@@ -34,8 +34,10 @@ import {
   Edit,
   GripVertical,
   FileSpreadsheet,
+  QrCode,
 } from 'lucide-react';
 import { campaignApi, schoolApi, authApi, tripApi } from '../../../services/api';
+import { CampaignSurveyModal } from './CampaignSurveyModal';
 
 const routeMarkerIcon = (color: string, label: string) =>
   L.divIcon({
@@ -396,6 +398,7 @@ export function AdminCampaignsPage() {
   const [allocationEndDate, setAllocationEndDate] = useState('');
   const [allocatedSearch, setAllocatedSearch] = useState('');
   const [viewingAllocatedTrip, setViewingAllocatedTrip] = useState<any | null>(null);
+  const [surveyModalCampaign, setSurveyModalCampaign] = useState<any | null>(null);
   const [selectedAllocationCampaignId, setSelectedAllocationCampaignId] = useState<string | null>(null);
   const [selectedAllocationCampaign, setSelectedAllocationCampaign] = useState<any | null>(null);
   const [isCampaignDropdownOpen, setIsCampaignDropdownOpen] = useState(false);
@@ -1475,7 +1478,7 @@ export function AdminCampaignsPage() {
             Quản Lý Chiến Dịch Tuyển Sinh
           </h1>
           <p className="text-sm text-slate-500 mt-1">
-            Quản lý và triển khai các chiến dịch tuyển sinh tại các trường THPT và đại học trên toàn quốc.
+            Quản lý và triển khai các chiến dịch tuyển sinh tại các điểm trường trên toàn quốc.
           </p>
         </div>
 
@@ -1698,6 +1701,15 @@ export function AdminCampaignsPage() {
 
                     <button
                       type="button"
+                      onClick={() => setSurveyModalCampaign(camp)}
+                      title="Khảo sát tuyển sinh & Mã QR"
+                      className="p-2 rounded-[5px] border border-blue-200 text-[#0f3b7d] hover:bg-blue-50 hover:border-blue-300 transition text-xs cursor-pointer flex items-center gap-1"
+                    >
+                      <QrCode className="w-3.5 h-3.5" />
+                    </button>
+
+                    <button
+                      type="button"
                       onClick={() => openEditCampaign(camp)}
                       title="Chỉnh sửa chiến dịch"
                       className="p-2 rounded-[5px] border border-slate-200 text-slate-600 hover:text-blue-700 hover:bg-blue-50 hover:border-blue-200 transition text-xs cursor-pointer"
@@ -1782,6 +1794,15 @@ export function AdminCampaignsPage() {
                             >
                               <FileSpreadsheet className="w-3.5 h-3.5" />
                               <span className="hidden lg:inline">Báo cáo</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setSurveyModalCampaign(camp)}
+                              className="py-1.5 px-2 rounded-[5px] border border-blue-200 text-[#0f3b7d] hover:bg-blue-50 text-xs font-semibold flex items-center gap-1 transition cursor-pointer"
+                              title="Khảo sát tuyển sinh & Mã QR"
+                            >
+                              <QrCode className="w-3.5 h-3.5" />
+                              <span className="hidden lg:inline">Khảo sát & QR</span>
                             </button>
                             <button
                               type="button"
@@ -2068,15 +2089,26 @@ export function AdminCampaignsPage() {
 
                     {/* Footer Thẻ: Hành động */}
                     <div className="px-4 py-2.5 bg-slate-50 border-t border-slate-100 flex items-center justify-between gap-2">
-                      <button
-                        type="button"
-                        onClick={() => handleViewAllocatedTrip(camp)}
-                        className="text-xs font-bold text-[#0f3b7d] hover:text-[#0c2f64] flex items-center gap-1 py-1 px-2 rounded-[5px] hover:bg-blue-50 transition cursor-pointer"
-                        title="Xem lộ trình và bản đồ"
-                      >
-                        <Route className="w-3.5 h-3.5" />
-                        <span>Xem lộ trình</span>
-                      </button>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => handleViewAllocatedTrip(camp)}
+                          className="text-xs font-bold text-[#0f3b7d] hover:text-[#0c2f64] flex items-center gap-1 py-1 px-2 rounded-[5px] hover:bg-blue-50 transition cursor-pointer"
+                          title="Xem lộ trình và bản đồ"
+                        >
+                          <Route className="w-3.5 h-3.5" />
+                          <span>Xem lộ trình</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setSurveyModalCampaign(camp)}
+                          className="text-xs font-bold text-indigo-700 hover:text-indigo-900 flex items-center gap-1 py-1 px-2 rounded-[5px] hover:bg-indigo-50 transition cursor-pointer"
+                          title="Khảo sát tuyển sinh & Mã QR"
+                        >
+                          <QrCode className="w-3.5 h-3.5" />
+                          <span>Khảo sát</span>
+                        </button>
+                      </div>
 
                       <div className="flex items-center gap-1">
                         <button
@@ -2186,6 +2218,15 @@ export function AdminCampaignsPage() {
                               >
                                 <Route className="w-3.5 h-3.5" />
                                 <span>Xem lộ trình</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setSurveyModalCampaign(camp)}
+                                className="py-1.5 px-2.5 rounded-[5px] bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold flex items-center gap-1 transition cursor-pointer"
+                                title="Khảo sát tuyển sinh & Mã QR"
+                              >
+                                <QrCode className="w-3.5 h-3.5" />
+                                <span>Khảo sát</span>
                               </button>
                               <button
                                 type="button"
@@ -4066,6 +4107,14 @@ export function AdminCampaignsPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Modal Khảo Sát & Mã QR Tuyển Sinh */}
+      {surveyModalCampaign && (
+        <CampaignSurveyModal
+          campaign={surveyModalCampaign}
+          onClose={() => setSurveyModalCampaign(null)}
+        />
       )}
     </div>
   );

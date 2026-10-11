@@ -318,7 +318,7 @@ export const DetailTab: React.FC<DetailTabProps> = ({ waypointId, detail, isLoad
             onChange={(e) => setFormData({ ...formData, description: e.target.value })}
             className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 text-sm bg-white"
             rows={3}
-            placeholder="Mô tả tóm tắt về trường THPT..."
+            placeholder="Mô tả tóm tắt về trường học..."
           />
         </div>
         <div className="grid grid-cols-2 gap-3">

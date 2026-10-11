@@ -297,6 +297,11 @@ export interface Report {
   trip_name?: string;
   leader_name?: string;
   campaign_id?: string;
+  status?: string;
+  trip_status?: string;
+  trip_created_at?: string;
+  start_point?: any;
+  assigned_staff?: any[];
   report_content: string;  // Markdown content
   total_schools: number;
   schools_visited: number;
@@ -384,6 +389,35 @@ export interface SystemLog {
 export interface SystemLogListResponse {
   total: number;
   items: SystemLog[];
+}
+
+// Field Note Types (Quản lý ghi chú thực địa)
+export interface FieldNote {
+  id: string;
+  trip_id?: string;
+  trip_name?: string;
+  campaign_id?: string;
+  campaign_name?: string;
+  school_id?: string;
+  school_name?: string;
+  waypoint_id?: string;
+  category?: string;
+  content: string;
+  author_name?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface NotesListResponse {
+  items: FieldNote[];
+  total: number;
+  page: number;
+  limit: number;
+  stats: {
+    total_notes: number;
+    total_schools: number;
+    total_trips: number;
+  };
 }
 
 

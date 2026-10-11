@@ -902,11 +902,31 @@ async def get_campaign_summary_report(campaign_id: str) -> dict:
     elif rounds_data and rounds_data[0].get("leader_name"):
         leader_n = rounds_data[0]["leader_name"]
 
+    # Danh sách cán bộ tuyển sinh toàn chiến dịch
+    all_staff_names = []
+    if camp and camp.get("team", {}).get("members"):
+        for m in camp["team"]["members"]:
+            if isinstance(m, dict) and m.get("name") and m["name"] not in all_staff_names:
+                all_staff_names.append(m["name"])
+    for t in trips:
+        t_staff = t.get("assigned_staff") or t.get("team", {}).get("members") or (t.get("start_point", {}).get("assigned_staff") if t.get("start_point") else None) or []
+        for s in t_staff:
+            if isinstance(s, dict) and s.get("name") and s["name"] not in all_staff_names:
+                all_staff_names.append(s["name"])
+            elif isinstance(s, str) and s not in all_staff_names:
+                all_staff_names.append(s)
+    if not all_staff_names and leader_n:
+        all_staff_names.append(leader_n)
+
     summary_doc = {
         "campaign_id": campaign_id,
         "campaign_name": c_name,
         "campaign_code": c_code,
         "leader_name": leader_n,
+        "status": camp.get("status", "completed") if camp else "completed",
+        "campaign_created_at": camp.get("created_at") if camp else None,
+        "start_point": camp.get("start_point") if (camp and camp.get("start_point")) else (trips[0].get("start_point") if trips else None),
+        "assigned_staff": all_staff_names,
         "start_date": to_vietnam_date(start_d) if start_d else "",
         "end_date": to_vietnam_date(end_d) if end_d else "",
         "total_rounds": len(rounds_data),
@@ -924,10 +944,28 @@ async def get_campaign_summary_report(campaign_id: str) -> dict:
 async def get_report_by_id(report_id: str) -> Optional[dict]:
     db = get_database()
     report = await db.trip_reports.find_one({"id": report_id, "is_deleted": {"$ne": True}})
-    if report and not report.get("trip_name"):
+    if report:
         trip = await db.admission_trips.find_one({"id": report.get("trip_id")})
         if trip:
-            report["trip_name"] = trip.get("name")
+            if not report.get("trip_name"):
+                report["trip_name"] = trip.get("name")
+            if not report.get("trip_code"):
+                report["trip_code"] = trip.get("trip_code") or trip.get("id")
+            if not report.get("campaign_id") and trip.get("campaign_id"):
+                report["campaign_id"] = trip.get("campaign_id")
+            report["status"] = trip.get("status") or "completed"
+            report["trip_status"] = trip.get("status") or "completed"
+            report["trip_created_at"] = trip.get("created_at")
+            report["start_point"] = trip.get("start_point")
+            
+            # Cán bộ tuyển sinh
+            staff_list = trip.get("assigned_staff") or (trip.get("team", {}).get("members") if trip.get("team") else None) or (trip.get("start_point", {}).get("assigned_staff") if trip.get("start_point") else None) or []
+            report["assigned_staff"] = staff_list
+            if not report.get("leader_name"):
+                if trip.get("team", {}).get("leader_name"):
+                    report["leader_name"] = trip["team"]["leader_name"]
+                elif staff_list and len(staff_list) > 0 and isinstance(staff_list[0], dict):
+                    report["leader_name"] = staff_list[0].get("name")
     return report
 
 
