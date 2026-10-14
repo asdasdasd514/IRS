@@ -48,7 +48,15 @@ async def ensure_database_indexes(db):
 
 async def connect_to_mongo():
     try:
-        db_instance.client = AsyncIOMotorClient(settings.MONGODB_URL)
+        kwargs = {}
+        if "mongodb+srv://" in settings.MONGODB_URL or "tls=true" in settings.MONGODB_URL.lower():
+            try:
+                import certifi
+                kwargs["tlsCAFile"] = certifi.where()
+            except ImportError:
+                pass
+
+        db_instance.client = AsyncIOMotorClient(settings.MONGODB_URL, **kwargs)
         db_instance.db = db_instance.client[settings.DATABASE_NAME]
         logging.info(f"✅ [MongoDB]: Connected to database '{settings.DATABASE_NAME}' at {settings.MONGODB_URL}")
         await ensure_database_indexes(db_instance.db)
