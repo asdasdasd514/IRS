@@ -75,8 +75,20 @@ def extract_trip_points(trip: dict):
 def get_point_tickets(p: dict) -> int:
     t_list = p.get("tickets") or []
     if t_list:
-        return sum(t.get("tickets_collected", 0) for t in t_list)
-    return p.get("tickets_collected", 0) or 0
+        valid_tickets = [t for t in t_list if not t.get("is_deleted")]
+        collected_sum = sum(int(t.get("tickets_collected", 0)) for t in valid_tickets)
+        if collected_sum > 0:
+            return collected_sum
+        if len(valid_tickets) > 0:
+            return len(valid_tickets)
+    try:
+        if p.get("tickets_collected") is not None:
+            return int(p["tickets_collected"])
+        if p.get("total_tickets") is not None:
+            return int(p["total_tickets"])
+    except (ValueError, TypeError):
+        pass
+    return 0
 
 
 def is_point_visited(p: dict) -> bool:
@@ -862,13 +874,17 @@ async def get_campaign_summary_report(campaign_id: str) -> dict:
                     "notes": s.get("notes") or "Điểm trường mục tiêu"
                 }
 
-            if is_point_visited(s):
+            pt_tickets = get_point_tickets(s)
+            has_visited = is_point_visited(s) or pt_tickets > 0
+            if has_visited:
                 if r_name not in schools_map[s_key]["visited_rounds"]:
                     schools_map[s_key]["visited_rounds"].append(r_name)
                 schools_map[s_key]["total_visits"] += 1
-                schools_map[s_key]["total_tickets"] += get_point_tickets(s)
+                schools_map[s_key]["total_tickets"] += pt_tickets
                 if s.get("notes"):
                     schools_map[s_key]["notes"] = s.get("notes")
+            elif pt_tickets > 0:
+                schools_map[s_key]["total_tickets"] += pt_tickets
 
     schools_list = list(schools_map.values())
     for s_item in schools_list:

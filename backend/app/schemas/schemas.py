@@ -357,8 +357,8 @@ class RoutePlanDestination(BaseModel):
     lat: float
     lng: float
     address: Optional[str] = None
-    distance_meters: Optional[int] = None
-    duration_seconds: Optional[int] = None
+    distance_meters: Optional[Union[int, float]] = None
+    duration_seconds: Optional[Union[int, float]] = None
 
 
 class RoutePlanBase(BaseModel):
@@ -370,10 +370,10 @@ class RoutePlanBase(BaseModel):
     start_lng: float
     start_name: Optional[str] = None
     total_destinations: int = 0
-    total_distance_meters: int = 0
+    total_distance_meters: Union[int, float] = 0
     estimated_distance_km: float = 0.0
-    total_duration_seconds: int = 0
-    estimated_duration_minutes: int = 0
+    total_duration_seconds: Union[int, float] = 0
+    estimated_duration_minutes: Union[int, float] = 0
     destinations: List[RoutePlanDestination] = []
     polyline: Optional[str] = None
     status: str = "applied" # applied, draft, archived
@@ -466,9 +466,9 @@ class NextHopRequest(BaseModel):
 
 class NextHopCandidate(BaseModel):
     waypoint: Any
-    duration_seconds: int
+    duration_seconds: Union[int, float]
     duration_text: str
-    distance_meters: int
+    distance_meters: Union[int, float]
     distance_text: str
     is_recommended: bool = False
 

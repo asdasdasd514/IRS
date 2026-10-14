@@ -57,9 +57,11 @@ export const exportReportToExcel = (report: Report | any) => {
   if (schools.length > 0) {
     schools.forEach((s: any, idx: number) => {
       const ticketsCount =
-        (s.tickets || []).reduce((acc: number, t: any) => acc + (t.tickets_collected || 0), 0) ||
-        s.tickets_collected ||
-        0;
+        s.tickets_collected != null
+          ? s.tickets_collected
+          : Array.isArray(s.tickets) && s.tickets.length > 0
+            ? ((s.tickets.reduce((acc: number, t: any) => acc + (t.tickets_collected || 0), 0)) || s.tickets.length)
+            : 0;
       const visitedTime = s.visited_at
         ? new Date(s.visited_at).toLocaleString('vi-VN', {
             year: 'numeric',

@@ -642,9 +642,11 @@ export const ReportPage: React.FC = () => {
                       {(currentReport.schools_data && currentReport.schools_data.length > 0) ? (
                         currentReport.schools_data.map((sch: any, idx: number) => {
                           const ticketsCount =
-                            (sch.tickets || []).reduce((acc: number, t: any) => acc + (t.tickets_collected || 0), 0) ||
-                            sch.tickets_collected ||
-                            0;
+                            sch.tickets_collected != null
+                              ? sch.tickets_collected
+                              : Array.isArray(sch.tickets) && sch.tickets.length > 0
+                                ? ((sch.tickets.reduce((acc: number, t: any) => acc + (t.tickets_collected || 0), 0)) || sch.tickets.length)
+                                : 0;
                           const visitedTime = sch.visited_at
                             ? formatDate(sch.visited_at)
                             : (sch.is_visited ? 'Đã hoàn tất' : 'Chưa tiếp cận');

@@ -246,10 +246,11 @@ export const TripMapPage: React.FC = () => {
       if (w.tickets_count !== undefined) {
         ticketMap[w.id] = w.tickets_count;
       } else if (Array.isArray(w.tickets) && w.tickets.length > 0) {
-        ticketMap[w.id] = w.tickets.reduce(
+        const sumCollected = w.tickets.reduce(
           (sum: number, t: any) => sum + (t.tickets_collected || 0),
           0
         );
+        ticketMap[w.id] = sumCollected > 0 ? sumCollected : w.tickets.length;
       } else if (w.visited_at) {
         missingVisitedIds.push(w.id);
       }
@@ -265,7 +266,10 @@ export const TripMapPage: React.FC = () => {
         const ticketPromises = missingVisitedIds.map(async (waypointId) => {
           try {
             const tickets = await ticketApi.getAll(waypointId);
-            const totalTickets = tickets.reduce((sum, ticket) => sum + ticket.tickets_collected, 0);
+            const totalTickets = tickets.reduce(
+              (sum, ticket: any) => sum + (ticket.tickets_collected || (ticket.student_name ? 1 : 0) || 0),
+              0
+            );
             return { waypointId, count: totalTickets };
           } catch {
             return { waypointId, count: 0 };
