@@ -2018,11 +2018,11 @@ export function AdminCampaignsPage() {
                       <div className="mt-3 p-2 rounded-[5px] bg-blue-50/70 border border-blue-100/80 flex items-center gap-2 text-xs text-[#0f3b7d]">
                         <Calendar className="w-3.5 h-3.5 text-[#0f3b7d] shrink-0" />
                         <span className="font-bold">
-                          {formatDateDisplay(camp.start_date) || 'Chưa đặt ngày'}
+                          {formatDateDisplay(camp.start_date) || (camp.created_at ? formatDateDisplay(String(camp.created_at)) : 'Chưa đặt ngày')}
                         </span>
                         <span className="text-slate-400 font-normal">→</span>
                         <span className="font-bold">
-                          {formatDateDisplay(camp.end_date) || 'Chưa đặt ngày'}
+                          {formatDateDisplay(camp.end_date) || (camp.created_at ? formatDateDisplay(String(camp.created_at)) : 'Chưa đặt ngày')}
                         </span>
                       </div>
                     </div>
@@ -2171,9 +2171,9 @@ export function AdminCampaignsPage() {
                           <td className="py-3.5 px-4 whitespace-nowrap">
                             <div className="flex items-center gap-1.5 text-xs text-[#0f3b7d] font-bold">
                               <Calendar className="w-3.5 h-3.5 shrink-0" />
-                              <span>{formatDateDisplay(camp.start_date) || 'Chưa đặt'}</span>
+                              <span>{formatDateDisplay(camp.start_date) || (camp.created_at ? formatDateDisplay(String(camp.created_at)) : 'Chưa đặt')}</span>
                               <span className="text-slate-400 font-normal">→</span>
-                              <span>{formatDateDisplay(camp.end_date) || 'Chưa đặt'}</span>
+                              <span>{formatDateDisplay(camp.end_date) || (camp.created_at ? formatDateDisplay(String(camp.created_at)) : 'Chưa đặt')}</span>
                             </div>
                           </td>
                           <td className="py-3.5 px-4 whitespace-nowrap">

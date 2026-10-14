@@ -812,8 +812,13 @@ export function StaffCampaignsPage() {
                         <div className="flex items-center gap-1.5 text-[11px]">
                           <Calendar className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                           <span className="truncate">
-                            {formatDateDisplay(camp.start_date) || 'Chưa đặt ngày'}
-                            {camp.end_date ? ` - ${formatDateDisplay(camp.end_date)}` : ''}
+                            {(() => {
+                              const sDate = formatDateDisplay(camp.start_date) || (camp.created_at ? formatDateDisplay(String(camp.created_at)) : null);
+                              const eDate = formatDateDisplay(camp.end_date);
+                              if (!sDate) return 'Chưa đặt ngày';
+                              if (eDate && eDate !== sDate) return `${sDate} - ${eDate}`;
+                              return sDate;
+                            })()}
                           </span>
                         </div>
 

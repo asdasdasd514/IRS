@@ -5,7 +5,7 @@ và tự động tham chiếu thông tin hồ sơ trường từ collection `sch
 """
 
 from typing import List, Optional, Dict, Any
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from math import radians, sin, cos, sqrt, atan2
 import uuid
 
@@ -786,6 +786,8 @@ class TripService:
 
         campaign_id = old_trip.get("campaign_id") or trip_id
         now = datetime.now(timezone.utc)
+        vietnam_tz = timezone(timedelta(hours=7))
+        today_str = datetime.now(vietnam_tz).strftime("%Y-%m-%d")
 
         # Đếm số chuyến đi đã có của chiến dịch này để sinh mã đợt tiếp theo
         count = await db.admission_trips.count_documents({"campaign_id": campaign_id, "is_deleted": {"$ne": True}})
@@ -818,8 +820,8 @@ class TripService:
             "name": new_trip_name,
             "trip_code": new_trip_code,
             "status": "assigned",
-            "start_date": None,
-            "end_date": None,
+            "start_date": today_str,
+            "end_date": today_str,
             "team": old_trip.get("team"),
             "current_lat": old_trip.get("start_point", {}).get("lat") if old_trip.get("start_point") else None,
             "current_lng": old_trip.get("start_point", {}).get("lng") if old_trip.get("start_point") else None,
