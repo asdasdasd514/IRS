@@ -42,6 +42,7 @@ export const TripMapPage: React.FC = () => {
   const [menuOpen, setMenuOpen] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [showQuickNoteModal, setShowQuickNoteModal] = useState(false);
+  const [showCreateNextTripModal, setShowCreateNextTripModal] = useState(false);
   const [route, setRoute] = useState<{ lat: number; lng: number }[] | null>(null);
   const [showVisitedSheet, setShowVisitedSheet] = useState(false);
   const [waypointTickets, setWaypointTickets] = useState<Record<string, number>>({});
@@ -633,19 +634,20 @@ export const TripMapPage: React.FC = () => {
 
   // Tạo chuyến đi mới tiếp theo cho đợt tuyển sinh tiếp theo
   const [isCreatingNextTrip, setIsCreatingNextTrip] = useState(false);
-  const handleCreateNextTrip = async () => {
+  const handleOpenCreateNextTripModal = () => {
+    setMenuOpen(false);
+    setShowCreateNextTripModal(true);
+  };
+
+  const handleConfirmCreateNextTrip = async () => {
     if (!tripId) return;
-    const confirmed = window.confirm(
-      'Tạo chuyến đi tiếp theo cho đợt tuyển sinh mới dựa trên danh sách các điểm trường của lộ trình này?\n\n(Hệ thống sẽ bảo lưu 100% chuyến đi và báo cáo hiện tại, đồng thời sinh chuyến đi mới với mã kế tiếp).'
-    );
-    if (!confirmed) return;
 
     setIsCreatingNextTrip(true);
-    setMenuOpen(false);
 
     try {
       const res = await tripApi.createNextTrip(tripId);
       if (res.success && res.trip_id) {
+        setShowCreateNextTripModal(false);
         setAddSuccessToast(`🎉 Đã tạo chuyến đi mới [${res.trip_code || ''}]! Đang chuyển hướng...`);
         setTimeout(() => {
           navigate(`/trips/${res.trip_id}/map`);
@@ -1085,13 +1087,13 @@ export const TripMapPage: React.FC = () => {
               </button>
 
               <button
-                onClick={handleCreateNextTrip}
+                onClick={handleOpenCreateNextTripModal}
                 disabled={isCreatingNextTrip}
                 className="w-full flex items-center gap-3 p-3 rounded-[5px] hover:bg-blue-50 text-[#0f3b7d] text-left font-bold transition cursor-pointer"
                 title="Tạo chuyến đi tiếp theo cho đợt tuyển sinh mới"
               >
                 <span>🚗</span>
-                <span>{isCreatingNextTrip ? 'Đang tạo chuyến mới...' : 'Chuyến đi mới'}</span>
+                <span>Chuyến đi mới</span>
               </button>
             </div>
 
@@ -1189,6 +1191,82 @@ export const TripMapPage: React.FC = () => {
         onClose={() => setShowHistoryModal(false)}
         tripName={mapName}
       />
+
+      {/* Pop up xác nhận tạo chuyến đi mới */}
+      {showCreateNextTripModal && (
+        <div className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full border border-slate-100 overflow-hidden animate-scale-up">
+            {/* Header */}
+            <div className="bg-[#0f3b7d] px-6 py-4 text-white flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-white/15 flex items-center justify-center text-lg">
+                  🚗
+                </div>
+                <div>
+                  <h3 className="font-bold text-base leading-tight">Xác nhận tạo chuyến đi mới</h3>
+                  <p className="text-xs text-blue-200">Khởi tạo đợt tuyển sinh tiếp theo</p>
+                </div>
+              </div>
+              <button
+                onClick={() => !isCreatingNextTrip && setShowCreateNextTripModal(false)}
+                disabled={isCreatingNextTrip}
+                className="w-8 h-8 rounded-lg flex items-center justify-center text-white/80 hover:text-white hover:bg-white/10 transition disabled:opacity-50"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Content Body */}
+            <div className="p-6 space-y-4">
+              <p className="text-slate-800 text-sm leading-relaxed">
+                Tạo chuyến đi tiếp theo cho đợt tuyển sinh mới dựa trên danh sách các điểm trường của lộ trình này?
+              </p>
+
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-2.5 text-xs text-slate-600 leading-normal">
+                <div className="flex items-start gap-2">
+                  <span className="text-emerald-600 font-bold text-sm leading-none mt-0.5">✓</span>
+                  <span>
+                    <strong className="text-slate-700">Bảo lưu dữ liệu:</strong> Hệ thống sẽ bảo lưu 100% chuyến đi, lịch sử check-in và báo cáo hiện tại.
+                  </span>
+                </div>
+                <div className="flex items-start gap-2">
+                  <span className="text-blue-600 font-bold text-sm leading-none mt-0.5">✓</span>
+                  <span>
+                    <strong className="text-slate-700">Sinh chuyến mới:</strong> Tự động tạo chuyến đi mới với mã đợt kế tiếp để chuẩn bị triển khai.
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Footer Buttons */}
+            <div className="px-6 py-4 bg-slate-50 border-t border-slate-200 flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setShowCreateNextTripModal(false)}
+                disabled={isCreatingNextTrip}
+                className="px-4 py-2 rounded-lg border border-slate-300 bg-white text-slate-700 font-medium hover:bg-slate-100 transition cursor-pointer disabled:opacity-50 text-sm"
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmCreateNextTrip}
+                disabled={isCreatingNextTrip}
+                className="px-5 py-2 rounded-lg bg-[#0f3b7d] hover:bg-[#0c2f64] text-white font-semibold shadow transition flex items-center gap-2 cursor-pointer disabled:opacity-50 text-sm"
+              >
+                {isCreatingNextTrip ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    <span>Đang xử lý...</span>
+                  </>
+                ) : (
+                  <span>Xác Nhận</span>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
