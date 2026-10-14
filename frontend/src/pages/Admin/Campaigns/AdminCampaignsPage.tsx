@@ -549,7 +549,12 @@ export function AdminCampaignsPage() {
     });
   };
 
-  const updateDestinationVisitTime = (schoolId: string, time?: string, duration?: number) => {
+  const updateDestinationVisitTime = (
+    schoolId: string,
+    time?: string,
+    duration?: number,
+    hoursInput?: string | number
+  ) => {
     setSelectedDestinations((prev) =>
       prev.map((item) =>
         item.school_id === schoolId || item.id === schoolId
@@ -557,6 +562,7 @@ export function AdminCampaignsPage() {
               ...item,
               preferred_visit_time: time && time.trim() ? time.trim() : undefined,
               visit_duration_minutes: duration !== undefined ? duration : (item.visit_duration_minutes || 60),
+              visit_duration_hours: hoursInput !== undefined ? hoursInput : item.visit_duration_hours,
             }
           : item
       )
@@ -765,6 +771,7 @@ export function AdminCampaignsPage() {
           priority: d.priority,
           preferred_visit_time: d.preferred_visit_time || d.preferred_time,
           visit_duration_minutes: d.visit_duration_minutes || 60,
+          visit_duration_hours: d.visit_duration_minutes ? Number((d.visit_duration_minutes / 60).toFixed(2)) : 1,
         }))
       : [];
     setSelectedDestinations(parsedDests);
@@ -2773,23 +2780,55 @@ export function AdminCampaignsPage() {
                                       />
                                     </div>
 
-                                    {/* Thời lượng ở lại */}
+                                    {/* Thời lượng ở lại (Nhập trực tiếp số giờ) */}
                                     <div className="flex items-center gap-1.5 bg-white border border-slate-300 rounded-[5px] px-2 py-1 shadow-2xs">
                                       <span className="text-[11px] text-slate-500 font-medium">Ở lại:</span>
-                                      <select
-                                        value={vDur}
-                                        onChange={(e) => updateDestinationVisitTime(school.id, vTime, parseInt(e.target.value, 10))}
-                                        className="text-xs font-semibold text-slate-800 bg-transparent outline-none cursor-pointer"
-                                        title="Thời gian làm việc / tư vấn tại trường"
-                                      >
-                                        <option value={30}>30 phút</option>
-                                        <option value={45}>45 phút</option>
-                                        <option value={60}>60 phút (1 giờ)</option>
-                                        <option value={90}>90 phút (1.5 giờ)</option>
-                                        <option value={120}>120 phút (2 giờ)</option>
-                                        <option value={150}>150 phút (2.5 giờ)</option>
-                                        <option value={180}>180 phút (3 giờ)</option>
-                                      </select>
+                                      <input
+                                        type="number"
+                                        min="0.1"
+                                        max="24"
+                                        step="0.5"
+                                        value={
+                                          destItem?.visit_duration_hours !== undefined
+                                            ? destItem.visit_duration_hours
+                                            : vDur
+                                            ? Number((vDur / 60).toFixed(2))
+                                            : 1
+                                        }
+                                        onChange={(e) => {
+                                          const valStr = e.target.value;
+                                          if (valStr === '') {
+                                            updateDestinationVisitTime(school.id, vTime, 60, '');
+                                            return;
+                                          }
+                                          const valNum = parseFloat(valStr);
+                                          if (!isNaN(valNum) && valNum > 0) {
+                                            const mins = Math.max(5, Math.round(valNum * 60));
+                                            updateDestinationVisitTime(school.id, vTime, mins, valStr);
+                                          } else {
+                                            updateDestinationVisitTime(school.id, vTime, 60, valStr);
+                                          }
+                                        }}
+                                        onBlur={(e) => {
+                                          const valNum = parseFloat(String(e.target.value));
+                                          if (isNaN(valNum) || valNum <= 0) {
+                                            updateDestinationVisitTime(school.id, vTime, 60, 1);
+                                          } else {
+                                            const cleanVal = Number(valNum.toFixed(2));
+                                            const mins = Math.max(5, Math.round(cleanVal * 60));
+                                            updateDestinationVisitTime(school.id, vTime, mins, cleanVal);
+                                          }
+                                        }}
+                                        className="w-14 text-xs font-bold text-slate-800 bg-slate-50 hover:bg-slate-100/80 focus:bg-white border border-slate-200 focus:border-[#0f3b7d] rounded px-1.5 py-0.5 outline-none text-center transition"
+                                        title="Nhập số giờ làm việc / tư vấn tại trường (ví dụ: 1, 1.5, 2)"
+                                        placeholder="1"
+                                      />
+                                      <span className="text-[11px] text-slate-700 font-bold">giờ</span>
+                                      {vDur > 0 && (
+                                        <span className="text-[10px] text-slate-400 font-medium whitespace-nowrap">
+                                          ({vDur} phút)
+                                        </span>
+                                      )}
                                     </div>
 
                                     {/* Dự kiến giờ rời */}
