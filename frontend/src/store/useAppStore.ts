@@ -49,6 +49,11 @@ interface AppState {
   mapCenter: Location | null;
   setMapCenter: (center: Location | null) => void;
 
+  // Sidebar state
+  sidebarCollapsed: boolean;
+  toggleSidebar: () => void;
+  setSidebarCollapsed: (collapsed: boolean) => void;
+
   // Reset all state
   reset: () => void;
 }
@@ -106,6 +111,33 @@ export const useAppStore = create<AppState>((set) => ({
   // Map center
   mapCenter: null,
   setMapCenter: (center) => set({ mapCenter: center }),
+
+  // Sidebar state
+  sidebarCollapsed: (() => {
+    try {
+      return localStorage.getItem('irs_sidebar_collapsed') === 'true';
+    } catch {
+      return false;
+    }
+  })(),
+  toggleSidebar: () =>
+    set((state) => {
+      const next = !state.sidebarCollapsed;
+      try {
+        localStorage.setItem('irs_sidebar_collapsed', String(next));
+      } catch (e) {
+        console.error('Error saving sidebar state:', e);
+      }
+      return { sidebarCollapsed: next };
+    }),
+  setSidebarCollapsed: (collapsed) => {
+    try {
+      localStorage.setItem('irs_sidebar_collapsed', String(collapsed));
+    } catch (e) {
+      console.error('Error saving sidebar state:', e);
+    }
+    set({ sidebarCollapsed: collapsed });
+  },
 
   // Reset
   reset: () =>

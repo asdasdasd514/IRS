@@ -34,7 +34,12 @@ backend/.venv/
 .venv/
 venv/
 __pycache__/
-*.py[cod]
 *$py.class
 backend/uploads/*
 !backend/uploads/.gitkeep
+
+# Backups & Data
+backup/
+backend/backup/
+*.backup
+*.dump

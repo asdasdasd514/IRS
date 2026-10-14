@@ -18,6 +18,7 @@ import type {
   SystemLogListResponse,
   FieldNote,
   NotesListResponse,
+  VisitsListResponse,
 } from '../types';
 
 // Auto-detect API URL based on browser location
@@ -742,13 +743,74 @@ export const noteApi = {
     return data;
   },
 
-  getExportExcelUrl: (params?: { trip_id?: string; campaign_id?: string; search?: string }): string => {
+  getExportExcelUrl: (params?: {
+    trip_id?: string;
+    campaign_id?: string;
+    school_id?: string;
+    category?: string;
+    search?: string;
+  }): string => {
     const query = new URLSearchParams();
     if (params?.trip_id) query.append('trip_id', params.trip_id);
     if (params?.campaign_id) query.append('campaign_id', params.campaign_id);
+    if (params?.school_id) query.append('school_id', params.school_id);
+    if (params?.category) query.append('category', params.category);
     if (params?.search) query.append('search', params.search);
     const qs = query.toString();
     return `${api.defaults.baseURL}/notes/export/excel${qs ? `?${qs}` : ''}`;
+  },
+};
+
+// Visit History API (Lịch sử tham quan / ghé thăm)
+export const visitApi = {
+  getVisits: async (params?: {
+    school_id?: string;
+    trip_id?: string;
+    campaign_id?: string;
+    is_checkin?: boolean;
+    date?: string;
+    search?: string;
+    limit?: number;
+    page?: number;
+  }): Promise<VisitsListResponse> => {
+    const { data } = await api.get('/visits', { params });
+    return data;
+  },
+
+  createVisit: async (payload: {
+    waypoint_id?: string;
+    school_id?: string;
+    school_name?: string;
+    trip_id?: string;
+    visit_content: string;
+    visit_date?: string;
+  }): Promise<{ success: boolean; id: string; message: string }> => {
+    const { data } = await api.post('/visits', payload);
+    return data;
+  },
+
+  deleteVisit: async (visitId: string): Promise<{ success: boolean; message: string }> => {
+    const { data } = await api.delete(`/visits/${visitId}`);
+    return data;
+  },
+
+  getExportExcelUrl: (params?: {
+    school_id?: string;
+    trip_id?: string;
+    campaign_id?: string;
+    is_checkin?: boolean;
+    date?: string;
+    search?: string;
+  }): string => {
+    const query = new URLSearchParams();
+    if (params?.trip_id) query.append('trip_id', params.trip_id);
+    if (params?.campaign_id) query.append('campaign_id', params.campaign_id);
+    if (params?.school_id) query.append('school_id', params.school_id);
+    if (params?.is_checkin !== undefined) query.append('is_checkin', String(params.is_checkin));
+    if (params?.date) query.append('date', params.date);
+    if (params?.search) query.append('search', params.search);
+    const qs = query.toString();
+    return `${api.defaults.baseURL}/visits/export/excel${qs ? `?${qs}` : ''}`;
   },
 };
 

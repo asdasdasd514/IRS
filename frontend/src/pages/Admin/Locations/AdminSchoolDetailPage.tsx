@@ -39,7 +39,8 @@ import {
   Undo2,
   Redo2,
   Heading,
-  SeparatorHorizontal
+  SeparatorHorizontal,
+  StickyNote
 } from 'lucide-react';
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
 import L from 'leaflet';
@@ -1782,6 +1783,50 @@ export function AdminSchoolDetailPage() {
                               className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs"
                             />
                           </div>
+                        </div>
+
+                        {/* GHI CHÚ THỰC ĐỊA TÍCH LŨY CỦA TRƯỜNG HỌC */}
+                        <div className="border-t border-slate-200 pt-3 space-y-2.5">
+                          <div className="flex items-center justify-between">
+                            <p className="font-bold text-slate-800 text-xs flex items-center gap-1.5">
+                              <StickyNote className="w-3.5 h-3.5 text-[#0f3b7d]" />
+                              <span>Ghi chú thực địa tích lũy</span>
+                            </p>
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-[#0f3b7d] border border-blue-200">
+                              {(school?.field_notes || []).length} ghi chú
+                            </span>
+                          </div>
+
+                          {(school?.field_notes || []).length > 0 ? (
+                            <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                              {(school?.field_notes || []).map((fn: any, idx: number) => (
+                                <div key={fn.id || idx} className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs space-y-1">
+                                  <div className="flex items-center justify-between text-[10px] text-slate-500 font-medium">
+                                    <span className="font-bold text-slate-700">{fn.author_name || 'Đoàn tuyển sinh'}</span>
+                                    <span>
+                                      {fn.created_at ? new Date(fn.created_at).toLocaleDateString('vi-VN', {
+                                        day: '2-digit',
+                                        month: '2-digit',
+                                        year: 'numeric',
+                                        hour: '2-digit',
+                                        minute: '2-digit'
+                                      }) : ''}
+                                    </span>
+                                  </div>
+                                  {fn.trip_name && (
+                                    <div className="text-[10px] text-indigo-700 font-semibold truncate">
+                                      🚗 {fn.trip_name}
+                                    </div>
+                                  )}
+                                  <p className="text-slate-800 font-medium leading-relaxed whitespace-pre-wrap">{fn.content}</p>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="p-3 bg-slate-50 border border-dashed border-slate-200 rounded-xl text-center">
+                              <p className="text-[11px] text-slate-500 italic">Chưa có ghi chú thực địa tích lũy nào cho trường này.</p>
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>

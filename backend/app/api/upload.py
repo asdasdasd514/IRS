@@ -101,11 +101,16 @@ async def upload_images(
             "created_at": datetime.utcnow()
         }
         image_ids.append(img_id)
-        # Nhúng trực tiếp vào visit_log trong waypoint
-        await db.waypoints.update_one(
+        # Nhúng trực tiếp vào visit_log trong campaign_waypoints hoặc waypoints
+        res_cw = await db.campaign_waypoints.update_one(
             {"visit_logs.id": visit_log_id},
             {"$push": {"visit_logs.$.images": image_doc}}
         )
+        if res_cw.matched_count == 0:
+            await db.waypoints.update_one(
+                {"visit_logs.id": visit_log_id},
+                {"$push": {"visit_logs.$.images": image_doc}}
+            )
     
     return JSONResponse({
         "success": True,
@@ -119,8 +124,10 @@ async def get_image(image_id: str):
     db = get_database()
     image = None
     
-    # 1. Tìm trong collection waypoints (nhúng trong visit_logs.images)
-    wp = await db.waypoints.find_one({"visit_logs.images.id": image_id})
+    # 1. Tìm trong collection campaign_waypoints hoặc waypoints (nhúng trong visit_logs.images)
+    wp = await db.campaign_waypoints.find_one({"visit_logs.images.id": image_id})
+    if not wp:
+        wp = await db.waypoints.find_one({"visit_logs.images.id": image_id})
     if wp:
         for log in wp.get("visit_logs", []):
             for img in log.get("images", []):
@@ -161,8 +168,8 @@ async def delete_image(image_id: str):
     db = get_database()
     now = datetime.utcnow()
     
-    # 1. Xóa mềm trong waypoints.visit_logs.images
-    res = await db.waypoints.update_one(
+    # 1. Xóa mềm trong campaign_waypoints hoặc waypoints
+    res = await db.campaign_waypoints.update_one(
         {"visit_logs.images.id": image_id},
         {"$set": {
             "visit_logs.$[].images.$[img].is_deleted": True,
@@ -170,6 +177,15 @@ async def delete_image(image_id: str):
         }},
         array_filters=[{"img.id": image_id}]
     )
+    if res.matched_count == 0:
+        res = await db.waypoints.update_one(
+            {"visit_logs.images.id": image_id},
+            {"$set": {
+                "visit_logs.$[].images.$[img].is_deleted": True,
+                "visit_logs.$[].images.$[img].deleted_at": now
+            }},
+            array_filters=[{"img.id": image_id}]
+        )
     
     # 2. Xóa mềm trong collection cũ nếu có
     if res.modified_count == 0 and hasattr(db, "waypoint_images"):

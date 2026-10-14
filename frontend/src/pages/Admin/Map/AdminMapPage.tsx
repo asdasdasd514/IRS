@@ -82,7 +82,7 @@ export function AdminMapPage() {
   });
 
   return (
-    <div className="max-w-[1600px] mx-auto space-y-5">
+    <div className="p-4 sm:p-6 lg:p-8 space-y-6">
       {/* Header */}
       <div>
         <h1 className="text-2xl font-black text-slate-900 tracking-tight">

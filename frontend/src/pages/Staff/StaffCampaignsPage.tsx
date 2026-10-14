@@ -574,7 +574,7 @@ export function StaffCampaignsPage() {
   };
 
   return (
-    <div className="space-y-5 animate-fade-in pb-12">
+    <div className="p-4 sm:p-6 lg:p-8 space-y-6 animate-fade-in pb-12">
       {/* 1. Header Banner & Profile Card */}
       {/* 3. Bố cục chính: Cột trái Danh sách Chiến dịch & Cột phải Bản đồ tương tác */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">

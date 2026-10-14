@@ -117,6 +117,7 @@ export interface School {
   };
   preferred_visit_hours?: string;
   notes?: string;
+  field_notes?: FieldNote[];
   total_visits?: number;
   total_tickets?: number;
   last_visited_at?: string;
@@ -417,6 +418,46 @@ export interface NotesListResponse {
     total_notes: number;
     total_schools: number;
     total_trips: number;
+  };
+}
+
+// Visit History Types (Quản lý lịch sử tham quan / ghé thăm)
+export interface VisitItem {
+  id: string;
+  waypoint_id?: string;
+  school_id?: string;
+  school_name: string;
+  school_address?: string;
+  trip_id?: string;
+  trip_code?: string;
+  trip_name?: string;
+  campaign_id?: string;
+  campaign_name?: string;
+  leader_name?: string;
+  members_names?: string;
+  visit_date: string;
+  visit_content: string;
+  is_checkin: boolean;
+  images: Array<{
+    id: string;
+    file_path?: string;
+    filename?: string;
+    cloudinary_url?: string;
+    content_type?: string;
+  }>;
+  created_at: string;
+}
+
+export interface VisitsListResponse {
+  items: VisitItem[];
+  total: number;
+  page: number;
+  limit: number;
+  stats: {
+    total_visits: number;
+    total_schools: number;
+    total_trips: number;
+    total_images: number;
   };
 }
 

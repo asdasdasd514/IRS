@@ -55,7 +55,7 @@ export function Header({ onOpenMobileMenu, title, subtitle }: HeaderProps) {
         {/* Mobile toggle button */}
         <button
           onClick={onOpenMobileMenu}
-          className="lg:hidden p-2 text-slate-600 hover:bg-slate-100 rounded-lg"
+          className="lg:hidden p-2 text-slate-600 hover:bg-slate-100 rounded-lg cursor-pointer"
           aria-label="Mở menu"
         >
           <Menu className="w-5 h-5" />

@@ -345,7 +345,7 @@ export function AdminLogsPage() {
   };
 
   return (
-    <div className="max-w-7xl mx-auto space-y-4 animate-fade-in pb-12">
+    <div className="p-4 sm:p-6 lg:p-8 space-y-6 animate-fade-in pb-12">
       {/* Bộ lọc & Tìm kiếm (kèm nút Làm mới) */}
       <div className="bg-white p-4 rounded-[5px] border border-slate-200/80 shadow-xs space-y-3">
         <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-center">

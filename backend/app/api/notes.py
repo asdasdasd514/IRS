@@ -1,11 +1,12 @@
 """
 API Quản lý Ghi chú Thực địa Tuyển sinh (Field Notes Management)
-Hỗ trợ ghi chú nhanh từ Bản đồ chuyến đi và Quản lý tập trung toàn bộ ghi chú
+Lưu trữ TRỰC TIẾP bên trong hồ sơ Trường học (collection 'schools' -> mảng 'field_notes')
+Thay vì tách bảng riêng biệt, bảo toàn lịch sử thực địa tích lũy theo từng điểm trường đối tác.
 """
 
 import uuid
 from datetime import datetime, timezone
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 import io
 import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
@@ -26,7 +27,7 @@ class CreateNoteRequest(BaseModel):
     school_id: Optional[str] = None
     school_name: Optional[str] = None
     waypoint_id: Optional[str] = None
-    category: Optional[str] = "Tiếp xúc BGH & Học sinh"
+    category: Optional[str] = "Ghi chú"
     content: str
     author_name: Optional[str] = "Cán bộ tuyển sinh"
 
@@ -37,74 +38,70 @@ class UpdateNoteRequest(BaseModel):
     school_name: Optional[str] = None
 
 
-async def sync_existing_waypoint_notes():
-    """Tự động đồng bộ các ghi chú đã có từ campaign_waypoints vào field_notes nếu chưa có"""
-    db = get_database()
-    existing_count = await db.field_notes.count_documents({"is_deleted": {"$ne": True}})
-    if existing_count > 0:
-        return
+async def _get_all_embedded_notes(db) -> List[Dict[str, Any]]:
+    """Đọc toàn bộ ghi chú thực địa được nhúng bên trong collection 'schools'"""
+    schools_cursor = db.schools.find({"is_deleted": {"$ne": True}})
+    all_notes = []
 
-    cursor = db.campaign_waypoints.find({
-        "notes": {"$exists": True, "$ne": ""},
-        "is_deleted": {"$ne": True}
-    })
-    
-    trips_cache = {}
-    schools_cache = {}
+    async for school in schools_cursor:
+        s_id = school.get("id") or str(school.get("_id"))
+        s_name = school.get("name") or "Trường học"
+        fnotes = school.get("field_notes") or []
 
-    async for wp in cursor:
-        note_text = wp.get("notes")
-        if not note_text or not str(note_text).strip():
-            continue
+        # Nếu trường có ghi chú tổng thể mà chưa có trong mảng field_notes
+        if not fnotes and school.get("notes") and str(school.get("notes")).strip():
+            fnotes = [{
+                "id": f"fn-{s_id}",
+                "content": str(school["notes"]).strip(),
+                "author_name": "Đoàn tuyển sinh",
+                "category": "Đánh giá thực địa",
+                "trip_id": None,
+                "trip_name": "Ghi chú trường",
+                "campaign_id": None,
+                "campaign_name": None,
+                "created_at": school.get("updated_at") or school.get("created_at") or datetime.now(timezone.utc),
+                "updated_at": school.get("updated_at") or datetime.now(timezone.utc),
+                "is_deleted": False
+            }]
 
-        trip_id = wp.get("trip_id")
-        trip_name = "Chuyến đi"
-        campaign_id = wp.get("campaign_id")
-        campaign_name = "Chiến dịch tuyển sinh"
+        for fn in fnotes:
+            if not isinstance(fn, dict) or fn.get("is_deleted") is True:
+                continue
 
-        if trip_id and trip_id not in trips_cache:
-            trip = await db.admission_trips.find_one({"id": trip_id})
-            if trip:
-                trips_cache[trip_id] = trip
-        
-        if trip_id and trip_id in trips_cache:
-            t = trips_cache[trip_id]
-            trip_name = t.get("name") or trip_name
-            if not campaign_id and t.get("campaign_id"):
-                campaign_id = t.get("campaign_id")
+            # Chuẩn hóa kiểu ngày tháng
+            c_at = fn.get("created_at")
+            if isinstance(c_at, datetime):
+                c_at_str = c_at.isoformat()
+            else:
+                c_at_str = str(c_at) if c_at else datetime.now(timezone.utc).isoformat()
 
-        if campaign_id:
-            c = await db.campaigns.find_one({"$or": [{"id": campaign_id}, {"_id": campaign_id}]})
-            if c:
-                campaign_name = c.get("name") or campaign_name
+            u_at = fn.get("updated_at")
+            if isinstance(u_at, datetime):
+                u_at_str = u_at.isoformat()
+            else:
+                u_at_str = str(u_at) if u_at else c_at_str
 
-        s_id = wp.get("school_id") or wp.get("id")
-        s_name = wp.get("name") or "Trường học"
+            note_item = {
+                "id": fn.get("id") or str(uuid.uuid4()),
+                "school_id": s_id,
+                "school_name": s_name,
+                "trip_id": fn.get("trip_id"),
+                "trip_name": fn.get("trip_name") or "Chuyến đi",
+                "campaign_id": fn.get("campaign_id"),
+                "campaign_name": fn.get("campaign_name") or "Chiến dịch tuyển sinh",
+                "waypoint_id": fn.get("waypoint_id"),
+                "category": fn.get("category") or "Đánh giá thực địa",
+                "content": fn.get("content", "").strip(),
+                "author_name": fn.get("author_name") or "Cán bộ tuyển sinh",
+                "created_at": c_at_str,
+                "updated_at": u_at_str,
+                "is_deleted": False
+            }
+            all_notes.append(note_item)
 
-        created_dt = wp.get("visited_at") or wp.get("created_at") or datetime.now(timezone.utc)
-        if isinstance(created_dt, str):
-            try:
-                created_dt = datetime.fromisoformat(created_dt)
-            except Exception:
-                created_dt = datetime.now(timezone.utc)
-
-        doc = {
-            "id": str(uuid.uuid4()),
-            "trip_id": trip_id,
-            "trip_name": trip_name,
-            "campaign_id": campaign_id,
-            "campaign_name": campaign_name,
-            "school_id": s_id,
-            "school_name": s_name,
-            "waypoint_id": wp.get("id"),
-            "category": "Đánh giá thực địa",
-            "content": str(note_text).strip(),
-            "author_name": "Đoàn tuyển sinh",
-            "created_at": created_dt,
-            "updated_at": created_dt,
-            "is_deleted": False
-        }
-        await db.field_notes.insert_one(doc)
+    # Sắp xếp mới nhất lên đầu
+    all_notes.sort(key=lambda x: str(x.get("created_at", "")), reverse=True)
+    return all_notes
 
 
 @router.get("")
@@ -117,61 +114,52 @@ async def get_all_notes(
     limit: int = 100,
     page: int = 1
 ):
-    """Lấy danh sách ghi chú với đầy đủ bộ lọc và thống kê"""
+    """Lấy danh sách ghi chú thực địa (được đọc trực tiếp từ hồ sơ các trường học)"""
     db = get_database()
-    await sync_existing_waypoint_notes()
+    raw_notes = await _get_all_embedded_notes(db)
 
-    # Xử lý an toàn nếu được gọi trực tiếp
+    # Thống kê tổng quan toàn hệ thống (không phụ thuộc bộ lọc)
+    total_all_notes = len(raw_notes)
+    distinct_schools = len(set(n["school_id"] for n in raw_notes if n.get("school_id")))
+    distinct_trips = len(set(n["trip_id"] for n in raw_notes if n.get("trip_id")))
+
+    # Áp dụng bộ lọc
+    filtered = raw_notes
+    if trip_id:
+        filtered = [n for n in filtered if n.get("trip_id") == trip_id]
+    if campaign_id:
+        filtered = [n for n in filtered if n.get("campaign_id") == campaign_id]
+    if school_id:
+        filtered = [n for n in filtered if n.get("school_id") == school_id or n.get("waypoint_id") == school_id]
+    if category:
+        filtered = [n for n in filtered if n.get("category") == category]
+    if search and search.strip():
+        q = search.strip().lower()
+        filtered = [
+            n for n in filtered
+            if q in n.get("content", "").lower()
+            or q in n.get("school_name", "").lower()
+            or q in n.get("trip_name", "").lower()
+            or q in n.get("author_name", "").lower()
+        ]
+
     try:
-        page_val = int(page)
+        page_val = max(1, int(page))
     except Exception:
         page_val = 1
     try:
-        limit_val = int(limit)
+        limit_val = max(1, int(limit))
     except Exception:
         limit_val = 100
 
-    query: dict = {"is_deleted": {"$ne": True}}
-
-    if trip_id:
-        query["trip_id"] = trip_id
-    if campaign_id:
-        query["campaign_id"] = campaign_id
-    if school_id:
-        query["$or"] = [{"school_id": school_id}, {"waypoint_id": school_id}]
-    if category:
-        query["category"] = category
-    if search and search.strip():
-        s_regex = {"$regex": search.strip(), "$options": "i"}
-        query["$or"] = [
-            {"content": s_regex},
-            {"school_name": s_regex},
-            {"trip_name": s_regex},
-            {"author_name": s_regex}
-        ]
-
-    total = await db.field_notes.count_documents(query)
     skip = (page_val - 1) * limit_val
-    cursor = db.field_notes.find(query).sort("created_at", -1).skip(skip).limit(limit_val)
-    items = []
-    async for doc in cursor:
-        doc["_id"] = str(doc["_id"])
-        if isinstance(doc.get("created_at"), datetime):
-            doc["created_at"] = doc["created_at"].isoformat()
-        if isinstance(doc.get("updated_at"), datetime):
-            doc["updated_at"] = doc["updated_at"].isoformat()
-        items.append(doc)
-
-    # Thống kê tổng hợp
-    distinct_schools = len(await db.field_notes.distinct("school_name", {"is_deleted": {"$ne": True}}))
-    distinct_trips = len(await db.field_notes.distinct("trip_id", {"is_deleted": {"$ne": True}}))
-    total_all_notes = await db.field_notes.count_documents({"is_deleted": {"$ne": True}})
+    paginated_items = filtered[skip : skip + limit_val]
 
     return {
-        "items": items,
-        "total": total,
-        "page": page,
-        "limit": limit,
+        "items": paginated_items,
+        "total": len(filtered),
+        "page": page_val,
+        "limit": limit_val,
         "stats": {
             "total_notes": total_all_notes,
             "total_schools": distinct_schools,
@@ -182,16 +170,16 @@ async def get_all_notes(
 
 @router.post("")
 async def create_note(data: CreateNoteRequest):
-    """Tạo ghi chú mới và tự động đồng bộ vào waypoint/trường học"""
+    """Tạo ghi chú mới và lưu trực tiếp vào mảng 'field_notes' của trường học tương ứng"""
     db = get_database()
-    now = datetime.now(timezone.utc)
+    now_iso = datetime.now(timezone.utc).isoformat()
     note_id = str(uuid.uuid4())
 
     trip_name = data.trip_name
     campaign_name = data.campaign_name
     campaign_id = data.campaign_id
 
-    # Bổ sung thông tin nếu thiếu
+    # Tìm thông tin chuyến đi / chiến dịch nếu có
     if data.trip_id:
         trip = await db.admission_trips.find_one({"id": data.trip_id})
         if trip:
@@ -203,26 +191,68 @@ async def create_note(data: CreateNoteRequest):
         if camp:
             campaign_name = campaign_name or camp.get("name")
 
-    doc = {
+    # Tìm trường học mục tiêu trong collection 'schools'
+    target_school = None
+    if data.school_id:
+        target_school = await db.schools.find_one({
+            "$or": [{"id": data.school_id}, {"code": data.school_id}],
+            "is_deleted": {"$ne": True}
+        })
+    if not target_school and data.school_name:
+        target_school = await db.schools.find_one({
+            "name": data.school_name.strip(),
+            "is_deleted": {"$ne": True}
+        })
+
+    s_id = (target_school.get("id") or str(target_school["_id"])) if target_school else data.school_id
+    s_name = target_school.get("name") if target_school else (data.school_name or "Điểm trường")
+
+    note_doc = {
         "id": note_id,
         "trip_id": data.trip_id,
         "trip_name": trip_name or "Chuyến đi",
         "campaign_id": campaign_id,
         "campaign_name": campaign_name or "Chiến dịch tuyển sinh",
-        "school_id": data.school_id,
-        "school_name": data.school_name or "Điểm trường",
+        "school_id": s_id,
+        "school_name": s_name,
         "waypoint_id": data.waypoint_id,
-        "category": data.category or "Tiếp xúc BGH & Học sinh",
+        "category": data.category or "Ghi chú",
         "content": data.content.strip(),
         "author_name": data.author_name or "Cán bộ tuyển sinh",
-        "created_at": now,
-        "updated_at": now,
+        "created_at": now_iso,
+        "updated_at": now_iso,
         "is_deleted": False
     }
 
-    await db.field_notes.insert_one(doc)
+    # Lưu trực tiếp vào mảng 'field_notes' của trường
+    if target_school:
+        await db.schools.update_one(
+            {"_id": target_school["_id"]},
+            {
+                "$push": {"field_notes": note_doc},
+                "$set": {
+                    "notes": data.content.strip(),
+                    "updated_at": datetime.now(timezone.utc)
+                }
+            }
+        )
+    else:
+        # Nếu chưa có hồ sơ trường học, tạo mới hồ sơ trường tối giản
+        new_school = {
+            "id": s_id or str(uuid.uuid4()),
+            "name": s_name,
+            "address": "Chưa có địa chỉ",
+            "lat": 10.7769,
+            "lng": 106.7009,
+            "notes": data.content.strip(),
+            "field_notes": [note_doc],
+            "created_at": datetime.now(timezone.utc),
+            "updated_at": datetime.now(timezone.utc),
+            "is_deleted": False
+        }
+        await db.schools.insert_one(new_school)
 
-    # Đồng bộ ngược vào campaign_waypoints nếu có
+    # Đồng bộ vào waypoint của chuyến đi nếu có
     if data.trip_id and (data.waypoint_id or data.school_id):
         wp_query = {
             "trip_id": data.trip_id,
@@ -237,67 +267,59 @@ async def create_note(data: CreateNoteRequest):
             {"$set": {"notes": data.content.strip()}}
         )
 
-    # Đồng bộ vào schools nếu có school_id
-    if data.school_id:
-        await db.schools.update_one(
-            {"$or": [{"id": data.school_id}, {"code": data.school_id}]},
-            {"$set": {"notes": data.content.strip(), "updated_at": now}}
-        )
-
-    doc["_id"] = str(doc["_id"])
-    doc["created_at"] = doc["created_at"].isoformat()
-    doc["updated_at"] = doc["updated_at"].isoformat()
-    return doc
+    return note_doc
 
 
 @router.put("/{note_id}")
 async def update_note(note_id: str, data: UpdateNoteRequest):
-    """Cập nhật nội dung ghi chú"""
+    """Cập nhật nội dung ghi chú bên trong trường học"""
     db = get_database()
-    note = await db.field_notes.find_one({"id": note_id, "is_deleted": {"$ne": True}})
-    if not note:
+    now_iso = datetime.now(timezone.utc).isoformat()
+
+    school = await db.schools.find_one({"field_notes.id": note_id})
+    if not school:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy ghi chú")
 
-    now = datetime.now(timezone.utc)
-    update_fields = {"updated_at": now}
+    set_fields = {"field_notes.$.updated_at": now_iso, "updated_at": datetime.now(timezone.utc)}
     if data.content is not None:
-        update_fields["content"] = data.content.strip()
+        set_fields["field_notes.$.content"] = data.content.strip()
+        set_fields["notes"] = data.content.strip()
     if data.category is not None:
-        update_fields["category"] = data.category
+        set_fields["field_notes.$.category"] = data.category
     if data.school_name is not None:
-        update_fields["school_name"] = data.school_name
+        set_fields["field_notes.$.school_name"] = data.school_name
 
-    await db.field_notes.update_one({"id": note_id}, {"$set": update_fields})
+    await db.schools.update_one(
+        {"field_notes.id": note_id},
+        {"$set": set_fields}
+    )
 
-    # Đồng bộ ngược vào campaign_waypoints nếu có
-    if data.content and note.get("trip_id") and (note.get("waypoint_id") or note.get("school_id")):
-        wp_query = {
-            "trip_id": note["trip_id"],
-            "$or": [
-                {"id": note.get("waypoint_id")},
-                {"school_id": note.get("school_id")},
-                {"id": note.get("school_id")}
-            ]
-        }
-        await db.campaign_waypoints.update_many(
-            wp_query,
-            {"$set": {"notes": data.content.strip()}}
-        )
+    # Lấy lại note vừa cập nhật
+    updated_school = await db.schools.find_one({"field_notes.id": note_id})
+    for fn in (updated_school.get("field_notes") or []):
+        if fn.get("id") == note_id:
+            fn["school_id"] = updated_school.get("id") or str(updated_school["_id"])
+            fn["school_name"] = updated_school.get("name")
+            return fn
 
-    updated = await db.field_notes.find_one({"id": note_id})
-    updated["_id"] = str(updated["_id"])
-    if isinstance(updated.get("created_at"), datetime):
-        updated["created_at"] = updated["created_at"].isoformat()
-    if isinstance(updated.get("updated_at"), datetime):
-        updated["updated_at"] = updated["updated_at"].isoformat()
-    return updated
+    return {"message": "Đã cập nhật ghi chú", "id": note_id}
 
 
 @router.delete("/{note_id}")
 async def delete_note(note_id: str):
-    """Xóa ghi chú (soft delete)"""
+    """Xóa ghi chú (soft delete trong trường học)"""
     db = get_database()
-    res = await db.field_notes.update_one({"id": note_id}, {"$set": {"is_deleted": True}})
+    now_iso = datetime.now(timezone.utc).isoformat()
+
+    res = await db.schools.update_one(
+        {"field_notes.id": note_id},
+        {
+            "$set": {
+                "field_notes.$.is_deleted": True,
+                "field_notes.$.updated_at": now_iso
+            }
+        }
+    )
     if res.matched_count == 0:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy ghi chú")
     return {"message": "Đã xóa ghi chú thành công", "id": note_id}
@@ -307,28 +329,34 @@ async def delete_note(note_id: str):
 async def export_notes_excel(
     trip_id: Optional[str] = None,
     campaign_id: Optional[str] = None,
+    school_id: Optional[str] = None,
+    category: Optional[str] = None,
     search: Optional[str] = None
 ):
-    """Xuất toàn bộ ghi chú ra file Excel định dạng chuyên nghiệp"""
+    """Xuất toàn bộ ghi chú thực địa từ các trường học ra file Excel"""
     db = get_database()
-    await sync_existing_waypoint_notes()
+    raw_notes = await _get_all_embedded_notes(db)
 
-    query: dict = {"is_deleted": {"$ne": True}}
+    filtered = raw_notes
     if trip_id:
-        query["trip_id"] = trip_id
+        filtered = [n for n in filtered if n.get("trip_id") == trip_id]
     if campaign_id:
-        query["campaign_id"] = campaign_id
+        filtered = [n for n in filtered if n.get("campaign_id") == campaign_id]
+    if school_id:
+        filtered = [n for n in filtered if n.get("school_id") == school_id or n.get("waypoint_id") == school_id]
+    if category:
+        filtered = [n for n in filtered if n.get("category") == category]
     if search and search.strip():
-        s_regex = {"$regex": search.strip(), "$options": "i"}
-        query["$or"] = [
-            {"content": s_regex},
-            {"school_name": s_regex},
-            {"trip_name": s_regex},
-            {"author_name": s_regex}
+        q = search.strip().lower()
+        filtered = [
+            n for n in filtered
+            if q in n.get("content", "").lower()
+            or q in n.get("school_name", "").lower()
+            or q in n.get("trip_name", "").lower()
+            or q in n.get("author_name", "").lower()
         ]
 
-    cursor = db.field_notes.find(query).sort("created_at", -1)
-    notes = await cursor.to_list(length=2000)
+    notes = filtered
 
     wb = openpyxl.Workbook()
     ws = wb.active
@@ -350,14 +378,14 @@ async def export_notes_excel(
     )
 
     # Tiêu đề bảng
-    ws.merge_cells("A1:G1")
+    ws.merge_cells("A1:H1")
     ws["A1"] = "DANH SÁCH GHI CHÚ VÀ ĐÁNH GIÁ THỰC ĐỊA TUYỂN SINH"
     ws["A1"].font = font_title
     ws["A1"].alignment = Alignment(horizontal="center", vertical="center")
     ws.row_dimensions[1].height = 32
 
     now_vn = datetime.now(timezone.utc).strftime("%d/%m/%Y %H:%M")
-    ws.merge_cells("A2:G2")
+    ws.merge_cells("A2:H2")
     ws["A2"] = f"Thời điểm xuất file: {now_vn} | Tổng số ghi chú: {len(notes)}"
     ws["A2"].font = Font(name="Calibri", size=10, italic=True, color="555555")
     ws["A2"].alignment = Alignment(horizontal="center", vertical="center")
@@ -367,6 +395,7 @@ async def export_notes_excel(
         "STT",
         "Thời Gian Ghi",
         "Điểm Trường",
+        "Phân Loại / Tag",
         "Chuyến Đi / Đợt",
         "Chiến Dịch",
         "Cán Bộ Ghi",
@@ -400,6 +429,7 @@ async def export_notes_excel(
             idx,
             c_time_str,
             n.get("school_name") or "Chưa rõ",
+            n.get("category") or "Ghi chú",
             n.get("trip_name") or "Chuyến đi",
             n.get("campaign_name") or "Chiến dịch tuyển sinh",
             n.get("author_name") or "Cán bộ tuyển sinh",
@@ -410,13 +440,13 @@ async def export_notes_excel(
             cell = ws.cell(row=r_idx, column=col_idx, value=val)
             cell.font = font_bold if col_idx in (1, 3) else font_normal
             cell.border = thin_border
-            align_h = "center" if col_idx in (1, 2) else ("left" if col_idx in (3, 4, 5, 7) else "center")
-            cell.alignment = Alignment(horizontal=align_h, vertical="center", wrap_text=(col_idx == 7))
+            align_h = "center" if col_idx in (1, 2, 4) else ("left" if col_idx in (3, 5, 6, 8) else "center")
+            cell.alignment = Alignment(horizontal=align_h, vertical="center", wrap_text=(col_idx == 8))
             if idx % 2 == 0:
                 cell.fill = fill_even
 
     # Căn chỉnh độ rộng cột
-    col_widths = [8, 18, 30, 28, 25, 20, 50]
+    col_widths = [8, 18, 30, 20, 28, 25, 20, 50]
     for idx, width in enumerate(col_widths, 1):
         ws.column_dimensions[get_column_letter(idx)].width = width
 

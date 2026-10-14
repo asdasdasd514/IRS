@@ -23,6 +23,12 @@ interface QuickNoteModalProps {
   onNoteSaved?: () => void;
 }
 
+export const FIELD_NOTE_TAGS = [
+  { label: '📝 Ghi chú', value: 'Ghi chú', activeBg: 'bg-blue-600 text-white border-blue-700', idleBg: 'bg-blue-50 text-blue-800 border-blue-200 hover:bg-blue-100' },
+  { label: '🌟 Tiềm năng', value: 'Tiềm năng', activeBg: 'bg-amber-500 text-white border-amber-600', idleBg: 'bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100' },
+  { label: '⚠️ Lưu ý', value: 'Lưu ý', activeBg: 'bg-rose-500 text-white border-rose-600', idleBg: 'bg-rose-50 text-rose-800 border-rose-200 hover:bg-rose-100' },
+];
+
 export const QuickNoteModal: React.FC<QuickNoteModalProps> = ({
   isOpen,
   onClose,
@@ -32,6 +38,7 @@ export const QuickNoteModal: React.FC<QuickNoteModalProps> = ({
   onNoteSaved,
 }) => {
   const [selectedWaypointId, setSelectedWaypointId] = useState<string>('');
+  const [selectedCategory, setSelectedCategory] = useState<string>('Ghi chú');
   const [content, setContent] = useState<string>('');
   const [authorName, setAuthorName] = useState<string>('Cán bộ tuyển sinh');
   const [isSaving, setIsSaving] = useState(false);
@@ -104,6 +111,7 @@ export const QuickNoteModal: React.FC<QuickNoteModalProps> = ({
         school_id: schoolId,
         school_name: schoolName,
         waypoint_id: selectedWp?.id,
+        category: selectedCategory,
         content: content.trim(),
         author_name: authorName,
       });
@@ -229,6 +237,33 @@ export const QuickNoteModal: React.FC<QuickNoteModalProps> = ({
                 </select>
               </div>
 
+              {/* Thẻ phân loại nhanh 1 chạm */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5 flex items-center justify-between">
+                  <span>Phân loại & Đánh giá nhanh:</span>
+                  <span className="text-[11px] font-bold text-[#0f3b7d] bg-blue-50 px-2 py-0.5 rounded-full border border-blue-200">
+                    {selectedCategory}
+                  </span>
+                </label>
+                <div className="flex flex-wrap gap-1.5">
+                  {FIELD_NOTE_TAGS.map((tag) => {
+                    const isSelected = selectedCategory === tag.value;
+                    return (
+                      <button
+                        key={tag.value}
+                        type="button"
+                        onClick={() => setSelectedCategory(tag.value)}
+                        className={`px-2.5 py-1 text-xs font-bold rounded-lg border transition-all cursor-pointer shadow-2xs ${
+                          isSelected ? `${tag.activeBg} scale-[1.03] ring-2 ring-offset-1 ring-blue-500` : tag.idleBg
+                        }`}
+                      >
+                        {tag.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
               {/* Nội dung ghi chú */}
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
@@ -307,9 +342,16 @@ export const QuickNoteModal: React.FC<QuickNoteModalProps> = ({
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div>
-                        <span className="font-bold text-xs text-slate-900 block">
-                          {note.school_name || 'Điểm trường'}
-                        </span>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-bold text-xs text-slate-900 block">
+                            {note.school_name || 'Điểm trường'}
+                          </span>
+                          {note.category && (
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-[#0f3b7d] border border-blue-200">
+                              {note.category}
+                            </span>
+                          )}
+                        </div>
                         <div className="flex items-center gap-2 text-[10px] text-slate-500 mt-0.5">
                           <span className="flex items-center gap-1">
                             <Clock className="w-3 h-3" />

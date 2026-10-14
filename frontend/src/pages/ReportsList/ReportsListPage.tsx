@@ -254,7 +254,7 @@ export const ReportsListPage: React.FC = () => {
   }
 
   return (
-    <div className="max-w-7xl mx-auto space-y-4 animate-fade-in pb-12">
+    <div className="p-4 sm:p-6 lg:p-8 space-y-6 animate-fade-in pb-12">
       {/* Top Header Card */}
       <div className="bg-white p-4 sm:p-5 rounded-[5px] border border-slate-200/80 shadow-xs space-y-4">
         <div className="flex items-center gap-3">

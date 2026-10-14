@@ -9,6 +9,7 @@ import {
   Route,
   FileSpreadsheet,
   StickyNote,
+  History,
   LucideIcon
 } from 'lucide-react';
 import { UserRole } from '../../types';
@@ -99,6 +100,13 @@ export const NAV_GROUPS: NavGroupConfig[] = [
         label: 'Ghi chú thực địa',
         path: '/admin/notes',
         icon: StickyNote,
+        roles: ['admin', 'staff'],
+      },
+      {
+        id: 'visits',
+        label: 'Lịch sử tham quan',
+        path: '/admin/visits',
+        icon: History,
         roles: ['admin', 'staff'],
       },
     ],

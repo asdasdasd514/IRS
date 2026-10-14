@@ -3,31 +3,47 @@ import { useQuery } from '@tanstack/react-query';
 import {
   StickyNote,
   Search,
-  Download,
   Plus,
   Trash2,
   Edit3,
-  School,
   Route,
   Clock,
   User,
   CheckCircle2,
   X,
   AlertCircle,
+  RefreshCw,
+  Building2,
 } from 'lucide-react';
-import { noteApi, campaignApi, tripApi } from '../../../services/api';
+import { noteApi, campaignApi, tripApi, schoolApi } from '../../../services/api';
 import type { FieldNote } from '../../../types';
+
+export const FIELD_NOTE_TAGS = [
+  { label: '📝 Ghi chú', value: 'Ghi chú', badgeColor: 'bg-blue-50 text-blue-800 border-blue-300' },
+  { label: '🌟 Tiềm năng', value: 'Tiềm năng', badgeColor: 'bg-amber-50 text-amber-800 border-amber-300' },
+  { label: '⚠️ Lưu ý', value: 'Lưu ý', badgeColor: 'bg-rose-50 text-rose-800 border-rose-300' },
+];
+
+const getTagBadgeStyle = (category?: string) => {
+  if (!category) return 'bg-blue-50 text-blue-800 border-blue-200';
+  const c = category.toLowerCase();
+  if (c.includes('tiềm năng')) return 'bg-amber-50 text-amber-800 border-amber-300';
+  if (c.includes('lưu ý')) return 'bg-rose-50 text-rose-800 border-rose-300';
+  return 'bg-blue-50 text-blue-800 border-blue-300';
+};
 
 export const AdminNotesPage: React.FC = () => {
   // Filter states
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedSchoolId, setSelectedSchoolId] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('');
   const [selectedCampaignId, setSelectedCampaignId] = useState('');
-  const [selectedTripId, setSelectedTripId] = useState('');
 
   // Modal create/edit states
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingNote, setEditingNote] = useState<FieldNote | null>(null);
   const [formSchoolName, setFormSchoolName] = useState('');
+  const [formCategory, setFormCategory] = useState('Ghi chú');
   const [formTripId, setFormTripId] = useState('');
   const [formContent, setFormContent] = useState('');
   const [formAuthorName, setFormAuthorName] = useState('Cán bộ tuyển sinh');
@@ -35,6 +51,12 @@ export const AdminNotesPage: React.FC = () => {
 
   // Toast
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  // Fetch Danh sách trường học cho dropdown filter
+  const { data: schools = [] } = useQuery({
+    queryKey: ['schools-list-for-notes'],
+    queryFn: () => schoolApi.getAll(),
+  });
 
   // Fetch Danh sách chiến dịch & chuyến đi cho dropdown filter
   const { data: campaigns = [] } = useQuery({
@@ -61,14 +83,16 @@ export const AdminNotesPage: React.FC = () => {
   } = useQuery({
     queryKey: [
       'field-notes',
+      selectedSchoolId,
+      selectedCategory,
       selectedCampaignId,
-      selectedTripId,
       searchTerm,
     ],
     queryFn: () =>
       noteApi.getNotes({
+        school_id: selectedSchoolId || undefined,
+        category: selectedCategory || undefined,
         campaign_id: selectedCampaignId || undefined,
-        trip_id: selectedTripId || undefined,
         search: searchTerm.trim() || undefined,
         limit: 200,
       }),
@@ -105,6 +129,7 @@ export const AdminNotesPage: React.FC = () => {
   const handleOpenCreateModal = () => {
     setEditingNote(null);
     setFormSchoolName('');
+    setFormCategory('Ghi chú');
     setFormTripId(trips.length > 0 ? trips[0].id : '');
     setFormContent('');
     setFormError(null);
@@ -115,6 +140,7 @@ export const AdminNotesPage: React.FC = () => {
   const handleOpenEditModal = (note: FieldNote) => {
     setEditingNote(note);
     setFormSchoolName(note.school_name || '');
+    setFormCategory(note.category || 'Ghi chú');
     setFormTripId(note.trip_id || '');
     setFormContent(note.content);
     setFormAuthorName(note.author_name || 'Cán bộ tuyển sinh');
@@ -135,6 +161,7 @@ export const AdminNotesPage: React.FC = () => {
         // Cập nhật
         await noteApi.updateNote(editingNote.id, {
           content: formContent.trim(),
+          category: formCategory,
           school_name: formSchoolName.trim() || undefined,
         });
         showToast('Đã cập nhật ghi chú thành công!');
@@ -146,6 +173,7 @@ export const AdminNotesPage: React.FC = () => {
           trip_name: selectedTripObj?.name,
           campaign_id: selectedTripObj?.campaign_id,
           school_name: formSchoolName.trim() || 'Điểm trường thực địa',
+          category: formCategory,
           content: formContent.trim(),
           author_name: formAuthorName,
         });
@@ -175,18 +203,9 @@ export const AdminNotesPage: React.FC = () => {
     }
   };
 
-  // Xuất file Excel
-  const handleExportExcel = () => {
-    const url = noteApi.getExportExcelUrl({
-      trip_id: selectedTripId || undefined,
-      campaign_id: selectedCampaignId || undefined,
-      search: searchTerm.trim() || undefined,
-    });
-    window.open(url, '_blank');
-  };
 
   return (
-    <div className="space-y-5 animate-fade-in pb-16">
+    <div className="p-4 sm:p-6 lg:p-8 space-y-6 animate-fade-in pb-16">
       {/* Toast thông báo */}
       {toastMessage && (
         <div className="fixed top-20 right-6 z-[9999] bg-emerald-600 text-white px-4 py-2.5 rounded-lg shadow-xl text-xs font-bold flex items-center gap-2 animate-bounce">
@@ -195,106 +214,129 @@ export const AdminNotesPage: React.FC = () => {
         </div>
       )}
 
-      {/* HEADER SECTION */}
-      <div className="bg-white p-5 sm:p-6 rounded-lg border border-slate-200/80 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+      {/* Top Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <div className="flex items-center gap-2.5">
-            <div className="p-2.5 bg-blue-50 text-[#0f3b7d] rounded-lg border border-blue-100">
+            <div className="w-10 h-10 rounded-[5px] bg-[#0f3b7d] text-white flex items-center justify-center shadow-xs">
               <StickyNote className="w-5 h-5" />
             </div>
             <div>
-              <h1 className="text-lg sm:text-xl font-black text-slate-900 tracking-tight">
-                Quản Lý Ghi Chú Thực Địa
+              <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">
+                Quản lý Ghi Chú Thực Địa
               </h1>
-              <p className="text-xs text-slate-500 font-medium">
-                Tổng hợp, tìm kiếm và theo dõi tất cả ghi chú, đánh giá từ các đợt công tác tuyển sinh
+              <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
+                Tổng hợp, phân loại và theo dõi tất cả đánh giá thực địa từ các đợt công tác tuyển sinh
               </p>
             </div>
           </div>
         </div>
 
-        {/* Nút tác vụ */}
+        {/* Action buttons */}
         <div className="flex items-center gap-2.5 shrink-0">
           <button
-            onClick={handleExportExcel}
-            className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 active:scale-[0.99] text-white rounded-[6px] text-xs font-bold shadow-2xs transition cursor-pointer"
-            title="Xuất danh sách ra file Excel (.xlsx)"
+            type="button"
+            onClick={() => {
+              refetch();
+              refetchGlobalStats();
+            }}
+            disabled={isLoading}
+            className="p-2.5 rounded-[5px] border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 transition shadow-xs cursor-pointer"
+            title="Làm mới dữ liệu"
           >
-            <Download className="w-3.5 h-3.5" />
-            <span>Xuất Excel</span>
+            <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin text-[#0f3b7d]' : ''}`} />
           </button>
 
           <button
             onClick={handleOpenCreateModal}
-            className="flex items-center gap-1.5 px-3.5 py-2 bg-[#0f3b7d] hover:bg-[#0c2f64] active:scale-[0.99] text-white rounded-[6px] text-xs font-bold shadow-2xs transition cursor-pointer"
+            className="px-4 py-2.5 rounded-[5px] bg-[#0f3b7d] hover:bg-[#0c2f64] active:scale-[0.99] text-white text-xs sm:text-sm font-bold flex items-center gap-2 transition shadow-xs cursor-pointer"
           >
-            <Plus className="w-3.5 h-3.5" />
+            <Plus className="w-4 h-4" />
             <span>Thêm ghi chú</span>
           </button>
         </div>
       </div>
 
-      {/* KPI METRIC CARDS */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
-        <div className="bg-white border border-slate-200/80 rounded-lg p-4 shadow-xs flex items-center gap-3.5">
-          <div className="w-11 h-11 rounded-lg bg-blue-50 text-[#0f3b7d] flex items-center justify-center font-bold">
-            <StickyNote className="w-5 h-5 text-[#0f3b7d]" />
+      {/* KPI Stats Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        {/* Card 1: Tổng số ghi chú */}
+        <div className="bg-white rounded-[5px] border border-slate-200/80 p-5 shadow-xs flex items-center gap-4">
+          <div className="w-12 h-12 rounded-[5px] bg-blue-50 text-[#0f3b7d] flex items-center justify-center shrink-0">
+            <StickyNote className="w-6 h-6" />
           </div>
-          <div>
-            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">
+          <div className="min-w-0">
+            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
               Tổng số ghi chú
             </span>
-            <p className="text-2xl font-black text-slate-900 leading-tight">
-              {stats.total_notes}{' '}
-              <span className="text-xs font-normal text-slate-500">bản ghi</span>
-            </p>
+            <div className="text-2xl font-black text-slate-900 mt-0.5">
+              {stats.total_notes.toLocaleString('vi-VN')}
+            </div>
+            <span className="text-[11px] text-slate-500">Đánh giá & phản hồi thực tế</span>
           </div>
         </div>
 
-        <div className="bg-white border border-slate-200/80 rounded-lg p-4 shadow-xs flex items-center gap-3.5">
-          <div className="w-11 h-11 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center font-bold">
-            <School className="w-5 h-5 text-emerald-600" />
+        {/* Card 2: Điểm trường có nhận xét */}
+        <div className="bg-white rounded-[5px] border border-slate-200/80 p-5 shadow-xs flex items-center gap-4">
+          <div className="w-12 h-12 rounded-[5px] bg-purple-50 text-purple-700 flex items-center justify-center shrink-0">
+            <Building2 className="w-6 h-6" />
           </div>
-          <div>
-            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">
+          <div className="min-w-0">
+            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
               Điểm trường có nhận xét
             </span>
-            <p className="text-2xl font-black text-emerald-700 leading-tight">
-              {stats.total_schools}{' '}
-              <span className="text-xs font-normal text-slate-500">trường</span>
-            </p>
+            <div className="text-2xl font-black text-slate-900 mt-0.5">
+              {stats.total_schools.toLocaleString('vi-VN')}
+            </div>
+            <span className="text-[11px] text-slate-500">Các trường đã có dữ liệu trao đổi</span>
           </div>
         </div>
 
-        <div className="bg-white border border-slate-200/80 rounded-lg p-4 shadow-xs flex items-center gap-3.5">
-          <div className="w-11 h-11 rounded-lg bg-purple-50 text-purple-700 flex items-center justify-center font-bold">
-            <Route className="w-5 h-5 text-purple-600" />
+        {/* Card 3: Đợt công tác ghi nhận */}
+        <div className="bg-white rounded-[5px] border border-slate-200/80 p-5 shadow-xs flex items-center gap-4">
+          <div className="w-12 h-12 rounded-[5px] bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
+            <Route className="w-6 h-6" />
           </div>
-          <div>
-            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">
+          <div className="min-w-0">
+            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
               Đợt công tác ghi nhận
             </span>
-            <p className="text-2xl font-black text-purple-700 leading-tight">
-              {stats.total_trips}{' '}
-              <span className="text-xs font-normal text-slate-500">chuyến đi</span>
-            </p>
+            <div className="text-2xl font-black text-slate-900 mt-0.5">
+              {stats.total_trips.toLocaleString('vi-VN')}
+            </div>
+            <span className="text-[11px] text-slate-500">Từ các đợt tuyển sinh thực địa</span>
           </div>
         </div>
       </div>
 
-      {/* FILTER & SEARCH BAR */}
-      <div className="bg-white p-4 rounded-lg border border-slate-200/80 shadow-xs space-y-3">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+      {/* Filter and Search Bar */}
+      <div className="bg-white rounded-[5px] border border-slate-200/80 p-4 shadow-xs">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           {/* Tìm kiếm từ khóa */}
           <div className="relative">
-            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Tìm theo trường, nội dung, cán bộ..."
-              className="w-full pl-8 pr-3 py-2 bg-slate-50 focus:bg-white border border-slate-300 rounded-[6px] text-xs font-medium outline-hidden focus:border-[#0f3b7d] focus:ring-1 focus:ring-[#0f3b7d] transition"
+              placeholder="Tìm theo nội dung, cán bộ..."
+              className="w-full pl-9 pr-3 py-2 rounded-[5px] border border-slate-200 text-xs sm:text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#0f3b7d] transition bg-white"
             />
+          </div>
+
+          {/* Lọc theo Điểm trường */}
+          <div>
+            <select
+              value={selectedSchoolId}
+              onChange={(e) => setSelectedSchoolId(e.target.value)}
+              className="w-full py-2 px-3 rounded-[5px] border border-slate-200 text-xs sm:text-sm text-slate-700 bg-white focus:outline-none focus:border-[#0f3b7d] transition cursor-pointer"
+            >
+              <option value="">Tất cả điểm trường ({schools.length})</option>
+              {schools.map((s: any) => (
+                <option key={s.id || s._id} value={s.id || s._id}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
           </div>
 
           {/* Lọc theo Chiến dịch */}
@@ -302,9 +344,9 @@ export const AdminNotesPage: React.FC = () => {
             <select
               value={selectedCampaignId}
               onChange={(e) => setSelectedCampaignId(e.target.value)}
-              className="w-full px-3 py-2 bg-slate-50 focus:bg-white border border-slate-300 rounded-[6px] text-xs font-medium outline-hidden focus:border-[#0f3b7d] transition cursor-pointer"
+              className="w-full py-2 px-3 rounded-[5px] border border-slate-200 text-xs sm:text-sm text-slate-700 bg-white focus:outline-none focus:border-[#0f3b7d] transition cursor-pointer"
             >
-              <option value="">Tất cả chiến dịch</option>
+              <option value="">Tất cả chiến dịch ({campaigns.length})</option>
               {campaigns.map((c: any) => (
                 <option key={c.id || c._id} value={c.id || c._id}>
                   {c.name}
@@ -313,20 +355,37 @@ export const AdminNotesPage: React.FC = () => {
             </select>
           </div>
 
-          {/* Lọc theo Chuyến đi */}
-          <div>
+          {/* Lọc theo Phân loại */}
+          <div className="flex items-center gap-2">
             <select
-              value={selectedTripId}
-              onChange={(e) => setSelectedTripId(e.target.value)}
-              className="w-full px-3 py-2 bg-slate-50 focus:bg-white border border-slate-300 rounded-[6px] text-xs font-medium outline-hidden focus:border-[#0f3b7d] transition cursor-pointer"
+              value={selectedCategory}
+              onChange={(e) => setSelectedCategory(e.target.value)}
+              className="w-full py-2 px-3 rounded-[5px] border border-slate-200 text-xs sm:text-sm text-slate-700 bg-white focus:outline-none focus:border-[#0f3b7d] transition cursor-pointer"
             >
-              <option value="">Tất cả chuyến đi (Đợt)</option>
-              {trips.map((t: any) => (
-                <option key={t.id} value={t.id}>
-                  {t.name}
+              <option value="">Tất cả phân loại</option>
+              {FIELD_NOTE_TAGS.map((tag) => (
+                <option key={tag.value} value={tag.value}>
+                  {tag.label}
                 </option>
               ))}
             </select>
+
+            {(selectedSchoolId || selectedCategory || selectedCampaignId || searchTerm) && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedSchoolId('');
+                  setSelectedCategory('');
+                  setSelectedCampaignId('');
+                  setSearchTerm('');
+                }}
+                title="Xóa tất cả bộ lọc"
+                className="px-2.5 py-2 bg-red-50 text-red-600 border border-red-200 rounded-[5px] text-xs font-bold hover:bg-red-100 transition whitespace-nowrap cursor-pointer flex items-center gap-1 shrink-0"
+              >
+                <X className="w-3.5 h-3.5" />
+                <span>Xóa</span>
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -339,8 +398,9 @@ export const AdminNotesPage: React.FC = () => {
               <tr className="bg-slate-100 text-slate-800 font-bold border-b border-slate-200 text-left">
                 <th className="py-3 px-3 text-center w-12">STT</th>
                 <th className="py-3 px-3 w-36">Thời Gian Ghi</th>
-                <th className="py-3 px-3 w-56">Điểm Trường</th>
-                <th className="py-3 px-3 w-48">Chuyến Đi / Đợt</th>
+                <th className="py-3 px-3 w-52">Điểm Trường</th>
+                <th className="py-3 px-3 w-40">Phân Loại / Tag</th>
+                <th className="py-3 px-3 w-44">Chuyến Đi / Đợt</th>
                 <th className="py-3 px-3">Nội Dung Ghi Chú & Đánh Giá</th>
                 <th className="py-3 px-3 w-32">Cán Bộ Ghi</th>
                 <th className="py-3 px-3 text-center w-20">Thao Tác</th>
@@ -349,14 +409,14 @@ export const AdminNotesPage: React.FC = () => {
             <tbody className="divide-y divide-slate-100 text-slate-700">
               {isLoading ? (
                 <tr>
-                  <td colSpan={7} className="py-12 text-center text-slate-400">
+                  <td colSpan={8} className="py-12 text-center text-slate-400">
                     <div className="w-7 h-7 border-2 border-slate-300 border-t-[#0f3b7d] rounded-full animate-spin mx-auto mb-2" />
                     Đang tải danh sách ghi chú...
                   </td>
                 </tr>
               ) : notesList.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="py-12 text-center text-slate-400">
+                  <td colSpan={8} className="py-12 text-center text-slate-400">
                     <StickyNote className="w-8 h-8 text-slate-300 mx-auto mb-2" />
                     <p className="font-semibold text-slate-600">Không tìm thấy ghi chú nào phù hợp</p>
                     <p className="text-[11px] text-slate-400 mt-1">
@@ -387,6 +447,15 @@ export const AdminNotesPage: React.FC = () => {
                     <td className="py-3 px-3">
                       <span className="font-bold text-slate-900 block">
                         {note.school_name || 'Điểm thực địa'}
+                      </span>
+                    </td>
+                    <td className="py-3 px-3">
+                      <span
+                        className={`inline-block px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${getTagBadgeStyle(
+                          note.category
+                        )}`}
+                      >
+                        {note.category || 'Ghi chú'}
                       </span>
                     </td>
                     <td className="py-3 px-3 text-slate-600">
@@ -502,6 +571,34 @@ export const AdminNotesPage: React.FC = () => {
                 </div>
               )}
 
+              {/* Chọn Tag Phân loại */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5 flex items-center justify-between">
+                  <span>Phân loại & Đánh giá:</span>
+                  <span className="text-[11px] font-bold text-[#0f3b7d] bg-blue-50 px-2 py-0.5 rounded-full border border-blue-200">
+                    {formCategory}
+                  </span>
+                </label>
+                <div className="flex flex-wrap gap-1.5">
+                  {FIELD_NOTE_TAGS.map((tag) => {
+                    const isSelected = formCategory === tag.value;
+                    return (
+                      <button
+                        key={tag.value}
+                        type="button"
+                        onClick={() => setFormCategory(tag.value)}
+                        className={`px-2.5 py-1 text-xs font-bold rounded-lg border transition-all cursor-pointer ${
+                          isSelected
+                            ? 'bg-[#0f3b7d] text-white border-[#0f3b7d] shadow-xs ring-2 ring-offset-1 ring-[#0f3b7d]'
+                            : `${tag.badgeColor} hover:brightness-95`
+                        }`}
+                      >
+                        {tag.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
 
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">

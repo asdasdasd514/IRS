@@ -1,5 +1,5 @@
 """
-IRS Mobile Admissions System - FastAPI Backend (MongoDB Database IRS)
+IRS Mobile Admissions System - FastAPI Backend (MongoDB Atlas Cloud IRS)
 Hệ thống Hỗ trợ Ra quyết định Lộ trình và Quản lý Chiến dịch Tuyển sinh Lưu động
 """
 

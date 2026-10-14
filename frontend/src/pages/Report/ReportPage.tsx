@@ -176,7 +176,7 @@ export const ReportPage: React.FC = () => {
   const roundsList = campaignSummary?.rounds_data || [];
 
   return (
-    <div className="max-w-6xl mx-auto space-y-4 animate-fade-in pb-16">
+    <div className="p-4 sm:p-6 lg:p-8 space-y-6 animate-fade-in pb-16">
       {/* ================= 1. THANH ĐIỀU HƯỚNG & DROPDOWN MENU CHỌN BÁO CÁO ================= */}
       <div className="bg-white p-3.5 sm:p-4 rounded-[5px] border border-slate-200/80 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3 print:hidden">
         <div className="flex flex-col sm:flex-row sm:items-center gap-3 min-w-0">
