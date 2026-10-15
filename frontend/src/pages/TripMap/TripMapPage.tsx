@@ -312,7 +312,7 @@ export const TripMapPage: React.FC = () => {
     onSuccess: (data, { waypointId }) => {
       if (data.success) {
         // Show toast with undo option
-        const waypoint = trip?.waypoints.find(w => w.id === waypointId);
+        const waypoint = displayWaypoints.find((w: any) => w.id === waypointId) || (data.waypoint as Waypoint);
         if (waypoint) {
           setLastCheckedInWaypoint(waypoint);
           setShowUndoToast(true);
@@ -328,6 +328,7 @@ export const TripMapPage: React.FC = () => {
       }
 
       queryClient.invalidateQueries({ queryKey: ['trip', tripId] });
+      refetchTrip();
       fetchNextHop();
     },
     onError: (error: any) => {

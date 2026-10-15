@@ -650,6 +650,8 @@ class TripService:
         updated_wp = await db.campaign_waypoints.find_one({"id": checkin_data.waypoint_id})
         if not updated_wp:
             updated_wp = await db.waypoints.find_one({"id": checkin_data.waypoint_id})
+        if updated_wp:
+            updated_wp.pop("_id", None)
 
         # Xóa cache next-hop để tính toán điểm đến tiếp theo ngay lập tức
         api_response_cache.clear_prefix(f"nexthop:{trip_id}")
