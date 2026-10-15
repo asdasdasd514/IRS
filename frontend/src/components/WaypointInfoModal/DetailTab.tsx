@@ -11,6 +11,16 @@ interface DetailTabProps {
   onUpdate: () => void;
 }
 
+const parseSafeDate = (dateVal?: string | Date | null): Date | null => {
+  if (!dateVal) return null;
+  if (dateVal instanceof Date) return dateVal;
+  const str = String(dateVal);
+  const hasTimezone = str.endsWith('Z') || str.includes('+') || (str.includes('T') && str.lastIndexOf('-') > str.indexOf('T'));
+  const normalized = hasTimezone ? str : `${str}Z`;
+  const d = new Date(normalized);
+  return isNaN(d.getTime()) ? new Date(str) : d;
+};
+
 // Helper function to format phone for Zalo
 const formatPhoneForZalo = (phone: string): string => {
   let cleaned = phone.replace(/\D/g, '');
@@ -256,9 +266,12 @@ export const DetailTab: React.FC<DetailTabProps> = ({ waypointId, detail, isLoad
             <div className="p-3 bg-gradient-to-br from-amber-50 to-amber-100/60 rounded-xl border border-amber-200 col-span-2 sm:col-span-1">
               <span className="text-[11px] font-bold text-amber-700 block mb-0.5">🕒 Lần ghé gần nhất</span>
               <div className="text-xs font-bold text-amber-900 mt-1">
-                {detail.last_visited_at
-                  ? `${new Date(detail.last_visited_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}, ${new Date(detail.last_visited_at).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })}`
-                  : 'Chưa có'}
+                {(() => {
+                  const d = parseSafeDate(detail.last_visited_at);
+                  return d
+                    ? `${d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}, ${d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })}`
+                    : 'Chưa có';
+                })()}
               </div>
             </div>
           </div>

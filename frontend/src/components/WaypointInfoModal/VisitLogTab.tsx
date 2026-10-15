@@ -12,6 +12,16 @@ interface VisitLogTabProps {
   onUpdate: () => void;
 }
 
+const parseSafeDate = (dateVal?: string | Date | null): Date | null => {
+  if (!dateVal) return null;
+  if (dateVal instanceof Date) return dateVal;
+  const str = String(dateVal);
+  const hasTimezone = str.endsWith('Z') || str.includes('+') || (str.includes('T') && str.lastIndexOf('-') > str.indexOf('T'));
+  const normalized = hasTimezone ? str : `${str}Z`;
+  const d = new Date(normalized);
+  return isNaN(d.getTime()) ? new Date(str) : d;
+};
+
 const getLocalIsoString = () => {
   const d = new Date();
   const pad = (n: number) => String(n).padStart(2, '0');
@@ -299,7 +309,16 @@ export const VisitLogTab: React.FC<VisitLogTabProps> = ({ waypointId, logs, isLo
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-semibold">
                   <Clock className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>Đã tới lúc: <strong>{new Date(log.visit_date || log.created_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}</strong>, {new Date(log.visit_date || log.created_at).toLocaleDateString('vi-VN')}</span>
+                  <span>
+                    {(() => {
+                      const d = parseSafeDate(log.visit_date || log.created_at);
+                      return d ? (
+                        <>Đã tới lúc: <strong>{d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}</strong>, {d.toLocaleDateString('vi-VN')}</>
+                      ) : (
+                        <>Đã tới trường</>
+                      );
+                    })()}
+                  </span>
                 </span>
 
                 {(log.trip_code || log.trip_name) && (

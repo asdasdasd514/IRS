@@ -182,6 +182,25 @@ async def get_waypoint_detail(waypoint_id: str):
         })
 
     board = school.get("school_board") if school else {}
+
+    def ensure_utc(dt):
+        if not dt:
+            return None
+        if isinstance(dt, datetime):
+            if dt.tzinfo is None:
+                return dt.replace(tzinfo=timezone.utc)
+            return dt
+        if isinstance(dt, str):
+            try:
+                clean_str = dt.replace("Z", "+00:00")
+                parsed = datetime.fromisoformat(clean_str)
+                if parsed.tzinfo is None:
+                    parsed = parsed.replace(tzinfo=timezone.utc)
+                return parsed
+            except Exception:
+                return None
+        return None
+
     return WaypointDetailResponse(
         id=wp.get("id"),
         waypoint_id=wp.get("id"),
@@ -201,10 +220,10 @@ async def get_waypoint_detail(waypoint_id: str):
         total_contact_attempts=school.get("total_contact_attempts", school.get("total_visits", 0)) if school else 0,
         total_visits=school.get("total_visits", 0) if school else 0,
         total_tickets=school.get("total_tickets", 0) if school else 0,
-        last_visited_at=school.get("last_visited_at") if school else None,
+        last_visited_at=ensure_utc(school.get("last_visited_at")) if school else None,
         notes=wp.get("notes") or (school.get("notes") if school else None),
-        created_at=wp.get("created_at"),
-        updated_at=wp.get("updated_at")
+        created_at=ensure_utc(wp.get("created_at")),
+        updated_at=ensure_utc(wp.get("updated_at"))
     )
 
 
@@ -302,6 +321,24 @@ async def get_visit_logs(waypoint_id: str):
     active_logs = []
     seen_log_ids = set()
 
+    def parse_to_datetime(val) -> datetime:
+        if not val:
+            return datetime.min.replace(tzinfo=timezone.utc)
+        if isinstance(val, datetime):
+            if val.tzinfo is None:
+                return val.replace(tzinfo=timezone.utc)
+            return val
+        if isinstance(val, str):
+            try:
+                clean_str = val.replace("Z", "+00:00")
+                dt = datetime.fromisoformat(clean_str)
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=timezone.utc)
+                return dt
+            except Exception:
+                return datetime.min.replace(tzinfo=timezone.utc)
+        return datetime.min.replace(tzinfo=timezone.utc)
+
     for item in related_wps:
         t_id = item.get("trip_id")
         t_code, t_name, leader_name, members_names = await get_trip_info(t_id)
@@ -316,6 +353,8 @@ async def get_visit_logs(waypoint_id: str):
                 log_copy["trip_name"] = t_name
                 log_copy["leader_name"] = leader_name
                 log_copy["members_names"] = members_names
+                log_copy["visit_date"] = parse_to_datetime(log.get("visit_date") or log.get("created_at"))
+                log_copy["created_at"] = parse_to_datetime(log.get("created_at") or log.get("visit_date"))
                 active_logs.append(log_copy)
 
         # Nếu điểm này đã check-in nhưng chưa có visit_log thủ công, tự sinh 1 bản ghi hiển thị chuyến đã ghé
@@ -324,21 +363,9 @@ async def get_visit_logs(waypoint_id: str):
             if auto_id not in seen_log_ids:
                 seen_log_ids.add(auto_id)
                 v_date = item.get("visited_at") or item.get("updated_at") or item.get("created_at")
-                
-                time_str = ""
-                if v_date:
-                    if isinstance(v_date, str):
-                        try:
-                            v_date_dt = datetime.fromisoformat(v_date)
-                        except Exception:
-                            v_date_dt = None
-                    else:
-                        v_date_dt = v_date
-                    if v_date_dt:
-                        if v_date_dt.tzinfo is None:
-                            v_date_dt = v_date_dt.replace(tzinfo=timezone.utc)
-                        vn_dt = v_date_dt + timedelta(hours=7)
-                        time_str = vn_dt.strftime("%H:%M ngày %d/%m/%Y")
+                v_dt = parse_to_datetime(v_date)
+                vn_dt = v_dt + timedelta(hours=7)
+                time_str = vn_dt.strftime("%H:%M ngày %d/%m/%Y")
 
                 trip_desc = f" trong chuyến đi {t_code}" if t_code else (f" trong chuyến đi {t_name}" if t_name else "")
                 
@@ -351,8 +378,8 @@ async def get_visit_logs(waypoint_id: str):
                     "id": auto_id,
                     "waypoint_id": item.get("id"),
                     "visit_content": content,
-                    "visit_date": item.get("visited_at") or item.get("updated_at"),
-                    "created_at": item.get("visited_at") or item.get("created_at"),
+                    "visit_date": v_dt,
+                    "created_at": v_dt,
                     "images": [],
                     "trip_id": t_id,
                     "trip_code": t_code,
@@ -361,7 +388,7 @@ async def get_visit_logs(waypoint_id: str):
                     "members_names": members_names
                 })
 
-    active_logs.sort(key=lambda x: x.get("visit_date") or x.get("created_at") or datetime.min, reverse=True)
+    active_logs.sort(key=lambda x: parse_to_datetime(x.get("visit_date") or x.get("created_at")), reverse=True)
     return [VisitLogResponse.model_validate(log) for log in active_logs]
 
 
