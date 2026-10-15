@@ -1,14 +1,24 @@
-import React, { useState, useEffect } from 'react';
-import { useMutation } from '@tanstack/react-query';
-import { Phone, MessageCircle, Globe, GraduationCap, School, ExternalLink } from 'lucide-react';
-import type { WaypointDetail, WaypointDetailFormData } from '../../types';
-import { waypointDetailApi } from '../../services/api';
+import React from 'react';
+import {
+  School,
+  MapPin,
+  Navigation,
+  ExternalLink,
+  Phone,
+  Globe,
+  GraduationCap,
+  Building2,
+  Clock,
+  StickyNote
+} from 'lucide-react';
+import type { Waypoint, WaypointDetail } from '../../types';
 
 interface DetailTabProps {
-  waypointId: string;
+  waypoint?: Waypoint;
+  waypointId?: string;
   detail: WaypointDetail | undefined;
   isLoading: boolean;
-  onUpdate: () => void;
+  onUpdate?: () => void;
 }
 
 const parseSafeDate = (dateVal?: string | Date | null): Date | null => {
@@ -21,485 +31,208 @@ const parseSafeDate = (dateVal?: string | Date | null): Date | null => {
   return isNaN(d.getTime()) ? new Date(str) : d;
 };
 
-// Helper function to format phone for Zalo
-const formatPhoneForZalo = (phone: string): string => {
-  let cleaned = phone.replace(/\D/g, '');
-  if (cleaned.startsWith('0')) {
-    cleaned = '84' + cleaned.substring(1);
-  }
-  return cleaned;
-};
-
-export const DetailTab: React.FC<DetailTabProps> = ({ waypointId, detail, isLoading, onUpdate }) => {
-  const [isEditing, setIsEditing] = useState(false);
-  const [formData, setFormData] = useState<WaypointDetailFormData>({
-    description: '',
-    image_url: '',
-    website: '',
-    admissions_info: '',
-    principal_name: '',
-    principal_phone: '',
-    vice_principal_name: '',
-    vice_principal_phone: '',
-    our_contact_person: '',
-    our_contact_role: '',
-    contact_process: '',
-    total_contact_attempts: 0,
-    notes: '',
-  });
-
-  useEffect(() => {
-    if (detail) {
-      setFormData({
-        description: detail.description || '',
-        image_url: detail.image_url || '',
-        website: detail.website || '',
-        admissions_info: detail.admissions_info || '',
-        principal_name: detail.principal_name || '',
-        principal_phone: detail.principal_phone || '',
-        vice_principal_name: detail.vice_principal_name || '',
-        vice_principal_phone: detail.vice_principal_phone || '',
-        our_contact_person: detail.our_contact_person || '',
-        our_contact_role: detail.our_contact_role || '',
-        contact_process: detail.contact_process || '',
-        total_contact_attempts: detail.total_contact_attempts || 0,
-        notes: detail.notes || '',
-      });
-    }
-  }, [detail]);
-
-  const createMutation = useMutation({
-    mutationFn: (data: WaypointDetailFormData) => waypointDetailApi.create(waypointId, data),
-    onSuccess: () => {
-      onUpdate();
-      setIsEditing(false);
-    },
-  });
-
-  const updateMutation = useMutation({
-    mutationFn: (data: Partial<WaypointDetailFormData>) => waypointDetailApi.update(waypointId, data),
-    onSuccess: () => {
-      onUpdate();
-      setIsEditing(false);
-    },
-  });
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (detail) {
-      updateMutation.mutate(formData);
-    } else {
-      createMutation.mutate(formData);
-    }
-  };
-
-
+export const DetailTab: React.FC<DetailTabProps> = ({ waypoint, detail, isLoading }) => {
   if (isLoading) {
-    return <div className="text-center py-8 text-gray-500">Đang tải...</div>;
-  }
-
-  if (!detail && !isEditing) {
     return (
-      <div className="text-center py-8 h-[500px] flex flex-col items-center justify-center">
-        <p className="text-gray-500 mb-4">Chưa có thông tin chi tiết</p>
-        <button
-          onClick={() => setIsEditing(true)}
-          className="bg-primary-500 text-white px-4 py-2 rounded-lg hover:bg-primary-600"
-        >
-          Thêm thông tin
-        </button>
+      <div className="flex flex-col items-center justify-center py-16 text-slate-400">
+        <div className="w-8 h-8 border-3 border-blue-600/30 border-t-[#0f3b7d] rounded-full animate-spin mb-3" />
+        <p className="text-xs font-semibold">Đang tải thông tin trường học...</p>
       </div>
     );
   }
 
-  if (!isEditing && detail) {
-    return (
-      <div className="space-y-4 pb-8 h-[500px] overflow-y-auto">
-        {/* Ảnh & Giới thiệu trường */}
-        {(detail.image_url || detail.description || detail.website) && (
-          <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm space-y-3">
-            <h3 className="font-semibold text-gray-800 flex items-center gap-2 text-base">
-              <School className="w-5 h-5 text-indigo-600" /> Thông tin trường học
-            </h3>
-            
-            {detail.image_url && (
-              <div className="rounded-lg overflow-hidden border border-gray-200 max-h-48 bg-gray-50">
-                <img
-                  src={detail.image_url}
-                  alt="Ảnh trường"
-                  className="w-full h-48 object-cover hover:scale-105 transition-transform duration-300"
-                  onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
-                />
+  const hotlinePhone = detail?.principal_phone || detail?.representative_phone;
+  const schoolName = waypoint?.name || 'Trường học';
+  const schoolAddress = waypoint?.address;
+  const lat = waypoint?.lat;
+  const lng = waypoint?.lng;
+
+  return (
+    <div className="space-y-4 pb-6 h-[500px] overflow-y-auto pr-1">
+      {/* Khối 1: Thông tin trường học & Hotline tuyển sinh */}
+      <div className="bg-white border border-slate-200/80 rounded-[5px] p-4 shadow-xs space-y-3">
+        <div className="flex items-start justify-between gap-3 flex-wrap">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <School className="w-5 h-5 text-[#0f3b7d] shrink-0" />
+              <h3 className="font-bold text-slate-900 text-base leading-snug">
+                {schoolName}
+              </h3>
+            </div>
+            {schoolAddress && (
+              <p className="text-xs text-slate-500 mt-1 flex items-start gap-1.5">
+                <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0 mt-0.5" />
+                <span className="leading-relaxed">{schoolAddress}</span>
+              </p>
+            )}
+          </div>
+
+          {lat && lng && (
+            <a
+              href={`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-[5px] bg-[#0f3b7d] hover:bg-[#0c2f64] text-white text-xs font-bold transition shadow-xs shrink-0 cursor-pointer"
+              title="Mở Google Maps chỉ đường"
+            >
+              <Navigation className="w-3.5 h-3.5" />
+              <span>Chỉ đường Google Maps</span>
+              <ExternalLink className="w-3 h-3 opacity-70" />
+            </a>
+          )}
+        </div>
+
+        {/* Thông tin Hotline & Website */}
+        {(hotlinePhone || detail?.website) && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-3 border-t border-slate-100 text-xs">
+            {hotlinePhone && (
+              <div className="flex items-center gap-2 text-slate-700 bg-slate-50 p-2.5 rounded-[5px] border border-slate-200/60">
+                <Phone className="w-4 h-4 text-[#0f3b7d] shrink-0" />
+                <span className="text-slate-500 font-medium">Hotline Tuyển sinh:</span>
+                <strong className="text-slate-900 font-bold font-mono text-sm tracking-wide">
+                  {hotlinePhone}
+                </strong>
               </div>
             )}
 
-            {detail.description && (
-              <div className="bg-indigo-50/60 p-3 rounded-lg border border-indigo-100">
-                <p className="text-xs font-semibold text-indigo-700 uppercase tracking-wide mb-1">Giới thiệu</p>
-                <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{detail.description}</p>
-              </div>
-            )}
-
-            {detail.website && (
-              <div className="flex items-center gap-2 pt-1">
-                <Globe className="w-4 h-4 text-gray-500 flex-shrink-0" />
+            {detail?.website && (
+              <div className="flex items-center gap-2 text-slate-700 bg-slate-50 p-2.5 rounded-[5px] border border-slate-200/60">
+                <Globe className="w-4 h-4 text-slate-500 shrink-0" />
+                <span className="text-slate-500 font-medium">Website:</span>
                 <a
                   href={detail.website.startsWith('http') ? detail.website : `https://${detail.website}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-sm text-blue-600 hover:text-blue-800 hover:underline flex items-center gap-1 truncate font-medium"
+                  className="text-blue-600 hover:text-blue-800 hover:underline font-semibold truncate flex items-center gap-1"
                 >
-                  {detail.website}
-                  <ExternalLink className="w-3.5 h-3.5 flex-shrink-0" />
+                  <span className="truncate">{detail.website}</span>
+                  <ExternalLink className="w-3 h-3 shrink-0" />
                 </a>
               </div>
             )}
           </div>
         )}
+      </div>
 
-        {/* Thông tin tuyển sinh Card */}
-        {detail.admissions_info && (
-          <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
-            <h3 className="font-semibold text-gray-800 mb-2 flex items-center gap-2 text-base">
-              <GraduationCap className="w-5 h-5 text-emerald-600" /> Thông tin tuyển sinh
-            </h3>
-            <div className="bg-emerald-50/60 p-3 rounded-lg border border-emerald-100">
-              <p className="whitespace-pre-wrap text-sm text-gray-700 leading-relaxed">{detail.admissions_info}</p>
-            </div>
-          </div>
-        )}
-
-        {/* Ban giám hiệu Card */}
-        <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
-          <h3 className="font-semibold text-gray-800 mb-4 flex items-center gap-2 text-base">
-            <span className="text-xl">👤</span> Ban giám hiệu & Người đại diện
+      {/* Khối 2: Ban Giám Hiệu nhà trường (chỉ hiện khi có dữ liệu) */}
+      {(detail?.principal_name || detail?.vice_principal_name) && (
+        <div className="bg-white border border-slate-200/80 rounded-[5px] p-4 shadow-xs space-y-3">
+          <h3 className="font-bold text-slate-800 flex items-center gap-2 text-xs uppercase tracking-wider">
+            <GraduationCap className="w-4 h-4 text-[#0f3b7d]" />
+            <span>Ban Giám Hiệu Nhà Trường</span>
           </h3>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="bg-gradient-to-br from-blue-50 to-blue-100/50 p-3 rounded-lg border border-blue-200">
-              <p className="text-xs font-medium text-blue-600 mb-1.5">Hiệu trưởng / Đại diện</p>
-              <p className="font-semibold text-gray-800 mb-0.5">{detail.principal_name || '---'}</p>
-              {detail.principal_phone && (
-                <div className="mt-2 space-y-1">
-                  <p className="text-sm text-gray-600">📞 {detail.principal_phone}</p>
-                  <div className="flex gap-2">
-                    <a
-                      href={`tel:${detail.principal_phone}`}
-                      className="flex-1 bg-blue-500 hover:bg-blue-600 text-white px-3 py-1.5 rounded-lg text-xs font-medium flex items-center justify-center gap-1 transition-colors"
-                    >
-                      <Phone className="w-3.5 h-3.5" />
-                      Gọi
-                    </a>
-                    <a
-                      href={`https://zalo.me/${formatPhoneForZalo(detail.principal_phone)}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-medium flex items-center justify-center gap-1 transition-colors"
-                    >
-                      <MessageCircle className="w-3.5 h-3.5" />
-                      Zalo
-                    </a>
-                  </div>
-                </div>
-              )}
-            </div>
-            <div className="bg-gradient-to-br from-purple-50 to-purple-100/50 p-3 rounded-lg border border-purple-200">
-              <p className="text-xs font-medium text-purple-600 mb-1.5">Phó hiệu trưởng</p>
-              <p className="font-semibold text-gray-800 mb-0.5">{detail.vice_principal_name || '---'}</p>
-              {detail.vice_principal_phone && (
-                <div className="mt-2 space-y-1">
-                  <p className="text-sm text-gray-600">📞 {detail.vice_principal_phone}</p>
-                  <div className="flex gap-2">
-                    <a
-                      href={`tel:${detail.vice_principal_phone}`}
-                      className="flex-1 bg-purple-500 hover:bg-purple-600 text-white px-3 py-1.5 rounded-lg text-xs font-medium flex items-center justify-center gap-1 transition-colors"
-                    >
-                      <Phone className="w-3.5 h-3.5" />
-                      Gọi
-                    </a>
-                    <a
-                      href={`https://zalo.me/${formatPhoneForZalo(detail.vice_principal_phone)}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex-1 bg-purple-600 hover:bg-purple-700 text-white px-3 py-1.5 rounded-lg text-xs font-medium flex items-center justify-center gap-1 transition-colors"
-                    >
-                      <MessageCircle className="w-3.5 h-3.5" />
-                      Zalo
-                    </a>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
 
-        {/* Người liên hệ Card */}
-        <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
-          <h3 className="font-semibold text-gray-800 mb-3 flex items-center gap-2 text-base">
-            <span className="text-xl">🤝</span> Người liên hệ (bên mình)
-          </h3>
-          <div className="bg-gradient-to-br from-green-50 to-green-100/50 p-3 rounded-lg border border-green-200">
-            <p className="font-semibold text-gray-800">{detail.our_contact_person || '---'}</p>
-            {detail.our_contact_role && (
-              <p className="text-sm text-gray-600 mt-1">{detail.our_contact_role}</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+            {detail.principal_name && (
+              <div className="p-3 bg-slate-50 rounded-[5px] border border-slate-200/60">
+                <span className="text-[11px] font-semibold text-slate-400 block uppercase tracking-wider">
+                  Hiệu trưởng / Đại diện
+                </span>
+                <p className="font-bold text-slate-800 text-sm mt-0.5">
+                  {detail.principal_name}
+                </p>
+              </div>
+            )}
+
+            {detail.vice_principal_name && (
+              <div className="p-3 bg-slate-50 rounded-[5px] border border-slate-200/60">
+                <span className="text-[11px] font-semibold text-slate-400 block uppercase tracking-wider">
+                  Phó hiệu trưởng
+                </span>
+                <p className="font-bold text-slate-800 text-sm mt-0.5">
+                  {detail.vice_principal_name}
+                </p>
+              </div>
             )}
           </div>
         </div>
+      )}
 
-        {/* Thống kê lịch sử tiếp cận & Tuyển sinh (Counter Cache O(1)) */}
-        <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
-          <h3 className="font-semibold text-gray-800 mb-3 flex items-center gap-2 text-base">
-            <span className="text-xl">📊</span> Thống kê tuyển sinh từ trước tới nay
-          </h3>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 mb-2">
-            <div className="p-3 bg-gradient-to-br from-blue-50 to-blue-100/60 rounded-xl border border-blue-200">
-              <span className="text-[11px] font-bold text-blue-700 block mb-0.5">🏫 Đã ghé qua</span>
-              <div className="text-xl font-black text-blue-900">
-                {detail.total_visits || 0} <span className="text-xs font-semibold text-blue-600">lần</span>
-              </div>
+      {/* Khối 3: Thống kê tuyển sinh từ trước tới nay (Counter Cache) */}
+      <div className="bg-white border border-slate-200/80 rounded-[5px] p-4 shadow-xs space-y-3">
+        <h3 className="font-bold text-slate-800 flex items-center gap-2 text-xs uppercase tracking-wider">
+          <Building2 className="w-4 h-4 text-[#0f3b7d]" />
+          <span>Chỉ Số Thực Địa Tuyển Sinh</span>
+        </h3>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="p-3 bg-blue-50/60 rounded-[5px] border border-blue-100">
+            <span className="text-[11px] font-bold text-blue-700 block mb-0.5 uppercase tracking-wider">
+              🏫 Đã ghé qua
+            </span>
+            <div className="text-xl font-black text-[#0f3b7d]">
+              {detail?.total_visits || 0} <span className="text-xs font-semibold text-blue-600">lần</span>
             </div>
-            <div className="p-3 bg-gradient-to-br from-emerald-50 to-emerald-100/60 rounded-xl border border-emerald-200">
-              <span className="text-[11px] font-bold text-emerald-700 block mb-0.5">🎫 Phiếu thu về</span>
-              <div className="text-xl font-black text-emerald-900">
-                {detail.total_tickets || 0} <span className="text-xs font-semibold text-emerald-600">phiếu</span>
-              </div>
+          </div>
+
+          <div className="p-3 bg-emerald-50/60 rounded-[5px] border border-emerald-100">
+            <span className="text-[11px] font-bold text-emerald-700 block mb-0.5 uppercase tracking-wider">
+              🎫 Phiếu thu về
+            </span>
+            <div className="text-xl font-black text-emerald-800">
+              {detail?.total_tickets || 0} <span className="text-xs font-semibold text-emerald-600">phiếu</span>
             </div>
-            <div className="p-3 bg-gradient-to-br from-amber-50 to-amber-100/60 rounded-xl border border-amber-200 col-span-2 sm:col-span-1">
-              <span className="text-[11px] font-bold text-amber-700 block mb-0.5">🕒 Lần ghé gần nhất</span>
-              <div className="text-xs font-bold text-amber-900 mt-1">
+          </div>
+
+          <div className="p-3 bg-amber-50/60 rounded-[5px] border border-amber-100">
+            <span className="text-[11px] font-bold text-amber-700 block mb-0.5 uppercase tracking-wider">
+              🕒 Lần ghé gần nhất
+            </span>
+            <div className="text-xs font-bold text-amber-900 mt-1 flex items-center gap-1">
+              <Clock className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+              <span>
                 {(() => {
-                  const d = parseSafeDate(detail.last_visited_at);
+                  const d = parseSafeDate(detail?.last_visited_at);
                   return d
-                    ? `${d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}, ${d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })}`
-                    : 'Chưa có';
+                    ? `${d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}, ${d.toLocaleDateString('vi-VN')}`
+                    : 'Chưa có lượt ghé';
                 })()}
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Khối 4: Ghi chú & Lưu ý thực địa (nếu có) */}
+      {(detail?.notes || detail?.admissions_info || detail?.description) && (
+        <div className="space-y-3">
+          {detail.notes && (
+            <div className="bg-white border border-slate-200/80 rounded-[5px] p-4 shadow-xs space-y-2">
+              <h3 className="font-bold text-slate-800 flex items-center gap-2 text-xs uppercase tracking-wider">
+                <StickyNote className="w-4 h-4 text-amber-600" />
+                <span>Ghi Chú & Lưu Ý Thực Địa</span>
+              </h3>
+              <div className="p-3 bg-amber-50/40 rounded-[5px] border border-amber-200/60 text-xs text-slate-700 whitespace-pre-wrap leading-relaxed">
+                {detail.notes}
               </div>
             </div>
-          </div>
-        </div>
+          )}
 
-        {/* Quá trình liên lạc Card */}
-        <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
-          <h3 className="font-semibold text-gray-800 mb-3 flex items-center gap-2 text-base">
-            <span className="text-xl">📞</span> Quá trình liên lạc
-          </h3>
-          <div className="bg-gradient-to-br from-orange-50 to-orange-100/50 px-3 py-2 rounded-lg border border-orange-200 mb-3 inline-block">
-            <p className="text-sm font-medium text-gray-700">
-              Tổng số lần: <span className="font-bold text-orange-600 text-lg">{detail.total_contact_attempts}</span>
-            </p>
-          </div>
-          <div className="bg-gray-50 p-3 rounded-lg border border-gray-200">
-            <p className="whitespace-pre-wrap text-sm text-gray-700 leading-relaxed">
-              {detail.contact_process || 'Chưa có thông tin'}
-            </p>
-          </div>
-        </div>
-
-        {/* Ghi chú Card */}
-        {detail.notes && (
-          <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
-            <h3 className="font-semibold text-gray-800 mb-3 flex items-center gap-2 text-base">
-              <span className="text-xl">📝</span> Ghi chú
-            </h3>
-            <div className="bg-yellow-50 p-3 rounded-lg border border-yellow-200">
-              <p className="whitespace-pre-wrap text-sm text-gray-700 leading-relaxed">{detail.notes}</p>
+          {detail.admissions_info && (
+            <div className="bg-white border border-slate-200/80 rounded-[5px] p-4 shadow-xs space-y-2">
+              <h3 className="font-bold text-slate-800 flex items-center gap-2 text-xs uppercase tracking-wider">
+                <GraduationCap className="w-4 h-4 text-emerald-600" />
+                <span>Thông Tin Tuyển Sinh Của Trường</span>
+              </h3>
+              <div className="p-3 bg-emerald-50/40 rounded-[5px] border border-emerald-200/60 text-xs text-slate-700 whitespace-pre-wrap leading-relaxed">
+                {detail.admissions_info}
+              </div>
             </div>
-          </div>
-        )}
+          )}
 
-        <button
-          onClick={() => setIsEditing(true)}
-          className="w-full bg-gradient-to-r from-blue-500 to-blue-600 text-white py-2.5 rounded-xl hover:from-blue-600 hover:to-blue-700 font-medium shadow-sm transition-all"
-        >
-          ✏️ Chỉnh sửa thông tin trường
-        </button>
-      </div>
-    );
-  }
-
-  // Editing form
-  return (
-    <form onSubmit={handleSubmit} className="space-y-6 pb-6 h-[500px] overflow-y-auto px-1">
-      {/* Thông tin trường học */}
-      <div className="bg-gray-50 p-4 rounded-xl border border-gray-200 space-y-3">
-        <h3 className="font-semibold text-gray-800 flex items-center gap-2 text-sm">
-          <School className="w-4 h-4 text-indigo-600" /> Giới thiệu & Website trường
-        </h3>
-        <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">Phần giới thiệu trường</label>
-          <textarea
-            value={formData.description}
-            onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-            className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 text-sm bg-white"
-            rows={3}
-            placeholder="Mô tả tóm tắt về trường học..."
-          />
+          {detail.description && (
+            <div className="bg-white border border-slate-200/80 rounded-[5px] p-4 shadow-xs space-y-2">
+              <h3 className="font-bold text-slate-800 flex items-center gap-2 text-xs uppercase tracking-wider">
+                <School className="w-4 h-4 text-indigo-600" />
+                <span>Giới Thiệu Trường</span>
+              </h3>
+              <p className="text-xs text-slate-600 leading-relaxed whitespace-pre-wrap">
+                {detail.description}
+              </p>
+            </div>
+          )}
         </div>
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Website trường</label>
-            <input
-              type="url"
-              value={formData.website}
-              onChange={(e) => setFormData({ ...formData, website: e.target.value })}
-              className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 text-sm bg-white"
-              placeholder="https://..."
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Link ảnh đại diện trường</label>
-            <input
-              type="url"
-              value={formData.image_url}
-              onChange={(e) => setFormData({ ...formData, image_url: e.target.value })}
-              className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 text-sm bg-white"
-              placeholder="https://..."
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* Thông tin tuyển sinh */}
-      <div className="bg-emerald-50/50 p-4 rounded-xl border border-emerald-200 space-y-2">
-        <h3 className="font-semibold text-emerald-900 flex items-center gap-2 text-sm">
-          <GraduationCap className="w-4 h-4 text-emerald-600" /> Thông tin tuyển sinh
-        </h3>
-        <textarea
-          value={formData.admissions_info}
-          onChange={(e) => setFormData({ ...formData, admissions_info: e.target.value })}
-          className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 text-sm bg-white"
-          rows={3}
-          placeholder="Chỉ tiêu, phương thức tuyển sinh, ngành đào tạo trọng điểm, ghi chú tuyển sinh..."
-        />
-      </div>
-
-      {/* Ban giám hiệu */}
-      <div>
-        <h3 className="font-semibold text-gray-700 mb-3 text-sm">👤 Thông tin Ban giám hiệu / Người đại diện</h3>
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-xs text-gray-600 mb-1">Hiệu trưởng / Đại diện</label>
-            <input
-              type="text"
-              value={formData.principal_name}
-              onChange={(e) => setFormData({ ...formData, principal_name: e.target.value })}
-              className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 text-sm"
-              placeholder="Họ và tên"
-            />
-            <input
-              type="tel"
-              value={formData.principal_phone}
-              onChange={(e) => setFormData({ ...formData, principal_phone: e.target.value })}
-              className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 mt-2 text-sm"
-              placeholder="Số điện thoại"
-            />
-          </div>
-          <div>
-            <label className="block text-xs text-gray-600 mb-1">Phó hiệu trưởng</label>
-            <input
-              type="text"
-              value={formData.vice_principal_name}
-              onChange={(e) => setFormData({ ...formData, vice_principal_name: e.target.value })}
-              className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 text-sm"
-              placeholder="Họ và tên"
-            />
-            <input
-              type="tel"
-              value={formData.vice_principal_phone}
-              onChange={(e) => setFormData({ ...formData, vice_principal_phone: e.target.value })}
-              className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 mt-2 text-sm"
-              placeholder="Số điện thoại"
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* Người liên hệ */}
-      <div>
-        <h3 className="font-semibold text-gray-700 mb-3 text-sm">🤝 Người liên hệ (bên mình)</h3>
-        <input
-          type="text"
-          value={formData.our_contact_person}
-          onChange={(e) => setFormData({ ...formData, our_contact_person: e.target.value })}
-          className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 mb-2 text-sm"
-          placeholder="Tên người liên hệ"
-        />
-        <input
-          type="text"
-          value={formData.our_contact_role}
-          onChange={(e) => setFormData({ ...formData, our_contact_role: e.target.value })}
-          className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 text-sm"
-          placeholder="Vai trò (VD: Trưởng nhóm, Nhân viên)"
-        />
-      </div>
-
-      {/* Quá trình liên lạc */}
-      <div>
-        <h3 className="font-semibold text-gray-700 mb-3 text-sm">📞 Quá trình liên lạc</h3>
-        <input
-          type="number"
-          value={formData.total_contact_attempts}
-          onChange={(e) => setFormData({ ...formData, total_contact_attempts: parseInt(e.target.value) || 0 })}
-          className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 mb-2 text-sm"
-          placeholder="Tổng số lần liên lạc"
-          min="0"
-        />
-        <textarea
-          value={formData.contact_process}
-          onChange={(e) => setFormData({ ...formData, contact_process: e.target.value })}
-          className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 text-sm"
-          rows={3}
-          placeholder="Mô tả quá trình liên lạc..."
-        />
-      </div>
-
-      {/* Ghi chú */}
-      <div>
-        <h3 className="font-semibold text-gray-700 mb-3 text-sm">📝 Ghi chú</h3>
-        <textarea
-          value={formData.notes}
-          onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-          className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 text-sm"
-          rows={3}
-          placeholder="Ghi chú thêm..."
-        />
-      </div>
-
-      <div className="flex gap-2 pt-2">
-        <button
-          type="button"
-          onClick={() => {
-            setIsEditing(false);
-            if (detail) {
-              setFormData({
-                description: detail.description || '',
-                image_url: detail.image_url || '',
-                website: detail.website || '',
-                admissions_info: detail.admissions_info || '',
-                principal_name: detail.principal_name || '',
-                principal_phone: detail.principal_phone || '',
-                vice_principal_name: detail.vice_principal_name || '',
-                vice_principal_phone: detail.vice_principal_phone || '',
-                our_contact_person: detail.our_contact_person || '',
-                our_contact_role: detail.our_contact_role || '',
-                contact_process: detail.contact_process || '',
-                total_contact_attempts: detail.total_contact_attempts || 0,
-                notes: detail.notes || '',
-              });
-            }
-          }}
-          className="flex-1 bg-gray-100 text-gray-700 py-2.5 rounded-lg hover:bg-gray-200 font-medium"
-        >
-          Hủy
-        </button>
-        <button
-          type="submit"
-          disabled={createMutation.isPending || updateMutation.isPending}
-          className="flex-1 bg-primary-500 text-white py-2.5 rounded-lg hover:bg-primary-600 font-medium disabled:opacity-50"
-        >
-          {createMutation.isPending || updateMutation.isPending ? 'Đang lưu...' : 'Lưu thông tin'}
-        </button>
-      </div>
-    </form>
+      )}
+    </div>
   );
 };
-

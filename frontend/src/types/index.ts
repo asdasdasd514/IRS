@@ -45,6 +45,7 @@ export interface CreateTripInput {
 // Waypoint Types
 export interface Waypoint {
   id: string;
+  code?: string | null;
   trip_id?: string | null;
   google_place_id: string | null;
   school_id?: string | null;

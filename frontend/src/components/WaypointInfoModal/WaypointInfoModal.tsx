@@ -66,39 +66,47 @@ export const WaypointInfoModal: React.FC<WaypointInfoModalProps> = ({
     <div className="fixed inset-0 z-[9999] bg-black bg-opacity-50 flex items-end sm:items-center sm:justify-center">
       <div className="bg-white w-full sm:max-w-3xl sm:rounded-[5px] rounded-t-[5px] max-h-[90vh] flex flex-col animate-slide-up">
         {/* Header */}
-        <div className="flex-shrink-0 flex items-center justify-between p-4 border-b">
+        <div className="flex-shrink-0 flex items-center justify-between p-4 border-b border-slate-200">
           <div>
-            <h2 className="text-xl font-bold text-gray-800">{waypoint.name}</h2>
+            <div className="flex items-center gap-2">
+              <h2 className="text-lg sm:text-xl font-bold text-slate-900 leading-snug">{waypoint.name}</h2>
+              {waypoint.code && (
+                <span className="text-[10px] font-mono text-slate-600 bg-slate-100 px-2 py-0.5 rounded-[3px] font-bold">
+                  {waypoint.code}
+                </span>
+              )}
+            </div>
             {waypoint.address && (
-              <p className="text-sm text-gray-500 mt-1">{waypoint.address}</p>
+              <p className="text-xs text-slate-500 mt-1">{waypoint.address}</p>
             )}
           </div>
           <button
             onClick={onClose}
-            className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+            className="p-1.5 hover:bg-slate-100 rounded-[5px] text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
+            title="Đóng"
           >
-            <X className="w-6 h-6 text-gray-500" />
+            <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Tabs */}
-        <div className="flex-shrink-0 flex border-b bg-gray-50">
+        <div className="flex-shrink-0 flex border-b border-slate-200 bg-slate-50 text-xs sm:text-sm">
           <button
             onClick={() => handleTabChange('detail')}
-            className={`flex-1 py-3 px-4 text-sm font-medium transition-colors ${
+            className={`flex-1 py-3 px-4 font-bold transition-colors cursor-pointer ${
               activeTab === 'detail'
-                ? 'text-primary-600 border-b-2 border-primary-600 bg-white'
-                : 'text-gray-600 hover:text-gray-800'
+                ? 'text-[#0f3b7d] border-b-2 border-[#0f3b7d] bg-white'
+                : 'text-slate-600 hover:text-slate-900'
             }`}
           >
             📋 Thông tin chi tiết
           </button>
           <button
             onClick={() => handleTabChange('visits')}
-            className={`flex-1 py-3 px-4 text-sm font-medium transition-colors ${
+            className={`flex-1 py-3 px-4 font-bold transition-colors cursor-pointer ${
               activeTab === 'visits'
-                ? 'text-primary-600 border-b-2 border-primary-600 bg-white'
-                : 'text-gray-600 hover:text-gray-800'
+                ? 'text-[#0f3b7d] border-b-2 border-[#0f3b7d] bg-white'
+                : 'text-slate-600 hover:text-slate-900'
             }`}
           >
             🏫 Lịch sử ({visitLogs.length})
@@ -106,10 +114,10 @@ export const WaypointInfoModal: React.FC<WaypointInfoModalProps> = ({
           {showTicketsTab && (
             <button
               onClick={() => handleTabChange('tickets')}
-              className={`flex-1 py-3 px-4 text-sm font-medium transition-colors ${
+              className={`flex-1 py-3 px-4 font-bold transition-colors cursor-pointer ${
                 activeTab === 'tickets'
-                  ? 'text-primary-600 border-b-2 border-primary-600 bg-white'
-                  : 'text-gray-600 hover:text-gray-800'
+                  ? 'text-[#0f3b7d] border-b-2 border-[#0f3b7d] bg-white'
+                  : 'text-slate-600 hover:text-slate-900'
               }`}
             >
               🎫 Phiếu ({tickets.length})
@@ -121,6 +129,7 @@ export const WaypointInfoModal: React.FC<WaypointInfoModalProps> = ({
         <div className="flex-1 overflow-y-auto p-4 min-h-[500px] max-h-[60vh]">
           {activeTab === 'detail' && (
             <DetailTab
+              waypoint={waypoint}
               waypointId={waypoint.id}
               detail={detail}
               isLoading={detailLoading}
