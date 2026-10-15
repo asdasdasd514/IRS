@@ -198,15 +198,15 @@ export function MapView({
         const distanceToMe = currentLocation
           ? calculateDistance(currentLocation.lat, currentLocation.lng, waypoint.lat, waypoint.lng)
           : null;
-        const isInsideCheckInRange = distanceToMe !== null && distanceToMe <= 30;
+        const isInsideCheckInRange = distanceToMe !== null && distanceToMe <= 200;
 
         return (
           <Fragment key={waypoint.id}>
-            {/* Vòng tròn bán kính check-in 30m - Chỉ hiển thị cho trường học, KHÔNG hiển thị cho quán ăn */}
+            {/* Vòng tròn bán kính check-in 200m - Chỉ hiển thị cho trường học, KHÔNG hiển thị cho quán ăn */}
             {!waypoint.is_visited && !isRestStop && (
               <Circle
                 center={[waypoint.lat, waypoint.lng]}
-                radius={30}
+                radius={200}
                 pathOptions={{
                   color: isInsideCheckInRange ? '#10B981' : '#3B82F6',
                   fillColor: isInsideCheckInRange ? '#10B981' : '#3B82F6',
@@ -302,7 +302,7 @@ export function MapView({
                             ? 'bg-emerald-100 text-emerald-800 border-emerald-300 animate-pulse'
                             : 'bg-blue-50 text-blue-700 border-blue-200'
                         }`}>
-                          📍 Bán kính check-in: 30m {distanceToMe !== null ? `(Hiện tại: ~${Math.round(distanceToMe)}m)` : ''}
+                          📍 Bán kính check-in: 200m {distanceToMe !== null ? `(Hiện tại: ~${Math.round(distanceToMe)}m)` : ''}
                         </div>
                       )}
                       {waypoint.contact_name && (

@@ -586,7 +586,7 @@ class TripService:
 
         return res.modified_count > 0
 
-    async def check_in(self, trip_id: str, checkin_data: CheckInRequest, max_distance: float = 30.0, actor_user: Optional[dict] = None) -> CheckInResponse:
+    async def check_in(self, trip_id: str, checkin_data: CheckInRequest, max_distance: float = 200.0, actor_user: Optional[dict] = None) -> CheckInResponse:
         db = get_database()
         waypoint = await db.campaign_waypoints.find_one({
             "id": checkin_data.waypoint_id,
@@ -611,7 +611,7 @@ class TripService:
                 message="Điểm dừng này đã được check-in trước đó"
             )
 
-        # Quán ăn/dừng chân (REST_STOP) không yêu cầu giới hạn bán kính GPS 30m
+        # Quán ăn/dừng chân (REST_STOP) không yêu cầu giới hạn bán kính GPS 200m
         is_rest_stop = str(waypoint.get("type", "")).upper() == "REST_STOP"
         if checkin_data.lat and checkin_data.lng and not checkin_data.remote and not is_rest_stop:
             dist = calculate_distance(checkin_data.lat, checkin_data.lng, waypoint["lat"], waypoint["lng"])

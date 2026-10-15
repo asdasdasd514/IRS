@@ -43,6 +43,12 @@ export const TripMapPage: React.FC = () => {
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [showQuickNoteModal, setShowQuickNoteModal] = useState(false);
   const [showCreateNextTripModal, setShowCreateNextTripModal] = useState(false);
+  const [checkInModalData, setCheckInModalData] = useState<{
+    waypoint: Waypoint;
+    distance: number;
+    distanceText: string;
+    isWithinRange: boolean;
+  } | null>(null);
   const [route, setRoute] = useState<{ lat: number; lng: number }[] | null>(null);
   const [showVisitedSheet, setShowVisitedSheet] = useState(false);
   const [waypointTickets, setWaypointTickets] = useState<Record<string, number>>({});
@@ -429,10 +435,10 @@ export const TripMapPage: React.FC = () => {
     }
   }, [tripId, displayWaypoints, queryClient, refetchTrip, fetchNextHop]);
 
-  // Check-in handler với quy tắc bán kính 10m - 30m
+  // Check-in handler với quy tắc bán kính 200m
   const handleCheckIn = useCallback(
     (waypoint: Waypoint) => {
-      // Nếu là quán ăn / điểm dừng chân, chuyển ngay sang xử lý ghé quán (không bán kính GPS 30m, không phiếu)
+      // Nếu là quán ăn / điểm dừng chân, chuyển ngay sang xử lý ghé quán (không bán kính GPS 200m, không phiếu)
       if (waypoint.type === 'REST_STOP') {
         handleCompleteRestStop(waypoint);
         return;
@@ -451,31 +457,25 @@ export const TripMapPage: React.FC = () => {
       );
 
       const distanceText = formatDistance(distance);
-      const isWithinRange = distance <= 30; // Quy chuẩn bán kính check-in 10 - 30m
+      const isWithinRange = distance <= 200; // Quy chuẩn bán kính check-in <= 200m
 
-      let confirmMessage = `Check-in tại: ${waypoint.name}\n\nKhoảng cách hiện tại: ${distanceText} (Quy định: ≤ 30m)`;
-      let isRemoteCheckIn = false;
-
-      if (!isWithinRange) {
-        confirmMessage += `\n\n⚠️ CẢNH BÁO KHOẢNG CÁCH:\nBạn đang cách điểm đến ${distanceText}, vượt quá bán kính quy định (10m - 30m).\n\n`;
-        confirmMessage += `Vui lòng di chuyển đến gần trường (trong vòng 30m) để hệ thống tự động ghi nhận.\n\n`;
-        confirmMessage += `Nếu bạn đã có mặt thực tế tại trường (sai số GPS tòa nhà), bạn có muốn gửi yêu cầu Check-in ngay không?`;
-        isRemoteCheckIn = true;
-
-        if (!window.confirm(confirmMessage)) {
-          return;
-        }
-      } else {
-        confirmMessage += `\n\n✅ Vị trí hợp lệ! Bạn đang có mặt trong bán kính 30m của trường.`;
-        if (!window.confirm(confirmMessage)) {
-          return;
-        }
-      }
-
-      checkInMutation.mutate({ waypointId: waypoint.id, remote: isRemoteCheckIn });
+      // Mở Form thông báo xác nhận Check-in thay vì window.confirm
+      setCheckInModalData({
+        waypoint,
+        distance,
+        distanceText,
+        isWithinRange,
+      });
     },
-    [checkInMutation, currentLocation, handleCompleteRestStop]
+    [currentLocation, handleCompleteRestStop]
   );
+
+  const handleConfirmCheckIn = () => {
+    if (!checkInModalData) return;
+    const { waypoint, isWithinRange } = checkInModalData;
+    checkInMutation.mutate({ waypointId: waypoint.id, remote: !isWithinRange });
+    setCheckInModalData(null);
+  };
 
   // Center on current location
   const handleCenterLocation = useCallback(() => {
@@ -1261,6 +1261,118 @@ export const TripMapPage: React.FC = () => {
                   </>
                 ) : (
                   <span>Xác Nhận</span>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Pop up Form thông báo xác nhận Check-in thực địa (Bán kính 200m) */}
+      {checkInModalData && (
+        <div className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full border border-slate-100 overflow-hidden animate-scale-up">
+            {/* Header */}
+            <div className={`px-6 py-4 text-white flex items-center justify-between ${
+              checkInModalData.isWithinRange
+                ? 'bg-gradient-to-r from-emerald-600 to-teal-700'
+                : 'bg-gradient-to-r from-amber-600 to-orange-600'
+            }`}>
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center text-xl shadow-inner">
+                  {checkInModalData.isWithinRange ? '📍' : '⚠️'}
+                </div>
+                <div>
+                  <h3 className="font-bold text-base leading-tight">
+                    {checkInModalData.isWithinRange ? 'Xác nhận Check-in' : 'Cảnh báo khoảng cách Check-in'}
+                  </h3>
+                  <p className="text-xs text-white/90">
+                    {checkInModalData.isWithinRange ? 'Vị trí GPS trong bán kính hợp lệ' : 'Khoảng cách vượt quá bán kính quy định'}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setCheckInModalData(null)}
+                className="w-8 h-8 rounded-lg flex items-center justify-center text-white/80 hover:text-white hover:bg-white/10 transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Content Body */}
+            <div className="p-6 space-y-4">
+              <div>
+                <p className="text-xs uppercase tracking-wider font-bold text-slate-400 mb-1">Điểm đến</p>
+                <h4 className="text-base font-bold text-slate-800 leading-snug">
+                  {checkInModalData.waypoint.name}
+                </h4>
+                {checkInModalData.waypoint.address && (
+                  <p className="text-xs text-slate-500 mt-1">{checkInModalData.waypoint.address}</p>
+                )}
+              </div>
+
+              {/* Distance card */}
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 flex items-center justify-between">
+                <div>
+                  <span className="text-xs text-slate-500 block">Khoảng cách hiện tại</span>
+                  <span className="text-lg font-black text-slate-800">{checkInModalData.distanceText}</span>
+                </div>
+                <div className="text-right">
+                  <span className="text-xs text-slate-500 block">Quy chuẩn bán kính</span>
+                  <span className="text-xs font-bold text-[#0f3b7d] bg-blue-50 px-2 py-0.5 rounded border border-blue-200 inline-block mt-0.5">
+                    ≤ 200m
+                  </span>
+                </div>
+              </div>
+
+              {/* Status explanation */}
+              {checkInModalData.isWithinRange ? (
+                <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3.5 text-xs text-emerald-800 space-y-1">
+                  <p className="font-bold flex items-center gap-1.5 text-emerald-900">
+                    <span>✅</span> Vị trí hợp lệ!
+                  </p>
+                  <p className="leading-relaxed">
+                    Bạn đang có mặt trong bán kính 200m của điểm trường. Hệ thống sẽ ghi nhận lịch sử đến trường và cập nhật trạng thái làm việc.
+                  </p>
+                </div>
+              ) : (
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-3.5 text-xs text-amber-900 space-y-1.5">
+                  <p className="font-bold flex items-center gap-1.5 text-amber-950">
+                    <span>⚠️</span> Vượt quá bán kính 200m
+                  </p>
+                  <p className="leading-relaxed text-amber-800">
+                    Bạn đang cách điểm đến {checkInModalData.distanceText}. Nếu bạn đã có mặt thực tế tại trường (do sai số định vị GPS), bạn vẫn có thể bấm Xác Nhận để gửi yêu cầu Check-in.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Footer Buttons */}
+            <div className="px-6 py-4 bg-slate-50 border-t border-slate-200 flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setCheckInModalData(null)}
+                className="px-4 py-2 rounded-lg border border-slate-300 bg-white text-slate-700 font-medium hover:bg-slate-100 transition cursor-pointer text-sm"
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmCheckIn}
+                disabled={checkInMutation.isPending}
+                className={`px-5 py-2 rounded-lg text-white font-semibold shadow transition flex items-center gap-2 cursor-pointer text-sm ${
+                  checkInModalData.isWithinRange
+                    ? 'bg-emerald-600 hover:bg-emerald-700'
+                    : 'bg-[#0f3b7d] hover:bg-[#0c2f64]'
+                }`}
+              >
+                {checkInMutation.isPending ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    <span>Đang xử lý...</span>
+                  </>
+                ) : (
+                  <span>Xác Nhận Check-in</span>
                 )}
               </button>
             </div>
