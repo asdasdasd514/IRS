@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Menu, HelpCircle, ShieldCheck, ChevronDown, LogOut, Bell } from 'lucide-react';
+import { Menu, ShieldCheck, ChevronDown, LogOut } from 'lucide-react';
 import { useAppStore } from '../../store/useAppStore';
 
 interface HeaderProps {
@@ -92,21 +92,6 @@ export function Header({ onOpenMobileMenu, title, subtitle }: HeaderProps) {
           <span>{userRole === 'admin' ? 'Quyền Quản Trị Viên' : 'Quyền Cán Bộ'}</span>
         </div>
 
-        {/* Help circle icon */}
-        <button
-          title="Trợ giúp & Hướng dẫn"
-          className="w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition"
-        >
-          <HelpCircle className="w-4 h-4 sm:w-5 sm:h-5" />
-        </button>
-
-        {/* Notification Bell */}
-        <button
-          title="Thông báo"
-          className="w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition cursor-pointer"
-        >
-          <Bell className="w-4 h-4 sm:w-5 sm:h-5" />
-        </button>
 
         {/* User Account Menu with Logout Dropdown in Top-Right Corner */}
         <div className="relative pl-1 sm:pl-2 border-l border-slate-200" ref={dropdownRef}>

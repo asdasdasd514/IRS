@@ -10,8 +10,6 @@ import {
   Users,
   CheckCircle2,
   X,
-  Image as ImageIcon,
-  ExternalLink,
   Eye,
   Navigation,
   Calendar,
@@ -19,7 +17,17 @@ import {
   Building2,
   StickyNote,
 } from 'lucide-react';
-import { visitApi, campaignApi, schoolApi, uploadApi } from '../../../services/api';
+import { visitApi, campaignApi, schoolApi } from '../../../services/api';
+
+const parseSafeDate = (dateVal?: string | Date | null): Date | null => {
+  if (!dateVal) return null;
+  if (dateVal instanceof Date) return dateVal;
+  const str = String(dateVal);
+  const hasTimezone = str.endsWith('Z') || str.includes('+') || (str.includes('T') && str.lastIndexOf('-') > str.indexOf('T'));
+  const normalized = hasTimezone ? str : `${str}Z`;
+  const d = new Date(normalized);
+  return isNaN(d.getTime()) ? new Date(str) : d;
+};
 
 export const AdminVisitsPage: React.FC = () => {
   // Filter states
@@ -30,9 +38,6 @@ export const AdminVisitsPage: React.FC = () => {
 
   // Detail Modal state
   const [selectedVisitDetail, setSelectedVisitDetail] = useState<any | null>(null);
-
-  // Preview Image Modal state
-  const [previewImage, setPreviewImage] = useState<{ url: string; title: string } | null>(null);
 
   // Toast
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -127,7 +132,7 @@ export const AdminVisitsPage: React.FC = () => {
                 Quản lý Lịch Sử Tham Quan
               </h1>
               <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
-                Theo dõi tất cả lượt check-in thực tế, nhật ký tiếp xúc và hình ảnh tư liệu tại các điểm trường
+                Theo dõi tất cả lượt check-in thực tế và nhật ký tiếp xúc tại các điểm trường
               </p>
             </div>
           </div>
@@ -164,7 +169,7 @@ export const AdminVisitsPage: React.FC = () => {
             <div className="text-2xl font-black text-slate-900 mt-0.5">
               {stats.total_visits.toLocaleString('vi-VN')}
             </div>
-            <span className="text-[11px] text-slate-500">Check-in thực tế & tư liệu thực địa</span>
+            <span className="text-[11px] text-slate-500">Check-in thực tế các chuyến đi</span>
           </div>
         </div>
 
@@ -325,24 +330,18 @@ export const AdminVisitsPage: React.FC = () => {
                       <div className="flex items-center gap-1 font-medium text-[11px]">
                         <Clock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                         <span>
-                          {new Date(visit.visit_date).toLocaleString('vi-VN', {
-                            hour: '2-digit',
-                            minute: '2-digit',
-                            day: '2-digit',
-                            month: '2-digit',
-                            year: 'numeric',
-                          })}
+                          {(() => {
+                            const d = parseSafeDate(visit.visit_date);
+                            return d ? d.toLocaleString('vi-VN', {
+                              hour: '2-digit',
+                              minute: '2-digit',
+                              day: '2-digit',
+                              month: '2-digit',
+                              year: 'numeric',
+                            }) : 'Chưa có thông tin';
+                          })()}
                         </span>
                       </div>
-                      {visit.is_checkin ? (
-                        <span className="mt-1 inline-block text-[10px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full font-bold border border-emerald-200">
-                          ✓ Check-in thực tế
-                        </span>
-                      ) : (
-                        <span className="mt-1 inline-block text-[10px] text-blue-700 bg-blue-50 px-2 py-0.5 rounded-full font-bold border border-blue-200">
-                          📝 Ghi nhận tư liệu
-                        </span>
-                      )}
                     </td>
 
                     <td className="py-3 px-3">
@@ -468,15 +467,6 @@ export const AdminVisitsPage: React.FC = () => {
                       {selectedVisitDetail.school_name}
                     </span>
                   </div>
-                  {selectedVisitDetail.is_checkin ? (
-                    <span className="inline-block text-[11px] text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full font-bold border border-emerald-200">
-                      ✓ Check-in thực tế tự động
-                    </span>
-                  ) : (
-                    <span className="inline-block text-[11px] text-blue-700 bg-blue-50 px-2.5 py-0.5 rounded-full font-bold border border-blue-200">
-                      📝 Ghi nhận tư liệu & ảnh
-                    </span>
-                  )}
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
@@ -488,13 +478,16 @@ export const AdminVisitsPage: React.FC = () => {
                     <span className="text-slate-400 font-semibold block text-[11px]">THỜI GIAN GHÉ THĂM</span>
                     <span className="text-slate-700 font-medium flex items-center gap-1 mt-0.5">
                       <Clock className="w-3.5 h-3.5 text-slate-400" />
-                      {new Date(selectedVisitDetail.visit_date).toLocaleString('vi-VN', {
-                        hour: '2-digit',
-                        minute: '2-digit',
-                        day: '2-digit',
-                        month: '2-digit',
-                        year: 'numeric',
-                      })}
+                      {(() => {
+                        const d = parseSafeDate(selectedVisitDetail.visit_date);
+                        return d ? d.toLocaleString('vi-VN', {
+                          hour: '2-digit',
+                          minute: '2-digit',
+                          day: '2-digit',
+                          month: '2-digit',
+                          year: 'numeric',
+                        }) : 'Chưa có thông tin';
+                      })()}
                     </span>
                   </div>
                   <div>
@@ -524,46 +517,7 @@ export const AdminVisitsPage: React.FC = () => {
                 </div>
               </div>
 
-              {/* Thẻ 2: Hình ảnh tư liệu */}
-              <div className="space-y-2.5">
-                <div className="flex items-center justify-between">
-                  <h4 className="font-bold text-xs uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-                    <ImageIcon className="w-4 h-4 text-amber-500" />
-                    <span>Hình ảnh tư liệu thực địa</span>
-                    <span className="text-slate-400 font-normal">({selectedVisitDetail.images?.length || 0} ảnh)</span>
-                  </h4>
-                </div>
-
-                {selectedVisitDetail.images && selectedVisitDetail.images.length > 0 ? (
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-                    {selectedVisitDetail.images.map((img: any, iIdx: number) => {
-                      const imgUrl = img.cloudinary_url || uploadApi.getImageUrl(img.id);
-                      return (
-                        <div
-                          key={img.id || iIdx}
-                          onClick={() => setPreviewImage({ url: imgUrl, title: selectedVisitDetail.school_name })}
-                          className="group relative rounded-[5px] overflow-hidden border border-slate-200 bg-slate-100 aspect-video cursor-pointer hover:shadow-md transition"
-                        >
-                          <img
-                            src={imgUrl}
-                            alt={`Tư liệu ${iIdx + 1}`}
-                            className="w-full h-full object-cover group-hover:scale-105 transition duration-200"
-                          />
-                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition">
-                            <Eye className="w-5 h-5 text-white" />
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <div className="p-4 bg-slate-50 rounded-[5px] border border-slate-200 text-center text-slate-400 text-xs">
-                    Chưa có hình ảnh tư liệu nào được tải lên cho trường này trong chuyến thăm.
-                  </div>
-                )}
-              </div>
-
-              {/* Thẻ 3: Ghi chú & Đánh giá thực địa tại trường trong chiến dịch */}
+              {/* Thẻ 2: Ghi chú & Đánh giá thực địa tại trường trong chiến dịch */}
               <div className="space-y-2.5">
                 <div className="flex items-center justify-between">
                   <h4 className="font-bold text-xs uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
@@ -612,52 +566,6 @@ export const AdminVisitsPage: React.FC = () => {
               >
                 Đóng
               </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL LIGHTBOX XEM ẢNH */}
-      {previewImage && (
-        <div
-          className="fixed inset-0 z-[99999] bg-black/80 backdrop-blur-xs flex items-center justify-center p-4 animate-fade-in"
-          onClick={() => setPreviewImage(null)}
-        >
-          <div
-            className="bg-white rounded-xl shadow-2xl max-w-2xl w-full overflow-hidden flex flex-col"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="p-4 bg-slate-900 text-white flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <ImageIcon className="w-4 h-4 text-amber-400" />
-                <span className="text-xs font-bold">{previewImage.title} - Ảnh tư liệu</span>
-              </div>
-              <button
-                type="button"
-                onClick={() => setPreviewImage(null)}
-                className="text-white/70 hover:text-white p-1 rounded cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <div className="p-3 bg-slate-950 flex items-center justify-center max-h-[75vh]">
-              <img
-                src={previewImage.url}
-                alt="Preview"
-                className="max-h-[70vh] max-w-full object-contain rounded"
-              />
-            </div>
-            <div className="p-3 bg-slate-50 border-t border-slate-200 flex items-center justify-between text-xs">
-              <span className="text-slate-500">Ảnh chụp thực tế lưu trữ đám mây</span>
-              <a
-                href={previewImage.url}
-                target="_blank"
-                rel="noreferrer"
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-[#0f3b7d] text-white rounded-md font-bold hover:bg-[#0c2f64] transition"
-              >
-                <ExternalLink className="w-3.5 h-3.5" />
-                <span>Mở ảnh gốc</span>
-              </a>
             </div>
           </div>
         </div>

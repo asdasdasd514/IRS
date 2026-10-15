@@ -6,7 +6,6 @@ import {
   Building2,
   Search,
   ExternalLink,
-  Navigation,
   Globe,
   School
 } from 'lucide-react';
@@ -102,9 +101,21 @@ export function AdminMapPage() {
               <Building2 className="w-4 h-4 text-[#0f3b7d]" />
               <h2 className="text-sm font-bold text-slate-900">Danh sách địa điểm</h2>
             </div>
-            <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-50 text-[#0f3b7d]">
-              {filteredSchools.length} trường
-            </span>
+            <div className="flex items-center gap-2">
+              {selectedSchool && (
+                <button
+                  type="button"
+                  onClick={() => setSelectedSchool(null)}
+                  className="text-xs font-semibold text-rose-600 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 px-2 py-0.5 rounded-[4px] transition cursor-pointer"
+                  title="Bỏ chọn trường đang xem"
+                >
+                  ✕ Bỏ chọn
+                </button>
+              )}
+              <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-50 text-[#0f3b7d]">
+                {filteredSchools.length} trường
+              </span>
+            </div>
           </div>
 
           {/* Search Box */}
@@ -129,11 +140,16 @@ export function AdminMapPage() {
               </p>
             ) : (
               filteredSchools.map((s) => {
-                const isSelected = selectedSchool?.id === s.id;
+                const isSelected = Boolean(
+                  selectedSchool && (
+                    (selectedSchool.id && selectedSchool.id === s.id) ||
+                    (selectedSchool._id && selectedSchool._id === s._id)
+                  )
+                );
                 return (
                   <div
                     key={s.id || s._id}
-                    onClick={() => setSelectedSchool(s)}
+                    onClick={() => setSelectedSchool(isSelected ? null : s)}
                     className={`p-2.5 rounded-[5px] border text-xs cursor-pointer transition ${
                       isSelected
                         ? 'border-[#0f3b7d] bg-blue-50/70 shadow-xs'
@@ -161,10 +177,11 @@ export function AdminMapPage() {
                           ? `${Number(s.lat).toFixed(4)}, ${Number(s.lng).toFixed(4)}`
                           : 'Chưa có tọa độ'}
                       </span>
-                      <span className="text-blue-600 hover:underline flex items-center gap-0.5 font-medium">
-                        <span>Định vị</span>
-                        <Navigation className="w-3 h-3" />
-                      </span>
+                      {isSelected && (
+                        <span className="text-rose-600 font-semibold hover:underline">
+                          ✕ Bỏ chọn
+                        </span>
+                      )}
                     </div>
                   </div>
                 );
@@ -213,7 +230,15 @@ export function AdminMapPage() {
                     position={[Number(school.lat), Number(school.lng)]}
                     icon={schoolIcon}
                     eventHandlers={{
-                      click: () => setSelectedSchool(school),
+                      click: () => {
+                        const isCurrent = Boolean(
+                          selectedSchool && (
+                            (selectedSchool.id && selectedSchool.id === school.id) ||
+                            (selectedSchool._id && selectedSchool._id === school._id)
+                          )
+                        );
+                        setSelectedSchool(isCurrent ? null : school);
+                      },
                     }}
                   >
                     <Popup>

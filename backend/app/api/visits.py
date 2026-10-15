@@ -126,9 +126,13 @@ async def _gather_all_visits(db) -> List[Dict[str, Any]]:
 
             v_date = log.get("visit_date") or log.get("created_at")
             if isinstance(v_date, datetime):
+                if v_date.tzinfo is None:
+                    v_date = v_date.replace(tzinfo=timezone.utc)
                 v_date_str = v_date.isoformat()
             else:
                 v_date_str = str(v_date) if v_date else datetime.now(timezone.utc).isoformat()
+            if not (v_date_str.endswith("Z") or "+" in v_date_str):
+                v_date_str = f"{v_date_str}Z"
 
             raw_images = log.get("images") or []
             active_images = [
@@ -164,20 +168,25 @@ async def _gather_all_visits(db) -> List[Dict[str, Any]]:
                 seen_ids.add(auto_id)
                 v_date = item.get("visited_at") or item.get("updated_at") or item.get("created_at")
                 if isinstance(v_date, datetime):
+                    if v_date.tzinfo is None:
+                        v_date = v_date.replace(tzinfo=timezone.utc)
                     v_date_str = v_date.isoformat()
                     v_date_dt = v_date
                 else:
                     v_date_str = str(v_date) if v_date else datetime.now(timezone.utc).isoformat()
                     try:
-                        v_date_dt = datetime.fromisoformat(v_date_str)
+                        v_date_dt = datetime.fromisoformat(v_date_str.replace("Z", "+00:00"))
                     except Exception:
                         v_date_dt = None
+
+                if not (v_date_str.endswith("Z") or "+" in v_date_str):
+                    v_date_str = f"{v_date_str}Z"
 
                 time_display = ""
                 if v_date_dt:
                     if v_date_dt.tzinfo is None:
                         v_date_dt = v_date_dt.replace(tzinfo=timezone.utc)
-                    vn_dt = v_date_dt + timedelta(hours=7)
+                    vn_dt = v_date_dt.astimezone(timezone(timedelta(hours=7)))
                     time_display = vn_dt.strftime("%H:%M ngày %d/%m/%Y")
 
                 trip_desc = f" trong chuyến đi {t_info.get('trip_code')}" if t_info.get('trip_code') else ""
