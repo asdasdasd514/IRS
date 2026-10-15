@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { reportApi, campaignApi } from '../../services/api';
 import { exportReportToExcel, exportCampaignSummaryToExcel } from '../../utils/reportExcelExporter';
+import { formatDate, formatDateTime } from '../../utils/formatters';
 
 export const ReportPage: React.FC = () => {
   const { reportId, campaignId } = useParams<{ reportId?: string; campaignId?: string }>();
@@ -54,35 +55,6 @@ export const ReportPage: React.FC = () => {
     }
   }, [currentReport, campaignId, viewMode]);
 
-  const formatDate = (dateString?: string) => {
-    if (!dateString) return '';
-    const date = new Date(dateString);
-    if (isNaN(date.getTime())) return dateString;
-    return date.toLocaleDateString('vi-VN', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      timeZone: 'Asia/Ho_Chi_Minh',
-    });
-  };
-
-  // Định dạng ngày giờ chuẩn xác: DD/MM/YYYY HH:mm (như hình mẫu)
-  const formatDateTime = (dateString?: string) => {
-    if (!dateString) return '';
-    if (/^\d{2}\/\d{2}\/\d{4} \d{2}:\d{2}$/.test(dateString.trim())) return dateString.trim();
-    const d = new Date(dateString);
-    if (isNaN(d.getTime())) return dateString;
-    const pad = (n: number) => (n < 10 ? `0${n}` : `${n}`);
-    const day = pad(d.getDate());
-    const month = pad(d.getMonth() + 1);
-    const year = d.getFullYear();
-    const hours = pad(d.getHours());
-    const mins = pad(d.getMinutes());
-    return `${day}/${month}/${year} ${hours}:${mins}`;
-  };
-
   // Định dạng điểm xuất phát (100% dữ liệu động từ API/Database)
   const formatStartPoint = (point?: any) => {
     if (!point) return 'Chưa cập nhật';
@@ -112,15 +84,7 @@ export const ReportPage: React.FC = () => {
   const formatCampaignDateRange = (start?: string, end?: string, rounds?: any[]) => {
     const formatSingle = (val?: string) => {
       if (!val) return '';
-      if (val.includes('/')) return val;
-      const d = new Date(val);
-      if (isNaN(d.getTime())) return val;
-      return d.toLocaleDateString('vi-VN', {
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        timeZone: 'Asia/Ho_Chi_Minh',
-      });
+      return formatDate(val);
     };
     let s = formatSingle(start);
     let e = formatSingle(end);
@@ -642,13 +606,15 @@ export const ReportPage: React.FC = () => {
                       {(currentReport.schools_data && currentReport.schools_data.length > 0) ? (
                         currentReport.schools_data.map((sch: any, idx: number) => {
                           const ticketsCount =
-                            sch.tickets_collected != null
+                            sch.tickets_collected != null && sch.tickets_collected > 0
                               ? sch.tickets_collected
                               : Array.isArray(sch.tickets) && sch.tickets.length > 0
                                 ? ((sch.tickets.reduce((acc: number, t: any) => acc + (t.tickets_collected || 0), 0)) || sch.tickets.length)
-                                : 0;
+                                : (currentReport.schools_data && currentReport.schools_data.length === 1 && (currentReport.total_tickets || 0) > 0)
+                                  ? currentReport.total_tickets
+                                  : (sch.tickets_collected || 0);
                           const visitedTime = sch.visited_at
-                            ? formatDate(sch.visited_at)
+                            ? formatDateTime(sch.visited_at)
                             : (sch.is_visited ? 'Đã hoàn tất' : 'Chưa tiếp cận');
 
                           const contacts: string[] = [];

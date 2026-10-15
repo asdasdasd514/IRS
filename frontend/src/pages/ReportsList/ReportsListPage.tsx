@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { reportApi, campaignApi } from '../../services/api';
 import { exportReportToExcel, exportCampaignSummaryToExcel } from '../../utils/reportExcelExporter';
+import { formatDate } from '../../utils/formatters';
 import type { ReportListItem } from '../../types';
 
 interface CampaignGroup {
@@ -54,17 +55,6 @@ export const ReportsListPage: React.FC = () => {
     queryFn: () => campaignApi.getAll(),
   });
 
-  const formatDate = (dateString?: string) => {
-    if (!dateString) return '';
-    const date = new Date(dateString);
-    if (isNaN(date.getTime())) return dateString;
-    return date.toLocaleDateString('vi-VN', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      timeZone: 'Asia/Ho_Chi_Minh',
-    });
-  };
 
   // Gom nhóm dữ liệu CHA - CON (Chiến dịch làm Cha, các Đợt làm Con)
   const { campaignGroups, orphanReports } = useMemo(() => {

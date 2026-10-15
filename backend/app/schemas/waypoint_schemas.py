@@ -108,7 +108,7 @@ class VisitLogResponse(VisitLogBase):
 
 # ==================== PHẦN 3: Phiếu thu ====================
 class TicketBase(BaseModel):
-    visit_number: int
+    visit_number: Optional[int] = 1
     tickets_collected: int = 0
     notes: Optional[str] = None
 
@@ -125,7 +125,7 @@ class TicketUpdate(BaseModel):
 
 class TicketResponse(TicketBase):
     id: str
-    waypoint_id: str
+    waypoint_id: Optional[str] = None
     collection_date: Optional[datetime] = None
     created_at: Optional[datetime] = None
     

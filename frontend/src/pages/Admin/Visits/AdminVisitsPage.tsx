@@ -18,16 +18,7 @@ import {
   StickyNote,
 } from 'lucide-react';
 import { visitApi, campaignApi, schoolApi } from '../../../services/api';
-
-const parseSafeDate = (dateVal?: string | Date | null): Date | null => {
-  if (!dateVal) return null;
-  if (dateVal instanceof Date) return dateVal;
-  const str = String(dateVal);
-  const hasTimezone = str.endsWith('Z') || str.includes('+') || (str.includes('T') && str.lastIndexOf('-') > str.indexOf('T'));
-  const normalized = hasTimezone ? str : `${str}Z`;
-  const d = new Date(normalized);
-  return isNaN(d.getTime()) ? new Date(str) : d;
-};
+import { formatDateTime } from '../../../utils/formatters';
 
 export const AdminVisitsPage: React.FC = () => {
   // Filter states
@@ -330,16 +321,7 @@ export const AdminVisitsPage: React.FC = () => {
                       <div className="flex items-center gap-1 font-medium text-[11px]">
                         <Clock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                         <span>
-                          {(() => {
-                            const d = parseSafeDate(visit.visit_date);
-                            return d ? d.toLocaleString('vi-VN', {
-                              hour: '2-digit',
-                              minute: '2-digit',
-                              day: '2-digit',
-                              month: '2-digit',
-                              year: 'numeric',
-                            }) : 'Chưa có thông tin';
-                          })()}
+                          {formatDateTime(visit.visit_date) || 'Chưa có thông tin'}
                         </span>
                       </div>
                     </td>
@@ -478,16 +460,7 @@ export const AdminVisitsPage: React.FC = () => {
                     <span className="text-slate-400 font-semibold block text-[11px]">THỜI GIAN GHÉ THĂM</span>
                     <span className="text-slate-700 font-medium flex items-center gap-1 mt-0.5">
                       <Clock className="w-3.5 h-3.5 text-slate-400" />
-                      {(() => {
-                        const d = parseSafeDate(selectedVisitDetail.visit_date);
-                        return d ? d.toLocaleString('vi-VN', {
-                          hour: '2-digit',
-                          minute: '2-digit',
-                          day: '2-digit',
-                          month: '2-digit',
-                          year: 'numeric',
-                        }) : 'Chưa có thông tin';
-                      })()}
+                      <span>{formatDateTime(selectedVisitDetail.visit_date) || 'Chưa có thông tin'}</span>
                     </span>
                   </div>
                   <div>

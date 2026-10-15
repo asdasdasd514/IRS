@@ -1,5 +1,6 @@
 import * as XLSX from 'xlsx';
 import type { Report } from '../types';
+import { formatDate, formatDateTime } from './formatters';
 
 /**
  * Xuất file Excel báo cáo chuyến đi lẻ (tinh gọn 7 cột, không quán ăn, không tỷ lệ %)
@@ -10,15 +11,8 @@ export const exportReportToExcel = (report: Report | any) => {
   const tripName = report.trip_name || 'Lộ trình tuyển sinh';
   const tripCode = report.trip_code || report.trip_id || '';
   const createdDate = report.created_at
-    ? new Date(report.created_at).toLocaleString('vi-VN', {
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-        timeZone: 'Asia/Ho_Chi_Minh',
-      })
-    : new Date().toLocaleString('vi-VN');
+    ? formatDateTime(report.created_at)
+    : formatDateTime(new Date());
 
   const totalSchools = report.total_schools || 0;
   const schoolsVisited = report.schools_visited || 0;
@@ -57,20 +51,15 @@ export const exportReportToExcel = (report: Report | any) => {
   if (schools.length > 0) {
     schools.forEach((s: any, idx: number) => {
       const ticketsCount =
-        s.tickets_collected != null
+        s.tickets_collected != null && s.tickets_collected > 0
           ? s.tickets_collected
           : Array.isArray(s.tickets) && s.tickets.length > 0
             ? ((s.tickets.reduce((acc: number, t: any) => acc + (t.tickets_collected || 0), 0)) || s.tickets.length)
-            : 0;
+            : (report.schools_data && report.schools_data.length === 1 && (report.total_tickets || 0) > 0)
+              ? report.total_tickets
+              : (s.tickets_collected || 0);
       const visitedTime = s.visited_at
-        ? new Date(s.visited_at).toLocaleString('vi-VN', {
-            year: 'numeric',
-            month: '2-digit',
-            day: '2-digit',
-            hour: '2-digit',
-            minute: '2-digit',
-            timeZone: 'Asia/Ho_Chi_Minh',
-          })
+        ? formatDateTime(s.visited_at)
         : (s.is_visited ? 'Đã hoàn tất' : 'Chưa tiếp cận');
 
       const contacts: string[] = [];
@@ -143,7 +132,7 @@ export const exportReportToExcel = (report: Report | any) => {
           t.grade || '12',
           Array.isArray(t.interested_majors) ? t.interested_majors.join(', ') : (t.interested_majors || ''),
           s.name || '',
-          t.created_at ? new Date(t.created_at).toLocaleString('vi-VN') : '',
+          t.created_at ? formatDateTime(t.created_at) : '',
         ]);
       }
     });
@@ -193,7 +182,7 @@ export const exportCampaignSummaryToExcel = (summary: any) => {
     ['1. THÔNG TIN CHIẾN DỊCH'],
     ['Tên chiến dịch:', cName],
     ['Mã chiến dịch:', cCode],
-    ['Thời gian thực hiện:', summary.start_date ? `${summary.start_date} - ${summary.end_date || ''}` : '2026'],
+    ['Thời gian thực hiện:', summary.start_date ? `${formatDate(summary.start_date)} - ${summary.end_date ? formatDate(summary.end_date) : ''}` : '2026'],
     ['Quy mô thực hiện:', `${totalRounds} đợt công tác`],
     ['Số trường mục tiêu:', `${totalSchools} trường`],
     ['Tổng số phiếu tích lũy:', `${totalTickets} phiếu`],
@@ -218,7 +207,7 @@ export const exportCampaignSummaryToExcel = (summary: any) => {
         r.round_name || `Đợt ${r.round_number}`,
         r.trip_code || r.trip_id || '',
         r.trip_name || '',
-        r.date || '',
+        r.date ? formatDate(r.date) : '',
         r.leader_name || 'Chưa phân công',
         r.schools_count || 0,
         r.tickets_collected || 0,
@@ -316,7 +305,7 @@ export const exportSurveyResponsesToExcel = (responses: any[], title = 'Danh_sac
 
   const rows: any[][] = [
     ['DANH SÁCH HỌC SINH KHẢO SÁT & QUAN TÂM TUYỂN SINH'],
-    [`Thời điểm xuất: ${new Date().toLocaleString('vi-VN')}`],
+    [`Thời điểm xuất: ${formatDateTime(new Date())}`],
     [`Tổng số học sinh: ${responses.length}`],
     [],
     [
@@ -337,7 +326,7 @@ export const exportSurveyResponsesToExcel = (responses: any[], title = 'Danh_sac
       ? item.interested_majors.join(', ')
       : item.interested_majors || '';
     const createdStr = item.created_at
-      ? new Date(item.created_at).toLocaleString('vi-VN')
+      ? formatDateTime(item.created_at)
       : '';
 
     rows.push([

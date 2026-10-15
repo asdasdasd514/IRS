@@ -11,6 +11,7 @@ import asyncio
 from typing import List, Optional, Dict
 from datetime import datetime, timedelta, timezone
 import uuid
+import re
 import httpx
 import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
@@ -31,34 +32,51 @@ def to_vietnam_time(dt) -> str:
     if not dt:
         return ""
     if isinstance(dt, str):
+        clean_str = dt.strip()
+        if re.match(r"^\d{2}/\d{2}/\d{4}", clean_str):
+            return clean_str
         try:
-            dt = datetime.fromisoformat(dt)
+            dt = datetime.fromisoformat(clean_str.replace("Z", "+00:00"))
         except Exception:
-            return dt
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
-    vietnam_time = dt + timedelta(hours=7)
-    return vietnam_time.strftime('%d/%m/%Y %H:%M')
+            try:
+                dt = datetime.strptime(clean_str[:19], "%Y-%m-%d %H:%M:%S")
+            except Exception:
+                return dt
+    if hasattr(dt, "tzinfo"):
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        vn_time = dt.astimezone(timezone(timedelta(hours=7)))
+        return vn_time.strftime('%d/%m/%Y %H:%M')
+    return str(dt)
 
 
 def to_vietnam_date(dt) -> str:
     if not dt:
         return ""
     if isinstance(dt, str):
+        clean_str = dt.strip()
+        if re.match(r"^\d{2}/\d{2}/\d{4}", clean_str):
+            return clean_str
         try:
-            dt = datetime.fromisoformat(dt)
+            dt = datetime.fromisoformat(clean_str.replace("Z", "+00:00"))
         except Exception:
-            return dt
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
-    vietnam_time = dt + timedelta(hours=7)
-    return vietnam_time.strftime('%d/%m/%Y')
+            try:
+                dt = datetime.strptime(clean_str[:10], "%Y-%m-%d")
+            except Exception:
+                return dt
+    if hasattr(dt, "tzinfo"):
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        vn_time = dt.astimezone(timezone(timedelta(hours=7)))
+        return vn_time.strftime('%d/%m/%Y')
+    return str(dt)
 
 
 def extract_trip_points(trip: dict):
     if "schools_data" in trip and "rest_stops_data" in trip:
         return trip.get("schools_data") or [], trip.get("rest_stops_data") or []
-    raw_points = trip.get("destinations") or trip.get("waypoints") or trip.get("schools") or []
+    # Ưu tiên waypoints (dữ liệu động có tickets, visit_logs) trước destinations (mảng tĩnh ban đầu)
+    raw_points = trip.get("waypoints") or trip.get("schools") or trip.get("destinations") or []
     schools = []
     rest_stops = []
     for p in raw_points:
@@ -515,11 +533,35 @@ async def generate_trip_report(trip_id: str, created_at: Optional[datetime] = No
 
     now = created_at or datetime.now(timezone.utc)
 
+    # Lấy waypoints thực tế từ campaign_waypoints để có tickets, visit_logs, visited_at đầy đủ nhất
+    trip_cws = await db.campaign_waypoints.find({"trip_id": trip_id, "is_deleted": {"$ne": True}}).to_list(200)
+    cw_by_id = {cw.get("id"): cw for cw in trip_cws if cw.get("id")}
+    cw_by_school_id = {cw.get("school_id"): cw for cw in trip_cws if cw.get("school_id")}
+
     clean_schools = []
     for s in schools:
         s_id = s.get("school_id") or s.get("id")
         s_name = s.get("name")
-        is_v = is_point_visited(s)
+        cw_match = cw_by_id.get(s.get("id")) or cw_by_school_id.get(s_id)
+        
+        is_v = is_point_visited(s) or (is_point_visited(cw_match) if cw_match else False)
+        s_visited_at = s.get("visited_at") or (cw_match.get("visited_at") if cw_match else None)
+        if isinstance(s_visited_at, datetime):
+            if s_visited_at.tzinfo is None:
+                s_visited_at = s_visited_at.replace(tzinfo=timezone.utc)
+            s_visited_at = s_visited_at.isoformat()
+        elif isinstance(s_visited_at, str) and s_visited_at and not s_visited_at.endswith("Z") and "+" not in s_visited_at:
+            s_visited_at = s_visited_at.replace(" ", "T") + "Z"
+
+        s_tickets = s.get("tickets") or (cw_match.get("tickets") if cw_match else []) or []
+        s_logs = s.get("visit_logs") or (cw_match.get("visit_logs") if cw_match else []) or []
+
+        # Tính số phiếu của trường trong chuyến đi này
+        tickets_count = get_point_tickets(s)
+        if tickets_count == 0 and cw_match:
+            tickets_count = get_point_tickets(cw_match)
+        if tickets_count == 0 and s_tickets:
+            tickets_count = sum(int(t.get("tickets_collected", 0)) for t in s_tickets if not t.get("is_deleted"))
 
         # 1. Truy vấn thông tin trường trong db.schools để lấy tổng số lần ghé thăm lịch sử
         school_doc = None
@@ -561,9 +603,9 @@ async def generate_trip_report(trip_id: str, created_at: Optional[datetime] = No
                 "trip_id": trip_id,
                 "trip_name": trip.get("name") or "Chuyến đi này",
                 "title": "Chuyến đi này",
-                "date": s.get("visited_at") or now,
+                "date": s_visited_at or now,
                 "staff": s.get("our_contact_person") or (trip.get("assigned_staff", [{}])[0].get("name") if trip.get("assigned_staff") else None),
-                "tickets": get_point_tickets(s),
+                "tickets": tickets_count,
                 "notes": s.get("notes") or s.get("contact_process") or "Đã hoàn thành check-in thực địa",
                 "is_current": True
             })
@@ -585,7 +627,7 @@ async def generate_trip_report(trip_id: str, created_at: Optional[datetime] = No
                     })
 
         # Các visit_logs nhúng sẵn
-        for l in (s.get("visit_logs") or []):
+        for l in s_logs:
             if not l.get("is_deleted"):
                 visit_history.append({
                     "trip_id": trip_id,
@@ -609,17 +651,17 @@ async def generate_trip_report(trip_id: str, created_at: Optional[datetime] = No
             calc_total_visits = 1
 
         clean_schools.append({
-            "id": s.get("id"),
+            "id": s.get("id") or (cw_match.get("id") if cw_match else None),
             "school_id": s_id,
             "name": s_name,
             "address": s.get("address") or (school_doc.get("address") if school_doc else ""),
             "is_visited": is_v,
-            "visited_at": s.get("visited_at"),
+            "visited_at": s_visited_at,
             "total_visits": calc_total_visits,
             "visit_history": visit_history,
-            "tickets": s.get("tickets") or [],
-            "tickets_collected": get_point_tickets(s),
-            "visit_logs": s.get("visit_logs") or [],
+            "tickets": s_tickets,
+            "tickets_collected": tickets_count,
+            "visit_logs": s_logs,
             "principal_name": s.get("principal_name") or (school_doc.get("principal_name") if school_doc else ""),
             "principal_phone": s.get("principal_phone") or (school_doc.get("principal_phone") if school_doc else ""),
             "vice_principal_name": s.get("vice_principal_name") or (school_doc.get("vice_principal_name") if school_doc else ""),
@@ -630,6 +672,13 @@ async def generate_trip_report(trip_id: str, created_at: Optional[datetime] = No
             "contact_process": s.get("contact_process"),
             "notes": s.get("notes")
         })
+
+    # Cập nhật lại total_tickets chính xác theo clean_schools
+    calc_total_tickets = sum(cs.get("tickets_collected", 0) for cs in clean_schools)
+    if calc_total_tickets > 0:
+        total_tickets = calc_total_tickets
+    elif not total_tickets and trip.get("total_tickets"):
+        total_tickets = trip.get("total_tickets", 0)
 
     clean_stops = []
     for r in rest_stops:
@@ -649,6 +698,7 @@ async def generate_trip_report(trip_id: str, created_at: Optional[datetime] = No
     trip_enriched["schools_data"] = clean_schools
     trip_enriched["rest_stops_data"] = clean_stops
     trip_enriched["destinations"] = clean_schools + clean_stops
+    trip_enriched["total_tickets"] = total_tickets
 
     prompt = await build_report_prompt(trip_enriched, created_at)
     report_content = await call_report_api(prompt, trip_enriched, created_at)
@@ -680,10 +730,13 @@ async def generate_trip_report(trip_id: str, created_at: Optional[datetime] = No
         update_cw = {
             "is_visited": cs.get("is_visited", False),
             "visited_at": cs.get("visited_at"),
-            "tickets": cs.get("tickets") or [],
             "visit_logs": cs.get("visit_logs") or [],
             "notes": cs.get("notes") or ""
         }
+        # Chỉ cập nhật tickets nếu có phiếu thực tế, không ghi đè rỗng [] nếu db đã có phiếu
+        if cs.get("tickets"):
+            update_cw["tickets"] = cs.get("tickets")
+
         await db.campaign_waypoints.update_one(
             {"trip_id": trip_id, "$or": [{"school_id": s_id}, {"id": cs.get("id")}]},
             {"$set": update_cw}
@@ -811,6 +864,7 @@ async def get_campaign_summary_report(campaign_id: str) -> dict:
     }).sort("created_at", 1)
     reports = await rep_cursor.to_list(length=100)
     trip_report_map = {r.get("trip_id"): r.get("id") for r in reports if r.get("trip_id")}
+    trip_report_doc_map = {r.get("trip_id"): r for r in reports if r.get("trip_id")}
 
     rounds_data = []
     schools_map = {}
@@ -828,10 +882,24 @@ async def get_campaign_summary_report(campaign_id: str) -> dict:
         elif camp and camp.get("team", {}).get("leader_name"):
             leader = camp["team"]["leader_name"]
 
-        schools, _ = extract_trip_points(trip)
+        # Truy vấn waypoints thực tế từ campaign_waypoints để có tickets
+        cw_cursor = db.campaign_waypoints.find({"trip_id": t_id, "is_deleted": {"$ne": True}})
+        trip_cws = await cw_cursor.to_list(length=200)
+
+        trip_enriched_copy = dict(trip)
+        if trip_cws:
+            trip_enriched_copy["waypoints"] = trip_cws
+
+        schools, _ = extract_trip_points(trip_enriched_copy)
         visited_schools = [s for s in schools if is_point_visited(s)]
         tickets_in_trip = sum(get_point_tickets(s) for s in schools)
-        if not tickets_in_trip and trip.get("total_tickets"):
+
+        # Ưu tiên lấy từ báo cáo đã lập nếu có
+        rep_doc = trip_report_doc_map.get(t_id)
+        if rep_doc and rep_doc.get("total_tickets") is not None:
+            if rep_doc.get("total_tickets") > tickets_in_trip:
+                tickets_in_trip = rep_doc.get("total_tickets", 0)
+        elif not tickets_in_trip and trip.get("total_tickets"):
             tickets_in_trip = trip.get("total_tickets", 0)
 
         t_date = to_vietnam_date(trip.get("start_date") or trip.get("created_at"))
@@ -982,6 +1050,21 @@ async def get_report_by_id(report_id: str) -> Optional[dict]:
                     report["leader_name"] = trip["team"]["leader_name"]
                 elif staff_list and len(staff_list) > 0 and isinstance(staff_list[0], dict):
                     report["leader_name"] = staff_list[0].get("name")
+
+        # Đảm bảo schools_data có tickets_collected chính xác và visited_at chuẩn ISO UTC
+        tot_tickets = report.get("total_tickets") or 0
+        schools_data = report.get("schools_data") or []
+        if len(schools_data) == 1 and tot_tickets > 0:
+            if not schools_data[0].get("tickets_collected"):
+                schools_data[0]["tickets_collected"] = tot_tickets
+        for sch in schools_data:
+            v_at = sch.get("visited_at")
+            if v_at and isinstance(v_at, str) and not v_at.endswith("Z") and "+" not in v_at:
+                sch["visited_at"] = v_at.replace(" ", "T") + "Z"
+            elif v_at and isinstance(v_at, datetime):
+                if v_at.tzinfo is None:
+                    v_at = v_at.replace(tzinfo=timezone.utc)
+                sch["visited_at"] = v_at.isoformat()
     return report
 
 
