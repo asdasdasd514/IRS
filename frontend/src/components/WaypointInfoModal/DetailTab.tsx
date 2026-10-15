@@ -1,8 +1,6 @@
 import React from 'react';
 import {
   School,
-  MapPin,
-  Navigation,
   ExternalLink,
   Phone,
   Globe,
@@ -31,7 +29,7 @@ const parseSafeDate = (dateVal?: string | Date | null): Date | null => {
   return isNaN(d.getTime()) ? new Date(str) : d;
 };
 
-export const DetailTab: React.FC<DetailTabProps> = ({ waypoint, detail, isLoading }) => {
+export const DetailTab: React.FC<DetailTabProps> = ({ detail, isLoading }) => {
   if (isLoading) {
     return (
       <div className="flex flex-col items-center justify-center py-16 text-slate-400">
@@ -42,77 +40,53 @@ export const DetailTab: React.FC<DetailTabProps> = ({ waypoint, detail, isLoadin
   }
 
   const hotlinePhone = detail?.principal_phone || detail?.representative_phone;
-  const schoolName = waypoint?.name || 'Trường học';
-  const schoolAddress = waypoint?.address;
-  const lat = waypoint?.lat;
-  const lng = waypoint?.lng;
+  const phoneLines = hotlinePhone
+    ? hotlinePhone.split(/\s*[\/\n]\s*/).map((l) => l.trim()).filter(Boolean)
+    : [];
 
   return (
     <div className="space-y-4 pb-6 h-[500px] overflow-y-auto pr-1">
-      {/* Khối 1: Thông tin trường học & Hotline tuyển sinh */}
-      <div className="bg-white border border-slate-200/80 rounded-[5px] p-4 shadow-xs space-y-3">
-        <div className="flex items-start justify-between gap-3 flex-wrap">
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2">
-              <School className="w-5 h-5 text-[#0f3b7d] shrink-0" />
-              <h3 className="font-bold text-slate-900 text-base leading-snug">
-                {schoolName}
-              </h3>
+      {/* Khối 1: Hotline Tuyển sinh & Website */}
+      {(phoneLines.length > 0 || detail?.website) && (
+        <div className="bg-white border border-slate-200/80 rounded-[5px] p-4 shadow-xs space-y-3">
+          {phoneLines.length > 0 && (
+            <div className="bg-gradient-to-r from-blue-50/80 to-slate-50 border border-blue-100 rounded-[5px] p-3.5 space-y-2">
+              <div className="flex items-center gap-2 text-xs font-bold text-[#0f3b7d] uppercase tracking-wider">
+                <Phone className="w-4 h-4 text-[#0f3b7d] shrink-0" />
+                <span>Hotline Tuyển Sinh</span>
+              </div>
+              <div className="space-y-1.5 pl-6">
+                {phoneLines.map((line, idx) => (
+                  <div key={idx} className="flex items-start gap-2 text-slate-900">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#0f3b7d] shrink-0 mt-2" />
+                    <span className="font-mono font-bold text-sm tracking-wide leading-relaxed break-words">
+                      {line}
+                    </span>
+                  </div>
+                ))}
+              </div>
             </div>
-            {schoolAddress && (
-              <p className="text-xs text-slate-500 mt-1 flex items-start gap-1.5">
-                <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0 mt-0.5" />
-                <span className="leading-relaxed">{schoolAddress}</span>
-              </p>
-            )}
-          </div>
+          )}
 
-          {lat && lng && (
-            <a
-              href={`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-[5px] bg-[#0f3b7d] hover:bg-[#0c2f64] text-white text-xs font-bold transition shadow-xs shrink-0 cursor-pointer"
-              title="Mở Google Maps chỉ đường"
-            >
-              <Navigation className="w-3.5 h-3.5" />
-              <span>Chỉ đường Google Maps</span>
-              <ExternalLink className="w-3 h-3 opacity-70" />
-            </a>
+          {detail?.website && (
+            <div className="bg-slate-50 border border-slate-200/60 rounded-[5px] p-3 flex items-center justify-between gap-3 flex-wrap">
+              <div className="flex items-center gap-2 text-xs font-medium text-slate-600">
+                <Globe className="w-4 h-4 text-slate-500 shrink-0" />
+                <span>Website nhà trường:</span>
+              </div>
+              <a
+                href={detail.website.startsWith('http') ? detail.website : `https://${detail.website}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 text-blue-600 hover:text-blue-800 hover:underline font-bold text-xs sm:text-sm truncate max-w-full"
+              >
+                <span className="truncate">{detail.website}</span>
+                <ExternalLink className="w-3.5 h-3.5 shrink-0 opacity-80" />
+              </a>
+            </div>
           )}
         </div>
-
-        {/* Thông tin Hotline & Website */}
-        {(hotlinePhone || detail?.website) && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-3 border-t border-slate-100 text-xs">
-            {hotlinePhone && (
-              <div className="flex items-center gap-2 text-slate-700 bg-slate-50 p-2.5 rounded-[5px] border border-slate-200/60">
-                <Phone className="w-4 h-4 text-[#0f3b7d] shrink-0" />
-                <span className="text-slate-500 font-medium">Hotline Tuyển sinh:</span>
-                <strong className="text-slate-900 font-bold font-mono text-sm tracking-wide">
-                  {hotlinePhone}
-                </strong>
-              </div>
-            )}
-
-            {detail?.website && (
-              <div className="flex items-center gap-2 text-slate-700 bg-slate-50 p-2.5 rounded-[5px] border border-slate-200/60">
-                <Globe className="w-4 h-4 text-slate-500 shrink-0" />
-                <span className="text-slate-500 font-medium">Website:</span>
-                <a
-                  href={detail.website.startsWith('http') ? detail.website : `https://${detail.website}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-blue-600 hover:text-blue-800 hover:underline font-semibold truncate flex items-center gap-1"
-                >
-                  <span className="truncate">{detail.website}</span>
-                  <ExternalLink className="w-3 h-3 shrink-0" />
-                </a>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
+      )}
 
       {/* Khối 2: Ban Giám Hiệu nhà trường (chỉ hiện khi có dữ liệu) */}
       {(detail?.principal_name || detail?.vice_principal_name) && (
@@ -142,6 +116,11 @@ export const DetailTab: React.FC<DetailTabProps> = ({ waypoint, detail, isLoadin
                 <p className="font-bold text-slate-800 text-sm mt-0.5">
                   {detail.vice_principal_name}
                 </p>
+                {detail.vice_principal_phone && (
+                  <p className="text-xs text-slate-600 mt-1 font-mono font-medium">
+                    SĐT: {detail.vice_principal_phone}
+                  </p>
+                )}
               </div>
             )}
           </div>
