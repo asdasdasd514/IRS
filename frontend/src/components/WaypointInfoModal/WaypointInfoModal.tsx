@@ -3,6 +3,7 @@ import { X, Navigation, ExternalLink } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { Waypoint } from '../../types';
 import { waypointDetailApi, visitLogApi, ticketApi } from '../../services/api';
+import { getGoogleMapsPlaceUrl } from '../../utils/navigation';
 import { DetailTab } from './DetailTab';
 import { VisitLogTab } from './VisitLogTab';
 import { TicketTab } from './TicketTab';
@@ -81,9 +82,16 @@ export const WaypointInfoModal: React.FC<WaypointInfoModalProps> = ({
             )}
           </div>
           <div className="flex items-center gap-2 shrink-0">
-            {waypoint.lat && waypoint.lng && (
+            {(waypoint.google_map_url || (waypoint.lat && waypoint.lng)) && (
               <a
-                href={`https://www.google.com/maps/dir/?api=1&destination=${waypoint.lat},${waypoint.lng}`}
+                href={getGoogleMapsPlaceUrl({
+                  google_map_url: waypoint.google_map_url || (detail as any)?.google_map_url,
+                  notes: waypoint.notes || (detail as any)?.notes,
+                  name: waypoint.name,
+                  address: waypoint.address,
+                  lat: waypoint.lat,
+                  lng: waypoint.lng,
+                })}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[5px] bg-[#0f3b7d] hover:bg-[#0c2f64] text-white text-xs font-bold transition shadow-xs cursor-pointer"

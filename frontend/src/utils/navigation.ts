@@ -102,3 +102,40 @@ export function buildGoogleMapsMultiStopUrl(
 
   return `https://www.google.com/maps/dir/?api=1&origin=${originParam}&destination=${destParam}${waypointsParam}&travelmode=${travelMode}`;
 }
+
+/**
+ * Lấy URL Google Maps mở đúng thẻ địa điểm (Place Card) đầy đủ thông tin:
+ * - Ưu tiên 1: Link Google Maps chính chủ từ file Excel (maps.app.goo.gl/...)
+ * - Ưu tiên 2: Link Google Maps lưu trong notes
+ * - Ưu tiên 3: Tìm kiếm theo Tên trường + Địa chỉ (để mở ra đúng trang trường học có ảnh, website, sđt thay vì ghim tọa độ số thô)
+ */
+export function getGoogleMapsPlaceUrl(item: {
+  google_map_url?: string | null;
+  notes?: string | null;
+  name?: string | null;
+  address?: string | null;
+  lat?: number | null;
+  lng?: number | null;
+}): string {
+  if (item.google_map_url && item.google_map_url.trim()) {
+    return item.google_map_url.trim();
+  }
+
+  if (item.notes) {
+    const match = item.notes.match(/https?:\/\/(?:maps\.app\.goo\.gl|www\.google\.com\/maps|maps\.google\.com)\/[^\s]+/);
+    if (match) {
+      return match[0].trim();
+    }
+  }
+
+  if (item.name) {
+    const query = [item.name, item.address].filter(Boolean).join(' ');
+    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
+  }
+
+  if (item.lat != null && item.lng != null) {
+    return `https://www.google.com/maps/search/?api=1&query=${item.lat},${item.lng}`;
+  }
+
+  return 'https://www.google.com/maps';
+}

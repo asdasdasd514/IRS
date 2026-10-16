@@ -10,6 +10,7 @@ import {
   School
 } from 'lucide-react';
 import { schoolApi } from '../../../services/api';
+import { getGoogleMapsPlaceUrl } from '../../../utils/navigation';
 
 // Sửa lỗi hiển thị icon mặc định của Leaflet
 const schoolIcon = new L.Icon({
@@ -272,7 +273,7 @@ export function AdminMapPage() {
 
                         <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
                           <a
-                            href={`https://www.google.com/maps/search/?api=1&query=${school.lat},${school.lng}`}
+                            href={getGoogleMapsPlaceUrl(school)}
                             target="_blank"
                             rel="noreferrer"
                             className="text-[11px] font-bold text-blue-600 hover:underline flex items-center gap-1"

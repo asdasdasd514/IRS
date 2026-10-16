@@ -69,6 +69,7 @@ export interface Waypoint {
   vice_principal_phone?: string | null;
   admissions_info?: string | null;
   notes?: string | null;
+  google_map_url?: string | null;
   contact_name: string | null;
   contact_phone: string | null;
   created_at: string;
@@ -118,6 +119,7 @@ export interface School {
   };
   preferred_visit_hours?: string;
   notes?: string;
+  google_map_url?: string | null;
   field_notes?: FieldNote[];
   total_visits?: number;
   total_tickets?: number;

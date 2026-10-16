@@ -201,6 +201,7 @@ class SchoolBase(BaseModel):
     principal_phone: Optional[str] = None
     school_board: Optional[SchoolBoard] = None
     notes: Optional[str] = None
+    google_map_url: Optional[str] = None # Link Google Maps trực tiếp đến địa điểm
     field_notes: Optional[List[dict]] = None
     total_visits: int = 0  # Tổng số lần đã ghé qua từ trước tới nay (Counter Cache)
     total_tickets: int = 0  # Tổng số phiếu tuyển sinh đã thu thập được từ trước tới nay
@@ -230,6 +231,7 @@ class SchoolUpdate(BaseModel):
     principal_phone: Optional[str] = None
     school_board: Optional[SchoolBoard] = None
     notes: Optional[str] = None
+    google_map_url: Optional[str] = None
     field_notes: Optional[List[dict]] = None
     total_visits: Optional[int] = None
     total_tickets: Optional[int] = None
@@ -251,6 +253,7 @@ class WaypointBase(BaseModel):
     lat: float = Field(..., ge=-90, le=90)
     lng: float = Field(..., ge=-180, le=180)
     google_place_id: Optional[str] = None
+    google_map_url: Optional[str] = None # Link Google Maps trực tiếp đến địa điểm
     school_id: Optional[str] = None # Mã trường tham chiếu (nếu là trường học)
     address: Optional[str] = None
     type: WaypointType = WaypointType.SCHOOL
@@ -266,6 +269,7 @@ class WaypointUpdate(BaseModel):
     lat: Optional[float] = None
     lng: Optional[float] = None
     google_place_id: Optional[str] = None
+    google_map_url: Optional[str] = None
     school_id: Optional[str] = None
     address: Optional[str] = None
     type: Optional[WaypointType] = None

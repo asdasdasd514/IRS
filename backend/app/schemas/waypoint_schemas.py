@@ -36,6 +36,7 @@ class WaypointDetailBase(BaseModel):
     total_tickets: int = 0
     last_visited_at: Optional[datetime] = None
     notes: Optional[str] = None
+    google_map_url: Optional[str] = None
 
 
 class WaypointDetailCreate(WaypointDetailBase):
@@ -46,6 +47,7 @@ class WaypointDetailUpdate(BaseModel):
     description: Optional[str] = None
     image_url: Optional[str] = None
     website: Optional[str] = None
+    google_map_url: Optional[str] = None
     representative_name: Optional[str] = None
     representative_phone: Optional[str] = None
     principal_name: Optional[str] = None

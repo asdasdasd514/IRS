@@ -47,6 +47,7 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { schoolApi } from '../../../services/api';
 import { useAppStore } from '../../../store/useAppStore';
+import { getGoogleMapsPlaceUrl } from '../../../utils/navigation';
 import type { School, SchoolBlock } from '../../../types';
 
 // Cấu hình các Theme giao diện (Tone màu nền và viền trang)
@@ -2766,7 +2767,14 @@ function BlockRenderer({ block, school, isEditing, onOpenLightbox }: BlockRender
 
             {lat != null && lng != null && (
               <a
-                href={`https://www.google.com/maps/search/?api=1&query=${lat},${lng}`}
+                href={getGoogleMapsPlaceUrl({
+                  google_map_url: school.google_map_url,
+                  notes: school.notes,
+                  name: school.name,
+                  address: address,
+                  lat: lat,
+                  lng: lng,
+                })}
                 target="_blank"
                 rel="noreferrer"
                 className="px-3 py-1.5 rounded-[5px] bg-blue-50 text-blue-700 hover:bg-blue-100 text-xs font-semibold flex items-center gap-1.5 transition shrink-0"

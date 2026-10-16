@@ -8,7 +8,7 @@ import { MapView, BottomSheet, WaypointInfoModal, TripAuditHistoryModal, QuickNo
 import { tripApi, ticketApi, reportApi } from '../../services/api';
 import { useAppStore } from '../../store/useAppStore';
 import { useWatchPosition } from '../../hooks';
-import { calculateDistance, formatDistance, buildGoogleMapsDirectionsUrl } from '../../utils';
+import { calculateDistance, formatDistance, buildGoogleMapsDirectionsUrl, getGoogleMapsPlaceUrl } from '../../utils';
 import type { Waypoint } from '../../types';
 
 export const TripMapPage: React.FC = () => {
@@ -360,8 +360,14 @@ export const TripMapPage: React.FC = () => {
   // Navigate to Google Maps bám sát 100% tuyến đường đã định tuyến
   const handleNavigate = useCallback(
     (waypoint: Waypoint) => {
+      // Ưu tiên 1: Link Google Maps chính chủ từ file Excel mở trực tiếp trang địa điểm (Place Card)
+      if (waypoint.google_map_url) {
+        window.open(waypoint.google_map_url, '_blank', 'noopener,noreferrer');
+        return;
+      }
+
       if (!currentLocation) {
-        const url = `https://www.google.com/maps/dir/?api=1&destination=${waypoint.lat},${waypoint.lng}&travelmode=driving`;
+        const url = getGoogleMapsPlaceUrl(waypoint);
         window.open(url, '_blank', 'noopener,noreferrer');
         return;
       }

@@ -21,6 +21,7 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import { schoolApi, mapsApi } from '../../../services/api';
+import { getGoogleMapsPlaceUrl } from '../../../utils/navigation';
 
 export function AdminLocationsPage() {
   const navigate = useNavigate();
@@ -519,7 +520,7 @@ export function AdminLocationsPage() {
                         GPS: {Number(s.lat).toFixed(4)}, {Number(s.lng).toFixed(4)}
                       </span>
                       <a
-                        href={`https://www.google.com/maps/search/?api=1&query=${s.lat},${s.lng}`}
+                        href={getGoogleMapsPlaceUrl(s)}
                         target="_blank"
                         rel="noreferrer"
                         className="text-[11px] text-blue-600 hover:text-blue-800 flex items-center gap-1 font-medium hover:underline"
@@ -626,7 +627,7 @@ export function AdminLocationsPage() {
                           </span>
                           <div>
                             <a
-                              href={`https://www.google.com/maps/search/?api=1&query=${s.lat},${s.lng}`}
+                              href={getGoogleMapsPlaceUrl(s)}
                               target="_blank"
                               rel="noreferrer"
                               className="text-[11px] text-blue-600 hover:text-blue-800 hover:underline inline-flex items-center gap-1 font-medium"
