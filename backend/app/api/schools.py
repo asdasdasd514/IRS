@@ -81,12 +81,13 @@ async def create_school(
 
     # Đồng bộ trường học và ban giám hiệu
     p_name = dumped.get("principal_name")
-    p_phone = dumped.get("principal_phone")
+    vp_name = dumped.get("vice_principal_name")
+    c_phone = dumped.get("contact_phone")
     board = dumped.get("school_board") or {}
     if p_name and "principal_name" not in board:
         board["principal_name"] = p_name
-    if p_phone and "principal_phone" not in board:
-        board["principal_phone"] = p_phone
+    if vp_name and "vice_principal_name" not in board:
+        board["vice_principal_name"] = vp_name
     if board:
         dumped["school_board"] = board
 
@@ -107,6 +108,9 @@ async def create_school(
         "lat": float(school_doc["lat"]),
         "lng": float(school_doc["lng"]),
         "type": "SCHOOL",
+        "contact_phone": school_doc.get("contact_phone"),
+        "contact_email": school_doc.get("contact_email"),
+        "google_map_url": school_doc.get("google_map_url"),
         "is_deleted": False,
         "created_at": now,
         "updated_at": now
@@ -144,16 +148,42 @@ async def update_school(
         raise HTTPException(status_code=404, detail="Không tìm thấy trường học")
 
     update_dict = school_data.model_dump(exclude_unset=True)
+    
+    # Đồng bộ ban giám hiệu nếu có thay đổi
+    current_board = school.get("school_board") or {}
+    new_board = dict(current_board)
+    board_changed = False
+    
+    if "principal_name" in update_dict:
+        new_board["principal_name"] = update_dict["principal_name"]
+        board_changed = True
+    if "vice_principal_name" in update_dict:
+        new_board["vice_principal_name"] = update_dict["vice_principal_name"]
+        board_changed = True
     if "school_board" in update_dict and update_dict["school_board"] is not None:
-        # Giữ lại các trường cũ trong school_board nếu không bị ghi đè
-        current_board = school.get("school_board") or {}
-        update_dict["school_board"] = {**current_board, **update_dict["school_board"]}
+        new_board = {**new_board, **update_dict["school_board"]}
+        board_changed = True
+        
+    if board_changed:
+        update_dict["school_board"] = new_board
 
     update_dict["updated_at"] = now
     await db.schools.update_one(
         {"_id": school["_id"]},
         {"$set": update_dict}
     )
+
+    # Đồng bộ sang collection waypoints nếu có cập nhật thông tin vị trí / liên hệ
+    waypoint_sync = {}
+    for f in ["name", "address", "lat", "lng", "contact_phone", "contact_email", "google_map_url"]:
+        if f in update_dict and update_dict[f] is not None:
+            waypoint_sync[f] = update_dict[f]
+    if waypoint_sync:
+        waypoint_sync["updated_at"] = now
+        await db.waypoints.update_many(
+            {"$or": [{"school_id": school_id}, {"id": school_id}]},
+            {"$set": waypoint_sync}
+        )
 
     updated_school = await db.schools.find_one({"_id": school["_id"]})
     if "id" not in updated_school or not updated_school["id"]:

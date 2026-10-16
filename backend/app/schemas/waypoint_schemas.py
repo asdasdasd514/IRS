@@ -23,6 +23,8 @@ class WaypointDetailBase(BaseModel):
     website: Optional[str] = None # Website trường
     representative_name: Optional[str] = None # Người đại diện
     representative_phone: Optional[str] = None # SĐT người đại diện
+    contact_phone: Optional[str] = None # SĐT liên hệ trường
+    contact_email: Optional[str] = None # Email liên hệ trường (Contract_Email)
     principal_name: Optional[str] = None # Hiệu trưởng
     principal_phone: Optional[str] = None
     vice_principal_name: Optional[str] = None # Phó hiệu trưởng
@@ -48,6 +50,8 @@ class WaypointDetailUpdate(BaseModel):
     image_url: Optional[str] = None
     website: Optional[str] = None
     google_map_url: Optional[str] = None
+    contact_phone: Optional[str] = None
+    contact_email: Optional[str] = None
     representative_name: Optional[str] = None
     representative_phone: Optional[str] = None
     principal_name: Optional[str] = None
@@ -111,8 +115,14 @@ class VisitLogResponse(VisitLogBase):
 # ==================== PHẦN 3: Phiếu thu ====================
 class TicketBase(BaseModel):
     visit_number: Optional[int] = 1
-    tickets_collected: int = 0
+    tickets_collected: int = 1
+    student_name: Optional[str] = None
+    phone: Optional[str] = None
+    grade: Optional[str] = None
+    interested_majors: List[str] = []
     notes: Optional[str] = None
+    source: Optional[str] = None
+    answers: Optional[dict] = None
 
 
 class TicketCreate(TicketBase):
@@ -122,7 +132,13 @@ class TicketCreate(TicketBase):
 class TicketUpdate(BaseModel):
     visit_number: Optional[int] = None
     tickets_collected: Optional[int] = None
+    student_name: Optional[str] = None
+    phone: Optional[str] = None
+    grade: Optional[str] = None
+    interested_majors: Optional[List[str]] = None
     notes: Optional[str] = None
+    source: Optional[str] = None
+    answers: Optional[dict] = None
 
 
 class TicketResponse(TicketBase):
@@ -133,3 +149,4 @@ class TicketResponse(TicketBase):
     
     class Config:
         from_attributes = True
+        extra = "allow"

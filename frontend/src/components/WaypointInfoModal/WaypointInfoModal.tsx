@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Navigation, ExternalLink } from 'lucide-react';
+import { X, Navigation, ExternalLink, Pencil } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { Waypoint } from '../../types';
 import { waypointDetailApi, visitLogApi, ticketApi } from '../../services/api';
@@ -12,6 +12,7 @@ interface WaypointInfoModalProps {
   waypoint: Waypoint | null;
   isOpen: boolean;
   onClose: () => void;
+  onEditSchool?: (schoolId: string) => void;
 }
 
 type TabType = 'detail' | 'visits' | 'tickets';
@@ -20,6 +21,7 @@ export const WaypointInfoModal: React.FC<WaypointInfoModalProps> = ({
   waypoint,
   isOpen,
   onClose,
+  onEditSchool,
 }) => {
   const [activeTab, setActiveTab] = useState<TabType>('detail');
   const queryClient = useQueryClient();
@@ -102,6 +104,17 @@ export const WaypointInfoModal: React.FC<WaypointInfoModalProps> = ({
                 <span className="sm:hidden">Chỉ đường</span>
                 <ExternalLink className="w-3 h-3 opacity-70" />
               </a>
+            )}
+            {onEditSchool && (
+              <button
+                type="button"
+                onClick={() => onEditSchool(waypoint.school_id || waypoint.id)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[5px] bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200/80 text-xs font-bold transition shadow-xs cursor-pointer"
+                title="Chỉnh sửa thông tin trường học & tọa độ"
+              >
+                <Pencil className="w-3.5 h-3.5 text-amber-700" />
+                <span className="hidden sm:inline">Chỉnh sửa</span>
+              </button>
             )}
             <button
               onClick={onClose}

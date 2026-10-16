@@ -48,12 +48,40 @@ async def format_waypoint_response_async(db, wp: dict) -> WaypointResponse:
 
 
 async def find_any_point(db, point_id: str):
-    """Tìm điểm dừng trong campaign_waypoints hoặc waypoints"""
+    """Tìm điểm dừng trong campaign_waypoints hoặc waypoints hoặc schools"""
     wp = await db.campaign_waypoints.find_one({"id": point_id, "is_deleted": {"$ne": True}})
     is_campaign_wp = True
     if not wp:
         wp = await db.waypoints.find_one({"id": point_id, "is_deleted": {"$ne": True}})
         is_campaign_wp = False
+    if not wp:
+        wp = await db.waypoints.find_one({
+            "$or": [{"school_id": point_id}, {"id": point_id}],
+            "is_deleted": {"$ne": True}
+        })
+        is_campaign_wp = False
+    if not wp:
+        school = await db.schools.find_one({
+            "$or": [{"id": point_id}, {"code": point_id}],
+            "is_deleted": {"$ne": True}
+        })
+        if school:
+            wp = {
+                "id": school.get("id"),
+                "school_id": school.get("id"),
+                "name": school.get("name"),
+                "address": school.get("address"),
+                "lat": school.get("lat"),
+                "lng": school.get("lng"),
+                "type": "SCHOOL",
+                "notes": school.get("notes"),
+                "contact_phone": school.get("contact_phone"),
+                "contact_email": school.get("contact_email"),
+                "google_map_url": school.get("google_map_url"),
+                "created_at": school.get("created_at"),
+                "updated_at": school.get("updated_at")
+            }
+            is_campaign_wp = False
     return wp, is_campaign_wp
 
 
@@ -209,10 +237,12 @@ async def get_waypoint_detail(waypoint_id: str):
         website=school.get("website") if school else None,
         representative_name=school.get("representative_name") if school else None,
         representative_phone=school.get("representative_phone") if school else None,
-        principal_name=board.get("principal_name") if board else None,
-        principal_phone=board.get("principal_phone") if board else None,
-        vice_principal_name=board.get("vice_principal_name") if board else None,
-        vice_principal_phone=board.get("vice_principal_phone") if board else None,
+        contact_phone=school.get("contact_phone") if school else wp.get("contact_phone"),
+        contact_email=school.get("contact_email") if school else wp.get("contact_email"),
+        principal_name=(board.get("principal_name") if board else None) or (school.get("principal_name") if school else None),
+        principal_phone=(board.get("principal_phone") if board else None) or (school.get("principal_phone") if school else None),
+        vice_principal_name=(board.get("vice_principal_name") if board else None) or (school.get("vice_principal_name") if school else None),
+        vice_principal_phone=(board.get("vice_principal_phone") if board else None) or (school.get("vice_principal_phone") if school else None),
         admissions_info=school.get("admissions_info") if school else None,
         our_contact_person=school.get("our_contact_person") if school else None,
         our_contact_role=school.get("our_contact_role") if school else None,
@@ -222,6 +252,7 @@ async def get_waypoint_detail(waypoint_id: str):
         total_tickets=school.get("total_tickets", 0) if school else 0,
         last_visited_at=ensure_utc(school.get("last_visited_at")) if school else None,
         notes=wp.get("notes") or (school.get("notes") if school else None),
+        google_map_url=school.get("google_map_url") if school else wp.get("google_map_url"),
         created_at=ensure_utc(wp.get("created_at")),
         updated_at=ensure_utc(wp.get("updated_at"))
     )

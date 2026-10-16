@@ -197,8 +197,12 @@ class SchoolBase(BaseModel):
     images: List[str] = [] # Bộ sưu tập ảnh
     representative_name: Optional[str] = None # Người đại diện
     representative_phone: Optional[str] = None # SĐT đại diện
+    contact_phone: Optional[str] = None # SĐT liên hệ chính của trường (Hotline)
+    contact_email: Optional[str] = None # Email liên hệ chính của trường (Contract_Email)
     principal_name: Optional[str] = None
     principal_phone: Optional[str] = None
+    vice_principal_name: Optional[str] = None
+    vice_principal_phone: Optional[str] = None
     school_board: Optional[SchoolBoard] = None
     notes: Optional[str] = None
     google_map_url: Optional[str] = None # Link Google Maps trực tiếp đến địa điểm
@@ -227,8 +231,12 @@ class SchoolUpdate(BaseModel):
     images: Optional[List[str]] = None
     representative_name: Optional[str] = None
     representative_phone: Optional[str] = None
+    contact_phone: Optional[str] = None
+    contact_email: Optional[str] = None
     principal_name: Optional[str] = None
     principal_phone: Optional[str] = None
+    vice_principal_name: Optional[str] = None
+    vice_principal_phone: Optional[str] = None
     school_board: Optional[SchoolBoard] = None
     notes: Optional[str] = None
     google_map_url: Optional[str] = None
@@ -256,6 +264,8 @@ class WaypointBase(BaseModel):
     google_map_url: Optional[str] = None # Link Google Maps trực tiếp đến địa điểm
     school_id: Optional[str] = None # Mã trường tham chiếu (nếu là trường học)
     address: Optional[str] = None
+    contact_phone: Optional[str] = None
+    contact_email: Optional[str] = None
     type: WaypointType = WaypointType.SCHOOL
     notes: Optional[str] = None
 
@@ -272,6 +282,8 @@ class WaypointUpdate(BaseModel):
     google_map_url: Optional[str] = None
     school_id: Optional[str] = None
     address: Optional[str] = None
+    contact_phone: Optional[str] = None
+    contact_email: Optional[str] = None
     type: Optional[WaypointType] = None
     notes: Optional[str] = None
 
@@ -287,6 +299,7 @@ class WaypointResponse(WaypointBase):
     school: Optional[SchoolResponse] = None # Thông tin chi tiết trường tham chiếu từ schools
     contact_name: Optional[str] = None
     contact_phone: Optional[str] = None
+    contact_email: Optional[str] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 

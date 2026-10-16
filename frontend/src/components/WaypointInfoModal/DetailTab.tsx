@@ -3,6 +3,7 @@ import {
   School,
   ExternalLink,
   Phone,
+  Mail,
   Globe,
   GraduationCap,
   Building2,
@@ -39,21 +40,21 @@ export const DetailTab: React.FC<DetailTabProps> = ({ detail, isLoading }) => {
     );
   }
 
-  const hotlinePhone = detail?.principal_phone || detail?.representative_phone;
+  const hotlinePhone = detail?.contact_phone || detail?.representative_phone || detail?.principal_phone;
   const phoneLines = hotlinePhone
     ? hotlinePhone.split(/\s*[\/\n]\s*/).map((l) => l.trim()).filter(Boolean)
     : [];
 
   return (
     <div className="space-y-4 pb-6 h-[500px] overflow-y-auto pr-1">
-      {/* Khối 1: Hotline Tuyển sinh & Website */}
-      {(phoneLines.length > 0 || detail?.website) && (
+      {/* Khối 1: Số Điện Thoại Liên Hệ (Contact Phone), Email (Contract_Email) & Website */}
+      {(phoneLines.length > 0 || detail?.contact_email || detail?.website) && (
         <div className="bg-white border border-slate-200/80 rounded-[5px] p-4 shadow-xs space-y-3">
           {phoneLines.length > 0 && (
             <div className="bg-gradient-to-r from-blue-50/80 to-slate-50 border border-blue-100 rounded-[5px] p-3.5 space-y-2">
               <div className="flex items-center gap-2 text-xs font-bold text-[#0f3b7d] uppercase tracking-wider">
                 <Phone className="w-4 h-4 text-[#0f3b7d] shrink-0" />
-                <span>Hotline Tuyển Sinh</span>
+                <span>Số Điện Thoại Liên Hệ (Contract_Phone)</span>
               </div>
               <div className="space-y-1.5 pl-6">
                 {phoneLines.map((line, idx) => (
@@ -65,6 +66,21 @@ export const DetailTab: React.FC<DetailTabProps> = ({ detail, isLoading }) => {
                   </div>
                 ))}
               </div>
+            </div>
+          )}
+
+          {detail?.contact_email && (
+            <div className="bg-slate-50 border border-slate-200/60 rounded-[5px] p-3 flex items-center justify-between gap-3 flex-wrap">
+              <div className="flex items-center gap-2 text-xs font-medium text-slate-600">
+                <Mail className="w-4 h-4 text-[#0f3b7d] shrink-0" />
+                <span>Email liên hệ (Contract_Email):</span>
+              </div>
+              <a
+                href={`mailto:${detail.contact_email}`}
+                className="inline-flex items-center gap-1.5 text-blue-600 hover:text-blue-800 hover:underline font-bold text-xs sm:text-sm truncate max-w-full font-mono"
+              >
+                <span className="truncate">{detail.contact_email}</span>
+              </a>
             </div>
           )}
 
@@ -100,11 +116,16 @@ export const DetailTab: React.FC<DetailTabProps> = ({ detail, isLoading }) => {
             {detail.principal_name && (
               <div className="p-3 bg-slate-50 rounded-[5px] border border-slate-200/60">
                 <span className="text-[11px] font-semibold text-slate-400 block uppercase tracking-wider">
-                  Hiệu trưởng / Đại diện
+                  Hiệu trưởng
                 </span>
                 <p className="font-bold text-slate-800 text-sm mt-0.5">
                   {detail.principal_name}
                 </p>
+                {detail.principal_phone && (
+                  <p className="text-xs text-slate-600 mt-1 font-mono font-medium">
+                    SĐT: {detail.principal_phone}
+                  </p>
+                )}
               </div>
             )}
 

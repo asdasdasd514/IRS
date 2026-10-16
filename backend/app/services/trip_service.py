@@ -45,13 +45,23 @@ async def sync_waypoint_to_school(db, school_id: str, updated_fields: dict):
     
     if "principal_name" in updated_fields and updated_fields["principal_name"]:
         board_updates["school_board.principal_name"] = updated_fields["principal_name"]
+        school_set["principal_name"] = updated_fields["principal_name"]
     if "principal_phone" in updated_fields and updated_fields["principal_phone"]:
         board_updates["school_board.principal_phone"] = updated_fields["principal_phone"]
+        school_set["principal_phone"] = updated_fields["principal_phone"]
     if "vice_principal_name" in updated_fields and updated_fields["vice_principal_name"]:
         board_updates["school_board.vice_principal_name"] = updated_fields["vice_principal_name"]
+        school_set["vice_principal_name"] = updated_fields["vice_principal_name"]
     if "vice_principal_phone" in updated_fields and updated_fields["vice_principal_phone"]:
         board_updates["school_board.vice_principal_phone"] = updated_fields["vice_principal_phone"]
+        school_set["vice_principal_phone"] = updated_fields["vice_principal_phone"]
         
+    if "contact_phone" in updated_fields and updated_fields["contact_phone"]:
+        school_set["contact_phone"] = updated_fields["contact_phone"]
+    if "contact_email" in updated_fields and updated_fields["contact_email"]:
+        school_set["contact_email"] = updated_fields["contact_email"]
+    if "google_map_url" in updated_fields and updated_fields["google_map_url"]:
+        school_set["google_map_url"] = updated_fields["google_map_url"]
     if "representative_name" in updated_fields and updated_fields["representative_name"]:
         school_set["representative_name"] = updated_fields["representative_name"]
     if "representative_phone" in updated_fields and updated_fields["representative_phone"]:
@@ -136,6 +146,7 @@ class TripService:
                 "visit_duration_minutes": wp_dict.get("visit_duration_minutes", 60),
                 "contact_name": wp_dict.get("contact_name"),
                 "contact_phone": wp_dict.get("contact_phone"),
+                "contact_email": wp_dict.get("contact_email"),
                 "is_visited": False,
                 "visited_at": None,
                 "notes": wp_dict.get("notes"),
@@ -195,6 +206,7 @@ class TripService:
                     "assigned_staff": dest.get("assigned_staff") or [],
                     "contact_name": dest.get("contact_name") or dest.get("representative_name"),
                     "contact_phone": dest.get("contact_phone") or dest.get("representative_phone"),
+                    "contact_email": dest.get("contact_email"),
                     "is_deleted": False,
                     "created_at": now,
                     "updated_at": now
@@ -862,6 +874,7 @@ class TripService:
                 "assigned_staff": dest.get("assigned_staff") or [],
                 "contact_name": dest.get("contact_name"),
                 "contact_phone": dest.get("contact_phone"),
+                "contact_email": dest.get("contact_email"),
                 "is_deleted": False,
                 "created_at": now,
                 "updated_at": now

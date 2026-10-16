@@ -6,7 +6,7 @@ import {
   Search,
   MapPin,
   Phone,
-  User,
+  Mail,
   ExternalLink,
   Navigation,
   CheckCircle2,
@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { schoolApi, mapsApi } from '../../../services/api';
 import { getGoogleMapsPlaceUrl } from '../../../utils/navigation';
+import { WaypointInfoModal } from '../../../components/WaypointInfoModal/WaypointInfoModal';
 
 export function AdminLocationsPage() {
   const navigate = useNavigate();
@@ -30,6 +31,7 @@ export function AdminLocationsPage() {
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingSchool, setEditingSchool] = useState<any | null>(null);
+  const [selectedSchoolForDetail, setSelectedSchoolForDetail] = useState<any | null>(null);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>(() => {
     try {
       const saved = localStorage.getItem('irs_location_view_mode');
@@ -55,8 +57,10 @@ export function AdminLocationsPage() {
     address: '',
     lat: '',
     lng: '',
+    contact_phone: '',
+    contact_email: '',
     principal_name: '',
-    principal_phone: '',
+    vice_principal_name: '',
     website: '',
     notes: '',
   });
@@ -206,8 +210,10 @@ export function AdminLocationsPage() {
       address: '',
       lat: '',
       lng: '',
+      contact_phone: '',
+      contact_email: '',
       principal_name: '',
-      principal_phone: '',
+      vice_principal_name: '',
       website: '',
       notes: '',
     });
@@ -225,8 +231,10 @@ export function AdminLocationsPage() {
       address: school.address || '',
       lat: school.lat ? String(school.lat) : '',
       lng: school.lng ? String(school.lng) : '',
+      contact_phone: school.contact_phone || school.principal_phone || school.representative_phone || '',
+      contact_email: school.contact_email || '',
       principal_name: school.principal_name || school.school_board?.principal_name || '',
-      principal_phone: school.principal_phone || school.school_board?.principal_phone || '',
+      vice_principal_name: school.vice_principal_name || school.school_board?.vice_principal_name || '',
       website: school.website || '',
       notes: school.notes || '',
     });
@@ -254,8 +262,10 @@ export function AdminLocationsPage() {
       address: formData.address.trim() || undefined,
       lat: parseFloat(formData.lat),
       lng: parseFloat(formData.lng),
+      contact_phone: formData.contact_phone.trim() || undefined,
+      contact_email: formData.contact_email.trim() || undefined,
       principal_name: formData.principal_name.trim() || undefined,
-      principal_phone: formData.principal_phone.trim() || undefined,
+      vice_principal_name: formData.vice_principal_name.trim() || undefined,
       website: formData.website.trim() || undefined,
       notes: formData.notes.trim() || undefined,
     };
@@ -277,8 +287,10 @@ export function AdminLocationsPage() {
         address: '',
         lat: '',
         lng: '',
+        contact_phone: '',
+        contact_email: '',
         principal_name: '',
-        principal_phone: '',
+        vice_principal_name: '',
         website: '',
         notes: '',
       });
@@ -432,7 +444,7 @@ export function AdminLocationsPage() {
                   <div
                     onClick={() => navigate(`/admin/locations/${s.id || s._id}`)}
                     className="flex items-start gap-3 cursor-pointer group/title flex-1 min-w-0"
-                    title="Bấm để xem & tùy biến trang thông tin chi tiết của trường"
+                    title="Bấm để mở hồ sơ trường học & chỉnh sửa chi tiết"
                   >
                     <div className="w-10 h-10 rounded-[5px] bg-blue-50 text-[#0f3b7d] group-hover/title:bg-[#0f3b7d] group-hover/title:text-white transition flex items-center justify-center shrink-0 font-bold text-sm">
                       <Building2 className="w-5 h-5" />
@@ -448,7 +460,7 @@ export function AdminLocationsPage() {
                           </span>
                         )}
                         <span className="text-[10.5px] text-blue-600 font-medium opacity-0 group-hover/title:opacity-100 transition flex items-center gap-0.5">
-                          Xem trang trường →
+                          Hồ sơ & CMS trường →
                         </span>
                       </div>
                     </div>
@@ -458,9 +470,9 @@ export function AdminLocationsPage() {
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        navigate(`/admin/locations/${s.id || s._id}`);
+                        setSelectedSchoolForDetail(s);
                       }}
-                      title="Xem & Tùy biến trang trường học (WordPress Builder)"
+                      title="Xem thông tin chi tiết & lịch sử trường"
                       className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition"
                     >
                       <Eye className="w-4 h-4" />
@@ -494,21 +506,11 @@ export function AdminLocationsPage() {
                     <span className="line-clamp-2">{s.address || 'Chưa cập nhật địa chỉ'}</span>
                   </div>
 
-                  {(s.principal_name || s.school_board?.principal_name) && (
-                    <div className="flex items-center gap-2">
-                      <User className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                      <span>
-                        Hiệu trưởng:{' '}
-                        <strong>{s.principal_name || s.school_board?.principal_name}</strong>
-                      </span>
-                    </div>
-                  )}
-
-                  {(s.principal_phone || s.school_board?.principal_phone) && (
+                  {s.contact_phone && (
                     <div className="flex items-center gap-2">
                       <Phone className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                       <span className="text-[#0f3b7d] font-semibold">
-                        {s.principal_phone || s.school_board?.principal_phone}
+                        {s.contact_phone}
                       </span>
                     </div>
                   )}
@@ -561,8 +563,7 @@ export function AdminLocationsPage() {
               <thead>
                 <tr className="bg-slate-50/90 border-b border-slate-200/80 text-slate-500 font-bold uppercase tracking-wider text-[11px]">
                   <th className="py-3.5 px-4">Tên trường & Mã</th>
-                  <th className="py-3.5 px-4 min-w-[220px]">Địa chỉ chi tiết</th>
-                  <th className="py-3.5 px-4 min-w-[180px]">Ban Giám Hiệu</th>
+                  <th className="py-3.5 px-4 min-w-[260px]">Địa chỉ chi tiết</th>
                   <th className="py-3.5 px-4 min-w-[170px]">Tọa độ GPS & Map</th>
                   <th className="py-3.5 px-4">Website</th>
                   <th className="py-3.5 px-4 text-right">Thao tác</th>
@@ -578,7 +579,7 @@ export function AdminLocationsPage() {
                       <div
                         onClick={() => navigate(`/admin/locations/${s.id || s._id}`)}
                         className="flex items-center gap-3 cursor-pointer group/school-item"
-                        title="Bấm để xem & tùy biến trang thông tin chi tiết của trường"
+                        title="Bấm để mở hồ sơ trường học & chỉnh sửa chi tiết"
                       >
                         <div className="w-8 h-8 rounded-lg bg-blue-50 text-[#0f3b7d] group-hover/school-item:bg-[#0f3b7d] group-hover/school-item:text-white transition flex items-center justify-center shrink-0 font-bold">
                           <Building2 className="w-4 h-4" />
@@ -599,24 +600,6 @@ export function AdminLocationsPage() {
                       <div className="flex items-start gap-1.5 text-slate-600 max-w-sm">
                         <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0 mt-0.5" />
                         <span className="line-clamp-2">{s.address || 'Chưa cập nhật'}</span>
-                      </div>
-                    </td>
-                    <td className="py-3.5 px-4">
-                      <div className="space-y-0.5">
-                        {(s.principal_name || s.school_board?.principal_name) ? (
-                          <p className="font-semibold text-slate-800 flex items-center gap-1">
-                            <User className="w-3 h-3 text-slate-400 shrink-0" />
-                            <span>{s.principal_name || s.school_board?.principal_name}</span>
-                          </p>
-                        ) : (
-                          <span className="text-slate-400 italic text-[11px]">Chưa cập nhật</span>
-                        )}
-                        {(s.principal_phone || s.school_board?.principal_phone) && (
-                          <p className="text-[#0f3b7d] font-semibold flex items-center gap-1">
-                            <Phone className="w-3 h-3 text-slate-400 shrink-0" />
-                            <span>{s.principal_phone || s.school_board?.principal_phone}</span>
-                          </p>
-                        )}
                       </div>
                     </td>
                     <td className="py-3.5 px-4">
@@ -659,8 +642,8 @@ export function AdminLocationsPage() {
                     <td className="py-3.5 px-4 text-right">
                       <div className="flex items-center justify-end gap-1">
                         <button
-                          onClick={() => navigate(`/admin/locations/${s.id || s._id}`)}
-                          title="Xem & Tùy biến trang trường học (WordPress Builder)"
+                          onClick={() => setSelectedSchoolForDetail(s)}
+                          title="Xem thông tin chi tiết & lịch sử trường"
                           className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition"
                         >
                           <Eye className="w-4 h-4" />
@@ -910,25 +893,56 @@ export function AdminLocationsPage() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 mb-1">
-                      Hiệu trưởng / Ban giám hiệu
+                      Hiệu trưởng
                     </label>
                     <input
                       type="text"
                       value={formData.principal_name}
                       onChange={(e) => setFormData({ ...formData, principal_name: e.target.value })}
                       className="w-full px-3.5 py-2 text-xs bg-slate-50 border border-slate-300 rounded-[5px] focus:bg-white outline-none"
+                      placeholder="Họ tên Hiệu trưởng"
                     />
                   </div>
 
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 mb-1">
-                      Số điện thoại liên hệ
+                      Phó hiệu trưởng
                     </label>
                     <input
                       type="text"
-                      value={formData.principal_phone}
-                      onChange={(e) => setFormData({ ...formData, principal_phone: e.target.value })}
+                      value={formData.vice_principal_name}
+                      onChange={(e) => setFormData({ ...formData, vice_principal_name: e.target.value })}
                       className="w-full px-3.5 py-2 text-xs bg-slate-50 border border-slate-300 rounded-[5px] focus:bg-white outline-none"
+                      placeholder="Họ tên Phó hiệu trưởng"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      Số điện thoại liên hệ (Contract_Phone)
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.contact_phone}
+                      onChange={(e) => setFormData({ ...formData, contact_phone: e.target.value })}
+                      className="w-full px-3.5 py-2 text-xs bg-slate-50 border border-slate-300 rounded-[5px] focus:bg-white outline-none"
+                      placeholder="Ví dụ: 0251 382 8107"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1 flex items-center gap-1">
+                      <Mail className="w-3.5 h-3.5 text-slate-400" />
+                      <span>Email liên hệ (Contract_Email)</span>
+                    </label>
+                    <input
+                      type="email"
+                      value={formData.contact_email}
+                      onChange={(e) => setFormData({ ...formData, contact_email: e.target.value })}
+                      className="w-full px-3.5 py-2 text-xs bg-slate-50 border border-slate-300 rounded-[5px] focus:bg-white outline-none font-mono"
+                      placeholder="c3.truong@dongnai.edu.vn"
                     />
                   </div>
                 </div>
@@ -942,6 +956,7 @@ export function AdminLocationsPage() {
                     value={formData.website}
                     onChange={(e) => setFormData({ ...formData, website: e.target.value })}
                     className="w-full px-3.5 py-2 text-xs bg-slate-50 border border-slate-300 rounded-[5px] focus:bg-white outline-none"
+                    placeholder="https://..."
                   />
                 </div>
               </div>
@@ -966,6 +981,40 @@ export function AdminLocationsPage() {
             </form>
           </div>
         </div>
+      )}
+      {/* Modal Chi tiết & Lịch sử trường học (WaypointInfoModal) */}
+      {selectedSchoolForDetail && (
+        <WaypointInfoModal
+          waypoint={{
+            id: selectedSchoolForDetail.id || selectedSchoolForDetail._id,
+            school_id: selectedSchoolForDetail.id || selectedSchoolForDetail._id,
+            name: selectedSchoolForDetail.name,
+            address: selectedSchoolForDetail.address || null,
+            lat: selectedSchoolForDetail.lat,
+            lng: selectedSchoolForDetail.lng,
+            type: 'SCHOOL',
+            google_map_url: selectedSchoolForDetail.google_map_url || null,
+            code: selectedSchoolForDetail.code || null,
+            notes: selectedSchoolForDetail.notes || null,
+            contact_name: null,
+            contact_phone: selectedSchoolForDetail.contact_phone || null,
+            contact_email: selectedSchoolForDetail.contact_email || null,
+            google_place_id: null,
+            is_visited: false,
+            visit_order: 1,
+            visited_at: null,
+            created_at: selectedSchoolForDetail.created_at || new Date().toISOString(),
+          }}
+          isOpen={!!selectedSchoolForDetail}
+          onClose={() => setSelectedSchoolForDetail(null)}
+          onEditSchool={(schoolId) => {
+            const found = schools.find((item) => (item.id || item._id) === schoolId) || selectedSchoolForDetail;
+            setSelectedSchoolForDetail(null);
+            if (found) {
+              handleOpenEditModal(found);
+            }
+          }}
+        />
       )}
     </div>
   );

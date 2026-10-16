@@ -72,6 +72,7 @@ export interface Waypoint {
   google_map_url?: string | null;
   contact_name: string | null;
   contact_phone: string | null;
+  contact_email?: string | null;
   created_at: string;
   updated_at?: string | null;
 }
@@ -107,6 +108,8 @@ export interface School {
   blocks?: SchoolBlock[];
   representative_name?: string;
   representative_phone?: string;
+  contact_phone?: string | null;
+  contact_email?: string | null;
   principal_name?: string;
   principal_phone?: string;
   vice_principal_name?: string;
@@ -150,6 +153,7 @@ export interface CreateWaypointInput {
   notes?: string;
   contact_name?: string;
   contact_phone?: string;
+  contact_email?: string;
 }
 
 // Waypoint History Types - DEPRECATED - Thay bằng 3 phần mới
@@ -164,8 +168,11 @@ export interface WaypointDetail {
   description?: string;
   image_url?: string;
   website?: string;
+  google_map_url?: string | null;
   representative_name?: string;
   representative_phone?: string;
+  contact_phone?: string | null;
+  contact_email?: string | null;
   principal_name?: string;
   principal_phone?: string;
   vice_principal_name?: string;
@@ -187,6 +194,9 @@ export interface WaypointDetailFormData {
   description?: string;
   image_url?: string;
   website?: string;
+  google_map_url?: string;
+  contact_phone?: string;
+  contact_email?: string;
   representative_name?: string;
   representative_phone?: string;
   principal_name?: string;
@@ -239,6 +249,12 @@ export interface Ticket {
   visit_number: number;
   tickets_collected: number;
   collection_date: string;
+  student_name?: string;
+  phone?: string;
+  grade?: string;
+  interested_majors?: string[];
+  source?: string;
+  answers?: Record<string, any>;
   notes?: string;
   created_at: string;
 }
@@ -246,6 +262,12 @@ export interface Ticket {
 export interface TicketFormData {
   visit_number: number;
   tickets_collected: number;
+  student_name?: string;
+  phone?: string;
+  grade?: string;
+  interested_majors?: string[];
+  source?: string;
+  answers?: Record<string, any>;
   notes?: string;
 }
 
