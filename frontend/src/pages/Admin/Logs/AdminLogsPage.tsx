@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
   ClipboardList,
   Search,
@@ -14,8 +14,8 @@ import {
   Layers,
   MapPin,
 } from 'lucide-react';
-import { logApi, tripApi } from '../../../services/api';
-import type { SystemLog, TripListItem } from '../../../types';
+import { logApi, authApi } from '../../../services/api';
+import type { SystemLog, User } from '../../../types';
 
 const parseApiDate = (dateStr?: string | Date | null): Date | null => {
   if (!dateStr) return null;
@@ -83,18 +83,18 @@ export function AdminLogsPage() {
 
   // Filters
   const [search, setSearch] = useState('');
-  const [selectedTripId, setSelectedTripId] = useState('');
+  const [selectedUserId, setSelectedUserId] = useState('');
   const [expandedLogIds, setExpandedLogIds] = useState<Record<string, boolean>>({});
   const [showOnlyMatches, setShowOnlyMatches] = useState<Record<string, boolean>>({});
 
-  // Danh sách các chuyến đi để lọc
-  const [trips, setTrips] = useState<TripListItem[]>([]);
+  // Danh sách người dùng để lọc
+  const [users, setUsers] = useState<User[]>([]);
 
-  // Tải danh sách chuyến đi cho dropdown lọc
+  // Tải danh sách người dùng cho dropdown lọc
   useEffect(() => {
-    tripApi.getTrips()
-      .then((data) => setTrips(Array.isArray(data) ? data : []))
-      .catch((err) => console.error('Error fetching trips for filter:', err));
+    authApi.listUsers()
+      .then((data) => setUsers(Array.isArray(data) ? data : []))
+      .catch((err) => console.error('Error fetching users for filter:', err));
   }, []);
 
   // Tải dữ liệu nhật ký hệ thống
@@ -108,24 +108,10 @@ export function AdminLogsPage() {
         skip: 0,
       };
       if (search.trim()) params.search = search.trim();
-      if (selectedTripId) params.trip_id = selectedTripId;
+      if (selectedUserId) params.user_id = selectedUserId;
 
       const res = await logApi.getLogs(params);
       setLogs(res.items || []);
-
-      // Nếu người dùng đang tìm kiếm, tự động mở rộng tất cả các phiên để thấy ngay thao tác chi tiết
-      if (search.trim()) {
-        const allMatches: Record<string, boolean> = {};
-        (res.items || []).forEach((item: SystemLog) => {
-          allMatches[item.id] = true;
-        });
-        setExpandedLogIds(allMatches);
-      } else if (res.items && res.items.length > 0) {
-        setExpandedLogIds((prev) => ({
-          ...prev,
-          [res.items[0].id]: true,
-        }));
-      }
     } catch (err) {
       console.error('Error loading system logs:', err);
     } finally {
@@ -139,7 +125,115 @@ export function AdminLogsPage() {
       fetchLogs();
     }, 250);
     return () => clearTimeout(timer);
-  }, [search, selectedTripId]);
+  }, [search, selectedUserId]);
+
+  // Gom nhóm các logs theo [Ngày + Module nghiệp vụ (action_type / trip_id)]
+  const groupedLogs = useMemo(() => {
+    if (!logs || logs.length === 0) return [];
+
+    const map = new Map<string, any>();
+
+    logs.forEach((log) => {
+      const d = parseApiDate(log.created_at || log.updated_at);
+      const dateKey = d
+        ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+        : 'unknown_date';
+
+      // Khóa gom nhóm: Ngày + Module nghiệp vụ (chiến dịch, trường học, tài khoản, chuyến đi...)
+      const moduleKey = log.trip_id || log.action_type || log.title || 'GENERAL';
+      const groupKey = `${dateKey}__${moduleKey}`;
+
+      // Chuẩn hóa và đính kèm thông tin actor vào từng sub-activity
+      const logActivities = (log.activities || []).map((act: any) => ({
+        ...act,
+        actor: act.actor || log.actor,
+      }));
+
+      if (!map.has(groupKey)) {
+        map.set(groupKey, {
+          ...log,
+          id: groupKey, // Khóa định danh duy nhất cho thẻ gom nhóm
+          groupKey,
+          dateKey,
+          activities: [...logActivities],
+          actors: log.actor ? [log.actor] : [],
+          earliest_at: log.created_at,
+          latest_at: log.updated_at || log.created_at,
+        });
+      } else {
+        const existing = map.get(groupKey);
+        existing.activities.push(...logActivities);
+
+        if (log.actor && !existing.actors.some((a: any) => a.user_id === log.actor?.user_id)) {
+          existing.actors.push(log.actor);
+        }
+
+        const existingLatest = parseApiDate(existing.latest_at)?.getTime() || 0;
+        const currentLatest = parseApiDate(log.updated_at || log.created_at)?.getTime() || 0;
+        if (currentLatest > existingLatest) {
+          existing.latest_at = log.updated_at || log.created_at;
+        }
+
+        const existingEarliest = parseApiDate(existing.earliest_at)?.getTime() || Infinity;
+        const currentEarliest = parseApiDate(log.created_at)?.getTime() || Infinity;
+        if (currentEarliest < existingEarliest) {
+          existing.earliest_at = log.created_at;
+        }
+      }
+    });
+
+    const result = Array.from(map.values());
+
+    // Sắp xếp các thao tác con bên trong: Mới nhất lên trước
+    result.forEach((group) => {
+      // Loại bỏ trùng lặp sub-activity nếu có cùng id
+      const seenIds = new Set<string>();
+      group.activities = group.activities.filter((act: any) => {
+        if (!act.id) return true;
+        if (seenIds.has(act.id)) return false;
+        seenIds.add(act.id);
+        return true;
+      });
+
+      group.activities.sort((a: any, b: any) => {
+        const timeA = parseApiDate(a.timestamp)?.getTime() || 0;
+        const timeB = parseApiDate(b.timestamp)?.getTime() || 0;
+        return timeB - timeA;
+      });
+      group.total_actions = group.activities.length;
+    });
+
+    // Sắp xếp các thẻ nhóm: Thẻ có thao tác mới nhất lên trên cùng
+    result.sort((a, b) => {
+      const timeA = parseApiDate(a.latest_at)?.getTime() || 0;
+      const timeB = parseApiDate(b.latest_at)?.getTime() || 0;
+      return timeB - timeA;
+    });
+
+    return result;
+  }, [logs]);
+
+  // Tự động mở nhóm đầu tiên hoặc tất cả khi tìm kiếm
+  useEffect(() => {
+    if (search.trim()) {
+      const allMatches: Record<string, boolean> = {};
+      groupedLogs.forEach((item) => {
+        allMatches[item.id] = true;
+      });
+      setExpandedLogIds(allMatches);
+    } else if (groupedLogs.length > 0) {
+      setExpandedLogIds((prev) => {
+        if (Object.keys(prev).length === 0) {
+          return { [groupedLogs[0].id]: true };
+        }
+        return prev;
+      });
+    }
+  }, [search, groupedLogs]);
+
+  const totalActivitiesCount = useMemo(() => {
+    return groupedLogs.reduce((acc, g) => acc + (g.activities?.length || 0), 0);
+  }, [groupedLogs]);
 
   const toggleExpand = (logId: string) => {
     setExpandedLogIds((prev) => ({
@@ -150,7 +244,7 @@ export function AdminLogsPage() {
 
   const expandAll = () => {
     const all: Record<string, boolean> = {};
-    logs.forEach((l) => { all[l.id] = true; });
+    groupedLogs.forEach((l) => { all[l.id] = true; });
     setExpandedLogIds(all);
   };
 
@@ -361,20 +455,25 @@ export function AdminLogsPage() {
             />
           </div>
 
-          {/* Lọc theo Chuyến đi */}
+          {/* Lọc theo Người dùng */}
           <div className="md:col-span-3">
             <select
-              aria-label="Lọc theo chuyến đi"
-              value={selectedTripId}
-              onChange={(e) => setSelectedTripId(e.target.value)}
+              aria-label="Lọc theo người dùng"
+              value={selectedUserId}
+              onChange={(e) => setSelectedUserId(e.target.value)}
               className="w-full px-3 py-2 text-xs font-semibold rounded-[5px] bg-slate-50 border border-slate-200 text-slate-700 focus:bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-hidden transition cursor-pointer"
             >
-              <option value="">▼ Tất cả chuyến đi</option>
-              {trips.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name} {t.trip_code ? `[${t.trip_code}]` : ''}
-                </option>
-              ))}
+              <option value="">▼ Tất cả người dùng</option>
+              {users.map((u) => {
+                const uid = u.id || (u as any)._id;
+                const name = u.full_name || u.username;
+                const roleLabel = u.role === 'admin' ? 'Admin' : 'Cán bộ';
+                return (
+                  <option key={uid} value={uid}>
+                    {name} ({roleLabel})
+                  </option>
+                );
+              })}
             </select>
           </div>
 
@@ -395,7 +494,9 @@ export function AdminLogsPage() {
 
         {/* Nút Mở rộng / Thu gọn tất cả */}
         <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-xs text-slate-500">
-          <span>Hiển thị <strong>{logs.length}</strong> phiên thao tác gần nhất</span>
+          <span>
+            Hiển thị <strong>{groupedLogs.length}</strong> chuyên mục thao tác (<strong>{totalActivitiesCount}</strong> thao tác)
+          </span>
           <div className="flex items-center gap-3">
             <button
               type="button"
@@ -416,13 +517,13 @@ export function AdminLogsPage() {
         </div>
       </div>
 
-      {/* Danh sách Nhật ký (Mô hình Log Cha - Con) */}
+      {/* Danh sách Nhật ký (Mô hình Gom nhóm theo Ngày & Chuyên mục) */}
       {loading ? (
         <div className="p-12 bg-white rounded-[5px] border border-slate-200 flex flex-col items-center justify-center text-slate-400">
           <div className="w-8 h-8 border-3 border-blue-600/30 border-t-[#0f3b7d] rounded-full animate-spin mb-3" />
           <p className="text-xs font-semibold">Đang tải nhật ký hệ thống...</p>
         </div>
-      ) : logs.length === 0 ? (
+      ) : groupedLogs.length === 0 ? (
         <div className="p-12 bg-white rounded-[5px] border border-slate-200 text-center space-y-2">
           <div className="w-12 h-12 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center mx-auto mb-2">
             <ClipboardList className="w-6 h-6" />
@@ -434,7 +535,7 @@ export function AdminLogsPage() {
         </div>
       ) : (
         <div className="space-y-3">
-          {logs.map((sessionLog) => {
+          {groupedLogs.map((sessionLog) => {
             const isExpanded = Boolean(expandedLogIds[sessionLog.id]);
             const badge = getSessionBadge(sessionLog.action_type);
             const BadgeIcon = badge.icon;
@@ -501,17 +602,22 @@ export function AdminLogsPage() {
                               Admin
                             </span>
                           )}
+                          {sessionLog.actors && sessionLog.actors.length > 1 && (
+                            <span className="text-[10px] text-slate-500 font-normal">
+                              (+{sessionLog.actors.length - 1} người khác)
+                            </span>
+                          )}
                         </div>
 
                         {/* Thời gian thực hiện */}
                         <div className="flex items-center gap-1">
                           <Clock className="w-3.5 h-3.5 text-slate-400" />
-                          <span>{formatLogTime(sessionLog.created_at)}</span>
+                          <span>{formatLogTime(sessionLog.latest_at || sessionLog.updated_at || sessionLog.created_at)}</span>
                         </div>
 
                         {/* Tổng số thao tác */}
-                        <div className="text-slate-400">
-                          <span>({activities.length} thao tác)</span>
+                        <div className="text-slate-500 font-semibold">
+                          <span>({activities.length} thao tác trong ngày)</span>
                         </div>
                       </div>
                     </div>
@@ -561,12 +667,12 @@ export function AdminLogsPage() {
 
                     <div className="flex items-center justify-between">
                       <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                        Chi tiết các thao tác trong phiên ({displayedActivities.length}/{activities.length})
+                        Chi tiết các thao tác trong ngày ({displayedActivities.length}/{activities.length})
                       </p>
                     </div>
 
                     <div className="space-y-2 border-l-2 border-slate-200 ml-2.5 pl-3">
-                      {displayedActivities.map((sub, idx) => {
+                      {displayedActivities.map((sub: any, idx: number) => {
                         const isMatch = isSubMatch(sub);
                         const subBadge = getSubActionBadge(sub.action);
                         const SubIcon = subBadge.icon;
@@ -600,10 +706,15 @@ export function AdminLogsPage() {
                                 <p className="text-xs font-semibold text-slate-800 leading-snug">
                                   {highlightText(sub.description, search)}
                                 </p>
-                                <div className="flex items-center gap-2 mt-0.5">
+                                <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                                   <span className="text-[10px] text-slate-400">
                                     Lúc {formatSubTime(sub.timestamp)}
                                   </span>
+                                  {sub.actor && sessionLog.actors && sessionLog.actors.length > 1 && (
+                                    <span className="text-[10px] text-slate-600 bg-slate-100 px-1.5 py-0.2 rounded font-medium">
+                                      {sub.actor.full_name || sub.actor.username}
+                                    </span>
+                                  )}
                                   {isMatch && (
                                     <span className="px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 text-[9px] font-bold">
                                       Khớp từ khóa

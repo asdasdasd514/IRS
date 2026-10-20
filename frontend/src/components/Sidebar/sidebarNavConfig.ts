@@ -43,7 +43,7 @@ export const NAV_GROUPS: NavGroupConfig[] = [
       },
       {
         id: 'staff-campaigns',
-        label: 'Chiến dịch',
+        label: 'Triển khai chiến dịch',
         path: '/staff/campaigns',
         icon: Route,
         roles: ['admin', 'staff'],

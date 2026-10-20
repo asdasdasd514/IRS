@@ -22,7 +22,6 @@ import {
   Users,
   UserCheck,
   UserPlus,
-  Car,
   Shield,
   AlertCircle,
   LayoutGrid,
@@ -32,9 +31,11 @@ import {
   ChevronDown,
   Calendar,
   Edit,
-  GripVertical,
+  Navigation,
+  CheckCircle2,
   FileSpreadsheet,
   QrCode,
+  GripVertical,
 } from 'lucide-react';
 import { campaignApi, schoolApi, authApi, tripApi } from '../../../services/api';
 import { CampaignSurveyModal } from './CampaignSurveyModal';
@@ -371,7 +372,6 @@ export function AdminCampaignsPage() {
   const [systemUsers, setSystemUsers] = useState<any[]>([]);
 
   // Thông tin phân công đoàn công tác
-  const [vehiclePlate, setVehiclePlate] = useState('');
   const [teamNotes, setTeamNotes] = useState('');
   const [savingAssignment, setSavingAssignment] = useState(false);
   const [campaignSearch, setCampaignSearch] = useState('');
@@ -419,6 +419,9 @@ export function AdminCampaignsPage() {
   const [allocatedTrips, setAllocatedTrips] = useState<any[]>([]);
   const [editingTripId, setEditingTripId] = useState<string | null>(null);
 
+  // Prompt hỏi phân công ngay sau khi tạo chiến dịch thành công
+  const [createdCampaignPrompt, setCreatedCampaignPrompt] = useState<any | null>(null);
+
   const handleSetViewMode = (mode: 'grid' | 'list') => {
     setViewMode(mode);
     try {
@@ -448,6 +451,172 @@ export function AdminCampaignsPage() {
   const [startPoint, setStartPoint] = useState<any | null>(null);
   const [routePreview, setRoutePreview] = useState<any | null>(null);
 
+  // 3 Chế độ chọn Điểm xuất phát: 'gps' | 'custom' | 'schools'
+  const [startPointMode, setStartPointMode] = useState<'gps' | 'custom' | 'schools'>('gps');
+  const [isGettingGps, setIsGettingGps] = useState(false);
+  const [gpsError, setGpsError] = useState<string | null>(null);
+  const [gpsSuccess, setGpsSuccess] = useState<string | null>(null);
+
+  // State cho Địa điểm tùy ý
+  const [customName, setCustomName] = useState('');
+  const [customAddress, setCustomAddress] = useState('');
+  const [customMapLink, setCustomMapLink] = useState('');
+  const [customLat, setCustomLat] = useState('');
+  const [customLng, setCustomLng] = useState('');
+  const [isParsingCustomLink, setIsParsingCustomLink] = useState(false);
+  const [customParseError, setCustomParseError] = useState<string | null>(null);
+  const [customParseSuccess, setCustomParseSuccess] = useState<string | null>(null);
+
+  const handleGetCurrentGps = () => {
+    if (!navigator.geolocation) {
+      setGpsError('Trình duyệt của bạn không hỗ trợ định vị GPS.');
+      return;
+    }
+
+    setIsGettingGps(true);
+    setGpsError(null);
+    setGpsSuccess(null);
+
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const lat = Number(pos.coords.latitude.toFixed(6));
+        const lng = Number(pos.coords.longitude.toFixed(6));
+        const accuracy = Math.round(pos.coords.accuracy || 0);
+
+        setStartPoint({
+          school_id: null,
+          id: 'CURRENT_GPS',
+          name: 'Vị trí GPS hiện tại của tôi',
+          address: `Tọa độ thiết bị: ${lat}, ${lng} (Độ chính xác: ±${accuracy}m)`,
+          lat,
+          lng,
+        });
+
+        setIsGettingGps(false);
+        setGpsSuccess(`Đã xác định vị trí GPS thành công: ${lat}, ${lng}`);
+      },
+      (err) => {
+        setIsGettingGps(false);
+        let msg = 'Không thể lấy vị trí GPS.';
+        if (err.code === 1) {
+          msg = 'Bạn đã từ chối quyền truy cập vị trí trên trình duyệt. Vui lòng cho phép quyền vị trí hoặc chọn mục "Địa điểm tùy ý".';
+        } else if (err.code === 2) {
+          msg = 'Không thể xác định tọa độ GPS lúc này. Vui lòng thử lại hoặc chọn mục "Địa điểm tùy ý".';
+        } else if (err.code === 3) {
+          msg = 'Hết thời gian chờ tín hiệu GPS. Vui lòng thử lại.';
+        }
+        setGpsError(msg);
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 15000,
+        maximumAge: 10000,
+      }
+    );
+  };
+
+  const handleExtractCustomLocationCoords = () => {
+    if (!customMapLink.trim()) {
+      setCustomParseError('Vui lòng nhập link Google Maps hoặc chuỗi tọa độ.');
+      return;
+    }
+
+    setCustomParseError(null);
+    setCustomParseSuccess(null);
+    setIsParsingCustomLink(true);
+
+    const input = customMapLink.trim();
+
+    // 1. Tọa độ trực tiếp dạng: 10.9574, 106.8427
+    const coordMatch = input.match(/^(-?\d+\.\d+)[,\s]+(-?\d+\.\d+)$/);
+    if (coordMatch) {
+      const latVal = parseFloat(coordMatch[1]);
+      const lngVal = parseFloat(coordMatch[2]);
+      setCustomLat(latVal.toFixed(6));
+      setCustomLng(lngVal.toFixed(6));
+      setCustomParseSuccess(`✓ Đã nhận diện tọa độ: ${latVal.toFixed(6)}, ${lngVal.toFixed(6)}`);
+      setIsParsingCustomLink(false);
+
+      setStartPoint({
+        school_id: null,
+        id: 'CUSTOM_LOCATION',
+        name: customName.trim() || 'Địa điểm tập trung tùy chọn',
+        address: customAddress.trim() || `Tọa độ: ${latVal.toFixed(6)}, ${lngVal.toFixed(6)}`,
+        lat: latVal,
+        lng: lngVal,
+      });
+      return;
+    }
+
+    // 2. !3d<lat>!4d<lng>
+    const lat3d = input.match(/!3d(-?\d+\.?\d*)/);
+    const lng4d = input.match(/!4d(-?\d+\.?\d*)/);
+    if (lat3d && lng4d) {
+      const latVal = parseFloat(lat3d[1]);
+      const lngVal = parseFloat(lng4d[1]);
+      setCustomLat(latVal.toFixed(6));
+      setCustomLng(lngVal.toFixed(6));
+      setCustomParseSuccess(`✓ Đã trích xuất chính xác vị trí: ${latVal.toFixed(6)}, ${lngVal.toFixed(6)}`);
+      setIsParsingCustomLink(false);
+
+      setStartPoint({
+        school_id: null,
+        id: 'CUSTOM_LOCATION',
+        name: customName.trim() || 'Địa điểm tập trung tùy chọn',
+        address: customAddress.trim() || `Tọa độ: ${latVal.toFixed(6)}, ${lngVal.toFixed(6)}`,
+        lat: latVal,
+        lng: lngVal,
+      });
+      return;
+    }
+
+    // 3. @<lat>,<lng>
+    const atMatch = input.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
+    if (atMatch) {
+      const latVal = parseFloat(atMatch[1]);
+      const lngVal = parseFloat(atMatch[2]);
+      setCustomLat(latVal.toFixed(6));
+      setCustomLng(lngVal.toFixed(6));
+      setCustomParseSuccess(`✓ Đã nhận diện tọa độ bản đồ: ${latVal.toFixed(6)}, ${lngVal.toFixed(6)}`);
+      setIsParsingCustomLink(false);
+
+      setStartPoint({
+        school_id: null,
+        id: 'CUSTOM_LOCATION',
+        name: customName.trim() || 'Địa điểm tập trung tùy chọn',
+        address: customAddress.trim() || `Tọa độ: ${latVal.toFixed(6)}, ${lngVal.toFixed(6)}`,
+        lat: latVal,
+        lng: lngVal,
+      });
+      return;
+    }
+
+    setIsParsingCustomLink(false);
+    setCustomParseError('Không tìm thấy tọa độ trong link Google Maps. Bạn có thể nhập trực tiếp số Vĩ độ và Kinh độ vào 2 ô bên dưới.');
+  };
+
+  const handleApplyCustomLocation = () => {
+    const latNum = parseFloat(customLat);
+    const lngNum = parseFloat(customLng);
+
+    if (isNaN(latNum) || isNaN(lngNum) || latNum < -90 || latNum > 90 || lngNum < -180 || lngNum > 180) {
+      alert('Vui lòng nhập tọa độ (Vĩ độ & Kinh độ) hợp lệ.');
+      return;
+    }
+
+    const name = customName.trim() || 'Địa điểm tập trung tùy chọn';
+    const address = customAddress.trim() || `Tọa độ: ${latNum.toFixed(5)}, ${lngNum.toFixed(5)}`;
+
+    setStartPoint({
+      school_id: null,
+      id: 'CUSTOM_LOCATION',
+      name,
+      address,
+      lat: latNum,
+      lng: lngNum,
+    });
+  };
+
   const resetWizard = () => {
     setWizardStep(1);
     setEditingCampaignId(null);
@@ -458,6 +627,16 @@ export function AdminCampaignsPage() {
     setStartPoint(null);
     setRoutePreview(null);
     setWizardLoading(false);
+    setStartPointMode('gps');
+    setGpsError(null);
+    setGpsSuccess(null);
+    setCustomName('');
+    setCustomAddress('');
+    setCustomMapLink('');
+    setCustomLat('');
+    setCustomLng('');
+    setCustomParseError(null);
+    setCustomParseSuccess(null);
   };
 
   const loadCampaigns = async () => {
@@ -708,6 +887,7 @@ export function AdminCampaignsPage() {
         resetWizard();
         await loadCampaigns();
         setActionMessage(`Đã tạo thành công chiến dịch "${created.name}" với lộ trình tối ưu!`);
+        setCreatedCampaignPrompt(created);
       }
     } catch (err: any) {
       alert(err.response?.data?.detail || 'Không thể lưu chiến dịch');
@@ -933,7 +1113,6 @@ export function AdminCampaignsPage() {
           ? targetCamp.end_date.split('T')[0]
           : ''
       );
-      setVehiclePlate(camp.team?.vehicle_plate || targetCamp.team?.vehicle_plate || '');
       setTeamNotes(camp.team?.notes || targetCamp.team?.notes || '');
 
       // Trích xuất phân công các điểm dừng
@@ -949,7 +1128,6 @@ export function AdminCampaignsPage() {
       setEditingTripId(null);
       setAllocationStartDate('');
       setAllocationEndDate('');
-      setVehiclePlate('');
       setTeamNotes('');
       setStopAssignments({});
     }
@@ -969,7 +1147,6 @@ export function AdminCampaignsPage() {
     setEditingTripId(null);
     setAllocationStartDate('');
     setAllocationEndDate('');
-    setVehiclePlate('');
     setTeamNotes('');
     setStopAssignments({});
     setSelectedStopIdForAllocation('START');
@@ -1149,7 +1326,6 @@ export function AdminCampaignsPage() {
           email: s.email || '',
         })),
         stop_assignments: stopAssignments,
-        vehicle_plate: vehiclePlate.trim() || undefined,
         notes: teamNotes.trim() || undefined,
       };
 
@@ -1406,7 +1582,6 @@ export function AdminCampaignsPage() {
         c.trip_code?.toLowerCase().includes(q) ||
         c.id?.toLowerCase().includes(q) ||
         c.team?.leader_name?.toLowerCase().includes(q) ||
-        c.team?.vehicle_plate?.toLowerCase().includes(q) ||
         c.team?.members?.some((m: any) => m.name?.toLowerCase().includes(q))
     );
   }, [allocatedCampaigns, allocatedSearch]);
@@ -2059,14 +2234,6 @@ export function AdminCampaignsPage() {
                           </span>
                         </div>
 
-                        {camp.team?.vehicle_plate && (
-                          <div className="flex items-center gap-2 text-slate-700">
-                            <Car className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                            <span className="text-slate-400 font-medium">Xe:</span>
-                            <span className="font-semibold text-slate-800">{camp.team.vehicle_plate}</span>
-                          </div>
-                        )}
-
                         {members.length > 0 && (
                           <div className="pt-1">
                             <div className="flex items-center gap-1.5 text-slate-400 text-[11px] mb-1">
@@ -2199,11 +2366,6 @@ export function AdminCampaignsPage() {
                               <div className="flex items-center gap-1.5 text-slate-800 font-bold">
                                 <Shield className="w-3.5 h-3.5 text-[#0f3b7d] shrink-0" />
                                 <span className="truncate max-w-[150px]">{camp.team?.leader_name || 'Chưa chỉ định'}</span>
-                                {camp.team?.vehicle_plate && (
-                                  <span className="text-slate-400 font-normal text-[11px] flex items-center gap-1">
-                                    <Car className="w-3 h-3" /> {camp.team.vehicle_plate}
-                                  </span>
-                                )}
                               </div>
                               {members.length > 0 && (
                                 <div className="text-[11px] text-slate-500 flex items-center gap-1">
@@ -2868,55 +3030,262 @@ export function AdminCampaignsPage() {
               )}
 
               {wizardStep === 3 && (
-                <div className="space-y-3">
-                  <p className="text-xs text-slate-500">
-                    Chọn địa điểm làm điểm bắt đầu cho đoàn công tác tuyển sinh:
-                  </p>
-
-                  <div className="relative">
-                    <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3.5" />
-                    <input
-                      type="text"
-                      value={schoolSearch}
-                      onChange={(e) => setSchoolSearch(e.target.value)}
-                      placeholder="Tìm điểm bắt đầu theo tên hoặc địa chỉ..."
-                      className="w-full pl-10 pr-3 py-2.5 text-sm bg-slate-50 border border-slate-300 rounded-[5px] focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-[#0f3b7d] outline-none"
-                    />
+                <div className="space-y-3.5">
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-900">Chọn điểm xuất phát</h3>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      Chọn 1 trong 3 phương thức để thiết lập nơi đoàn xuất phát cho lộ trình tuyển sinh:
+                    </p>
                   </div>
 
+                  {/* 3 Nút chọn chế độ (Segmented control) */}
+                  <div className="grid grid-cols-3 gap-1.5 p-1 bg-slate-100 rounded-lg border border-slate-200">
+                    <button
+                      type="button"
+                      onClick={() => setStartPointMode('gps')}
+                      className={`flex items-center justify-center gap-1.5 py-2 px-2 text-xs font-semibold rounded-md transition-all ${
+                        startPointMode === 'gps'
+                          ? 'bg-[#0f3b7d] text-white shadow-sm'
+                          : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+                      }`}
+                    >
+                      <Navigation className="w-3.5 h-3.5" />
+                      <span>GPS hiện tại</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setStartPointMode('custom')}
+                      className={`flex items-center justify-center gap-1.5 py-2 px-2 text-xs font-semibold rounded-md transition-all ${
+                        startPointMode === 'custom'
+                          ? 'bg-[#0f3b7d] text-white shadow-sm'
+                          : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+                      }`}
+                    >
+                      <MapPin className="w-3.5 h-3.5" />
+                      <span>Địa điểm tùy ý</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setStartPointMode('schools')}
+                      className={`flex items-center justify-center gap-1.5 py-2 px-2 text-xs font-semibold rounded-md transition-all ${
+                        startPointMode === 'schools'
+                          ? 'bg-[#0f3b7d] text-white shadow-sm'
+                          : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+                      }`}
+                    >
+                      <Building2 className="w-3.5 h-3.5" />
+                      <span>Danh sách trường</span>
+                    </button>
+                  </div>
+
+                  {/* Thông tin điểm xuất phát đang chọn (nếu có) */}
                   {startPoint && (
-                    <div className="p-2.5 bg-blue-50 border border-blue-200 rounded-[5px] flex items-center justify-between text-xs">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <MapPin className="w-4 h-4 text-[#0f3b7d] shrink-0" />
-                        <span className="text-slate-600 font-semibold">Điểm xuất phát:</span>
-                        <span className="font-bold text-[#0f3b7d] truncate">{startPoint.name}</span>
-                        {startPoint.address && <span className="text-slate-500 truncate text-[11px]">({startPoint.address})</span>}
+                    <div className="p-3 bg-emerald-50/80 border border-emerald-200 rounded-lg flex items-center justify-between text-xs transition">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="w-7 h-7 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+                          <CheckCircle2 className="w-4 h-4" />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-slate-500 font-medium">Đã chọn:</span>
+                            <span className="font-bold text-slate-900 truncate">{startPoint.name}</span>
+                          </div>
+                          <p className="text-[11px] text-slate-500 truncate mt-0.5">
+                            {startPoint.address || `${Number(startPoint.lat).toFixed(5)}, ${Number(startPoint.lng).toFixed(5)}`}
+                          </p>
+                        </div>
                       </div>
-                      <span className="text-[10px] font-bold bg-[#0f3b7d] text-white px-2 py-0.5 rounded shrink-0">
-                        Đang chọn
-                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setStartPoint(null)}
+                        className="text-[11px] font-semibold text-rose-600 hover:text-rose-800 hover:bg-rose-50 px-2 py-1 rounded transition shrink-0 ml-2"
+                      >
+                        Bỏ chọn
+                      </button>
                     </div>
                   )}
 
-                  {/* Hiển thị dạng LIST cố định chiều cao 380px để không co giãn khi tìm kiếm */}
-                  <div className="h-[380px] overflow-y-auto space-y-2 pr-1 border border-slate-100 rounded-[5px] p-1 bg-slate-50/30">
-                    {schools.filter((school) => {
-                      const q = schoolSearch.trim().toLowerCase();
-                      if (!q) return true;
-                      return (
-                        school.name?.toLowerCase().includes(q) ||
-                        school.address?.toLowerCase().includes(q) ||
-                        school.code?.toLowerCase().includes(q)
-                      );
-                    }).length === 0 ? (
-                      <div className="h-full flex flex-col items-center justify-center rounded-[5px] border border-dashed border-slate-200 bg-white p-6 text-center text-sm text-slate-500">
-                        <Building2 className="w-8 h-8 text-slate-300 mb-2" />
-                        <p className="font-semibold text-slate-700">Không tìm thấy địa điểm nào</p>
-                        <p className="text-xs text-slate-400 mt-1">Thử tìm kiếm với từ khóa khác</p>
+                  {/* NỘI DUNG TÙY CHỌN 1: GPS HIỆN TẠI */}
+                  {startPointMode === 'gps' && (
+                    <div className="p-4 bg-slate-50/60 border border-slate-200 rounded-lg space-y-3.5">
+                      <div className="flex items-start gap-3">
+                        <div className="w-9 h-9 rounded-full bg-blue-100 text-[#0f3b7d] flex items-center justify-center shrink-0 mt-0.5">
+                          <Navigation className="w-5 h-5" />
+                        </div>
+                        <div className="text-xs">
+                          <h4 className="font-bold text-slate-800 text-sm">Định vị GPS từ thiết bị</h4>
+                          <p className="text-slate-500 mt-0.5 leading-relaxed">
+                            Lấy tọa độ vị trí thực tế của bạn trên thiết bị hiện tại để làm điểm bắt đầu xuất phát tuyến đường.
+                          </p>
+                        </div>
                       </div>
-                    ) : (
-                      schools
-                        .filter((school) => {
+
+                      <button
+                        type="button"
+                        onClick={handleGetCurrentGps}
+                        disabled={isGettingGps}
+                        className="w-full flex items-center justify-center gap-2 py-2.5 px-4 bg-[#0f3b7d] hover:bg-[#0c2f64] text-white font-semibold text-sm rounded-lg shadow-sm transition disabled:opacity-60 cursor-pointer"
+                      >
+                        <Navigation className={`w-4 h-4 ${isGettingGps ? 'animate-spin' : ''}`} />
+                        <span>{isGettingGps ? 'Đang lấy tọa độ GPS từ vệ tinh/thiết bị...' : 'Lấy vị trí GPS hiện tại của tôi'}</span>
+                      </button>
+
+                      {gpsSuccess && (
+                        <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-md text-xs text-emerald-800 flex items-center gap-2">
+                          <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
+                          <span>{gpsSuccess}</span>
+                        </div>
+                      )}
+
+                      {gpsError && (
+                        <div className="p-3 bg-rose-50 border border-rose-200 rounded-md text-xs text-rose-700 flex items-start gap-2">
+                          <AlertCircle className="w-4 h-4 shrink-0 text-rose-500 mt-0.5" />
+                          <span className="leading-relaxed">{gpsError}</span>
+                        </div>
+                      )}
+
+                      <div className="text-[11px] text-slate-400 bg-white p-2.5 rounded border border-slate-100">
+                        💡 <strong>Lưu ý:</strong> Vui lòng bấm <em>"Cho phép" (Allow)</em> khi trình duyệt hỏi quyền truy cập vị trí. Nếu đang dùng máy bàn hoặc bị chặn vị trí, bạn có thể chuyển qua mục <strong>"Địa điểm tùy ý"</strong> hoặc <strong>"Danh sách trường"</strong>.
+                      </div>
+                    </div>
+                  )}
+
+                  {/* NỘI DUNG TÙY CHỌN 2: ĐỊA ĐIỂM TÙY Ý */}
+                  {startPointMode === 'custom' && (
+                    <div className="p-4 bg-slate-50/60 border border-slate-200 rounded-lg space-y-3">
+                      <div>
+                        <h4 className="font-bold text-slate-800 text-sm">Điểm tập trung hoặc địa chỉ bất kỳ</h4>
+                        <p className="text-xs text-slate-500 mt-0.5">
+                          Dán link Google Maps hoặc nhập tọa độ địa điểm tập trung (quán cà phê, bến xe, văn phòng...):
+                        </p>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                        <div>
+                          <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                            Tên điểm xuất phát <span className="text-rose-500">*</span>
+                          </label>
+                          <input
+                            type="text"
+                            value={customName}
+                            onChange={(e) => setCustomName(e.target.value)}
+                            placeholder="VD: Quán Cà phê Điểm Hẹn, Trụ sở A..."
+                            className="w-full px-3 py-2 text-xs bg-white border border-slate-300 rounded-md focus:ring-2 focus:ring-blue-500/20 focus:border-[#0f3b7d] outline-none"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                            Địa chỉ mô tả (tùy chọn)
+                          </label>
+                          <input
+                            type="text"
+                            value={customAddress}
+                            onChange={(e) => setCustomAddress(e.target.value)}
+                            placeholder="VD: Số 123 Đường 30/4, P. Quyết Thắng..."
+                            className="w-full px-3 py-2 text-xs bg-white border border-slate-300 rounded-md focus:ring-2 focus:ring-blue-500/20 focus:border-[#0f3b7d] outline-none"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Dán link Google Maps hoặc chuỗi tọa độ */}
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                          Dán Link Google Maps hoặc Tọa độ
+                        </label>
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            value={customMapLink}
+                            onChange={(e) => setCustomMapLink(e.target.value)}
+                            placeholder="VD: https://maps.app.goo.gl/... hoặc 10.9574, 106.8427"
+                            className="flex-1 px-3 py-2 text-xs bg-white border border-slate-300 rounded-md focus:ring-2 focus:ring-blue-500/20 focus:border-[#0f3b7d] outline-none font-mono"
+                          />
+                          <button
+                            type="button"
+                            onClick={handleExtractCustomLocationCoords}
+                            disabled={isParsingCustomLink || !customMapLink.trim()}
+                            className="px-3 py-2 bg-slate-800 hover:bg-slate-900 text-white font-semibold text-xs rounded-md shadow-sm transition disabled:opacity-50 shrink-0 cursor-pointer"
+                          >
+                            {isParsingCustomLink ? 'Đang trích xuất...' : 'Trích xuất tọa độ'}
+                          </button>
+                        </div>
+                      </div>
+
+                      {customParseSuccess && (
+                        <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-md text-xs text-emerald-800 flex items-center gap-2">
+                          <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
+                          <span>{customParseSuccess}</span>
+                        </div>
+                      )}
+
+                      {customParseError && (
+                        <div className="p-2.5 bg-rose-50 border border-rose-200 rounded-md text-xs text-rose-700 flex items-center gap-2">
+                          <AlertCircle className="w-4 h-4 shrink-0 text-rose-500" />
+                          <span>{customParseError}</span>
+                        </div>
+                      )}
+
+                      {/* Hoặc nhập thủ công tọa độ */}
+                      <div className="p-2.5 bg-white border border-slate-200 rounded-md space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11px] font-bold text-slate-700">Tọa độ địa lý (WGS84):</span>
+                          <span className="text-[10px] text-slate-400">Có thể chỉnh sửa trực tiếp</span>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <span className="text-[10px] text-slate-500 block mb-0.5">Vĩ độ (Latitude)</span>
+                            <input
+                              type="number"
+                              step="any"
+                              value={customLat}
+                              onChange={(e) => setCustomLat(e.target.value)}
+                              placeholder="VD: 10.9574"
+                              className="w-full px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-300 rounded focus:bg-white focus:border-[#0f3b7d] outline-none font-mono"
+                            />
+                          </div>
+                          <div>
+                            <span className="text-[10px] text-slate-500 block mb-0.5">Kinh độ (Longitude)</span>
+                            <input
+                              type="number"
+                              step="any"
+                              value={customLng}
+                              onChange={(e) => setCustomLng(e.target.value)}
+                              placeholder="VD: 106.8427"
+                              className="w-full px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-300 rounded focus:bg-white focus:border-[#0f3b7d] outline-none font-mono"
+                            />
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={handleApplyCustomLocation}
+                          className="w-full mt-1 py-2 px-3 bg-[#0f3b7d] hover:bg-[#0c2f64] text-white font-semibold text-xs rounded transition flex items-center justify-center gap-1.5 cursor-pointer"
+                        >
+                          <Check className="w-3.5 h-3.5" />
+                          <span>Xác nhận & áp dụng tọa độ này làm điểm xuất phát</span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* NỘI DUNG TÙY CHỌN 3: DANH SÁCH TRƯỜNG */}
+                  {startPointMode === 'schools' && (
+                    <div className="space-y-2.5">
+                      <div className="relative">
+                        <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+                        <input
+                          type="text"
+                          value={schoolSearch}
+                          onChange={(e) => setSchoolSearch(e.target.value)}
+                          placeholder="Tìm điểm bắt đầu theo tên trường hoặc địa chỉ..."
+                          className="w-full pl-9 pr-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-md focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-[#0f3b7d] outline-none"
+                        />
+                      </div>
+
+                      {/* Hiển thị dạng LIST cố định chiều cao 340px */}
+                      <div className="h-[340px] overflow-y-auto space-y-1.5 pr-1 border border-slate-200 rounded-lg p-1.5 bg-slate-50/40">
+                        {schools.filter((school) => {
                           const q = schoolSearch.trim().toLowerCase();
                           if (!q) return true;
                           return (
@@ -2924,63 +3293,81 @@ export function AdminCampaignsPage() {
                             school.address?.toLowerCase().includes(q) ||
                             school.code?.toLowerCase().includes(q)
                           );
-                        })
-                        .map((school) => {
-                          const isSelected = Boolean(
-                            (startPoint?.school_id && startPoint.school_id === school.id) ||
-                            (startPoint?.id && startPoint.id === school.id) ||
-                            (startPoint?.lat != null && startPoint?.lng != null && Math.abs(Number(startPoint.lat) - Number(school.lat)) < 0.0001 && Math.abs(Number(startPoint.lng) - Number(school.lng)) < 0.0001)
-                          );
-                          return (
-                            <div
-                              key={school.id}
-                              onClick={() => setStartPoint({
-                                school_id: school.id,
-                                id: school.id,
-                                name: school.name,
-                                address: school.address || 'Không có địa chỉ',
-                                lat: Number(school.lat),
-                                lng: Number(school.lng),
-                              })}
-                              className={`cursor-pointer rounded-[5px] border p-3 flex items-center justify-between gap-3 transition ${
-                                isSelected
-                                  ? 'border-[#0f3b7d] bg-blue-50/70 shadow-2xs ring-1 ring-[#0f3b7d]'
-                                  : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50/80'
-                              }`}
-                            >
-                              <div className="flex items-center gap-3 min-w-0">
+                        }).length === 0 ? (
+                          <div className="h-full flex flex-col items-center justify-center rounded-lg border border-dashed border-slate-200 bg-white p-6 text-center text-xs text-slate-500">
+                            <Building2 className="w-7 h-7 text-slate-300 mb-2" />
+                            <p className="font-semibold text-slate-700">Không tìm thấy trường nào</p>
+                            <p className="text-[11px] text-slate-400 mt-0.5">Thử tìm kiếm với từ khóa khác</p>
+                          </div>
+                        ) : (
+                          schools
+                            .filter((school) => {
+                              const q = schoolSearch.trim().toLowerCase();
+                              if (!q) return true;
+                              return (
+                                school.name?.toLowerCase().includes(q) ||
+                                school.address?.toLowerCase().includes(q) ||
+                                school.code?.toLowerCase().includes(q)
+                              );
+                            })
+                            .map((school) => {
+                              const isSelected = Boolean(
+                                (startPoint?.school_id && startPoint.school_id === school.id) ||
+                                (startPoint?.id && startPoint.id === school.id) ||
+                                (startPoint?.lat != null && startPoint?.lng != null && Math.abs(Number(startPoint.lat) - Number(school.lat)) < 0.0001 && Math.abs(Number(startPoint.lng) - Number(school.lng)) < 0.0001)
+                              );
+                              return (
                                 <div
-                                  className={`w-5 h-5 rounded-full border flex items-center justify-center shrink-0 transition ${
+                                  key={school.id}
+                                  onClick={() => setStartPoint({
+                                    school_id: school.id,
+                                    id: school.id,
+                                    name: school.name,
+                                    address: school.address || 'Không có địa chỉ',
+                                    lat: Number(school.lat),
+                                    lng: Number(school.lng),
+                                  })}
+                                  className={`cursor-pointer rounded-md border p-2.5 flex items-center justify-between gap-3 transition ${
                                     isSelected
-                                      ? 'border-[#0f3b7d] bg-[#0f3b7d]'
-                                      : 'border-slate-300 bg-white'
+                                      ? 'border-[#0f3b7d] bg-blue-50/80 shadow-xs ring-1 ring-[#0f3b7d]'
+                                      : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50/80'
                                   }`}
                                 >
-                                  {isSelected && <div className="w-2 h-2 rounded-full bg-white" />}
-                                </div>
-                                <div className="min-w-0">
-                                  <div className="flex items-center gap-2">
-                                    <p className="font-semibold text-slate-900 text-sm truncate">{school.name}</p>
-                                    <span className="text-[10px] font-bold bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded-[5px] shrink-0">
-                                      {Number(school.lat).toFixed(5)}, {Number(school.lng).toFixed(5)}
-                                    </span>
+                                  <div className="flex items-center gap-2.5 min-w-0">
+                                    <div
+                                      className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 transition ${
+                                        isSelected
+                                          ? 'border-[#0f3b7d] bg-[#0f3b7d]'
+                                          : 'border-slate-300 bg-white'
+                                      }`}
+                                    >
+                                      {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                                    </div>
+                                    <div className="min-w-0">
+                                      <div className="flex items-center gap-1.5">
+                                        <p className="font-semibold text-slate-900 text-xs truncate">{school.name}</p>
+                                        <span className="text-[9px] font-bold bg-slate-100 text-slate-600 px-1 py-0.2 rounded shrink-0">
+                                          {Number(school.lat).toFixed(4)}, {Number(school.lng).toFixed(4)}
+                                        </span>
+                                      </div>
+                                      <p className="text-[11px] text-slate-500 mt-0.5 flex items-center gap-1 truncate">
+                                        <MapPin className="w-3 h-3 text-slate-400 shrink-0" />
+                                        <span className="truncate">{school.address || 'Chưa có địa chỉ'}</span>
+                                      </p>
+                                    </div>
                                   </div>
-                                  <p className="text-xs text-slate-500 mt-0.5 flex items-center gap-1.5 truncate">
-                                    <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                                    <span className="truncate">{school.address || 'Chưa có địa chỉ'}</span>
-                                  </p>
+                                  {isSelected && (
+                                    <span className="text-[10px] font-bold text-[#0f3b7d] shrink-0 bg-blue-100 px-2 py-0.5 rounded-full">
+                                      Điểm xuất phát
+                                    </span>
+                                  )}
                                 </div>
-                              </div>
-                              {isSelected && (
-                                <span className="text-xs font-semibold text-[#0f3b7d] shrink-0 bg-blue-100 px-2.5 py-0.5 rounded-full">
-                                  Điểm xuất phát
-                                </span>
-                              )}
-                            </div>
-                          );
-                        })
-                    )}
-                  </div>
+                              );
+                            })
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -3151,6 +3538,46 @@ export function AdminCampaignsPage() {
                   {wizardLoading ? 'Đang lưu...' : (editingCampaignId ? 'Lưu thay đổi chiến dịch' : 'Xác nhận tạo chiến dịch')}
                 </button>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL GỢI Ý PHÂN CÔNG NGAY SAU KHI TẠO CHIẾN DỊCH */}
+      {/* ========================================================================= */}
+      {createdCampaignPrompt && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+          <div className="bg-white rounded-xl max-w-md w-full p-6 shadow-2xl border border-slate-200 animate-slide-up text-center space-y-4">
+            <div className="w-14 h-14 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto shadow-xs">
+              <CheckCircle2 className="w-8 h-8" />
+            </div>
+            <div>
+              <h3 className="text-base sm:text-lg font-bold text-slate-900">Chiến dịch đã tạo thành công!</h3>
+              <p className="text-xs text-slate-600 mt-2 leading-relaxed">
+                Chiến dịch <strong className="text-[#0f3b7d]">"{createdCampaignPrompt.name}"</strong> đã được lưu với lộ trình tối ưu. Bạn có muốn phân công cán bộ đoàn công tác ngay bây giờ không?
+              </p>
+            </div>
+            <div className="grid grid-cols-2 gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setCreatedCampaignPrompt(null)}
+                className="py-2.5 px-3 rounded-lg border border-slate-300 text-slate-600 text-xs font-semibold hover:bg-slate-100 transition cursor-pointer"
+              >
+                Để sau (Về danh sách)
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const camp = createdCampaignPrompt;
+                  setCreatedCampaignPrompt(null);
+                  openAllocationModal(camp);
+                }}
+                className="py-2.5 px-3 rounded-lg bg-[#0f3b7d] hover:bg-[#0c2f64] text-white text-xs font-bold shadow-xs transition flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <UserPlus className="w-4 h-4" />
+                <span>Phân công ngay</span>
+              </button>
             </div>
           </div>
         </div>
@@ -3713,6 +4140,19 @@ export function AdminCampaignsPage() {
                       )}
                     </div>
 
+                    {/* Hướng dẫn thao tác */}
+                    <div className="p-2 bg-slate-50 border border-slate-200 rounded text-[11px] text-slate-600">
+                      Đang chọn:{' '}
+                      <strong className="text-[#0f3b7d]">
+                        {selectedStopIdForAllocation === 'START'
+                          ? 'Điểm xuất phát [S]'
+                          : selectedAllocationCampaign.destinations?.find(
+                              (d: any, idx: number) => (d.school_id || d.id || `STOP_${idx}`) === selectedStopIdForAllocation
+                            )?.name || selectedStopIdForAllocation}
+                      </strong>
+                      . Bấm hoặc kéo thả nhân sự vào điểm dừng.
+                    </div>
+
                     {/* Danh sách staff hỗ trợ kéo thả và click gán */}
                     <div className="space-y-2 max-h-[500px] overflow-y-auto pr-1">
                       {staffList.length === 0 ? (
@@ -3991,12 +4431,6 @@ export function AdminCampaignsPage() {
                   <Shield className="w-3.5 h-3.5 text-[#0f3b7d]" />
                   <span className="font-bold">{viewingAllocatedTrip.team?.leader_name || 'Chưa có trưởng đoàn'}</span>
                 </div>
-                {viewingAllocatedTrip.team?.vehicle_plate && (
-                  <div className="flex items-center gap-1.5">
-                    <Car className="w-3.5 h-3.5 text-slate-400" />
-                    <span className="font-semibold">{viewingAllocatedTrip.team.vehicle_plate}</span>
-                  </div>
-                )}
               </div>
             </div>
 

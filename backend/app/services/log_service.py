@@ -44,7 +44,7 @@ async def log_trip_activity(
     trip_code: Optional[str] = None,
     actor_user: Optional[dict] = None,
     details: Optional[Dict[str, Any]] = None,
-    time_window_minutes: int = 30
+    time_window_minutes: int = 1440
 ) -> dict:
     """
     Ghi nhật ký thao tác chuyến đi theo mô hình Cha - Con:
@@ -145,7 +145,7 @@ async def log_system_activity(
     description: str,
     actor_user: Optional[dict] = None,
     details: Optional[Dict[str, Any]] = None,
-    time_window_minutes: int = 30
+    time_window_minutes: int = 1440
 ) -> dict:
     """
     Ghi nhật ký hoạt động hệ thống (Đăng nhập, Quản lý tài khoản, Chiến dịch, Cài đặt).
@@ -253,37 +253,45 @@ async def count_system_logs(
 ) -> int:
     """Đếm tổng số bản ghi Log Cha theo bộ lọc"""
     db = get_database()
-    query: Dict[str, Any] = {"is_deleted": {"$ne": True}}
+    conditions: List[Dict[str, Any]] = [{"is_deleted": {"$ne": True}}]
 
     if category:
-        query["category"] = category
+        conditions.append({"category": category})
 
     if trip_id:
-        query["trip_id"] = trip_id
+        conditions.append({"trip_id": trip_id})
 
     if action_type:
-        query["action_type"] = action_type
+        conditions.append({"action_type": action_type})
     else:
         # Bỏ qua hoàn toàn các log đăng nhập / phiên đăng nhập (AUTH_SESSION)
-        query["action_type"] = {"$nin": ["AUTH_SESSION"]}
+        conditions.append({"action_type": {"$nin": ["AUTH_SESSION"]}})
 
     if user_id:
-        query["actor.user_id"] = user_id
+        conditions.append({
+            "$or": [
+                {"actor.user_id": user_id},
+                {"actor.username": user_id}
+            ]
+        })
 
     if search:
         s = search.strip()
         escaped_s = re.escape(s)
-        query["$or"] = [
-            {"title": {"$regex": escaped_s, "$options": "i"}},
-            {"trip_name": {"$regex": escaped_s, "$options": "i"}},
-            {"trip_code": {"$regex": escaped_s, "$options": "i"}},
-            {"actor.full_name": {"$regex": escaped_s, "$options": "i"}},
-            {"actor.username": {"$regex": escaped_s, "$options": "i"}},
-            {"activities.description": {"$regex": escaped_s, "$options": "i"}},
-            {"activities.label": {"$regex": escaped_s, "$options": "i"}},
-            {"activities.action": {"$regex": escaped_s, "$options": "i"}}
-        ]
+        conditions.append({
+            "$or": [
+                {"title": {"$regex": escaped_s, "$options": "i"}},
+                {"trip_name": {"$regex": escaped_s, "$options": "i"}},
+                {"trip_code": {"$regex": escaped_s, "$options": "i"}},
+                {"actor.full_name": {"$regex": escaped_s, "$options": "i"}},
+                {"actor.username": {"$regex": escaped_s, "$options": "i"}},
+                {"activities.description": {"$regex": escaped_s, "$options": "i"}},
+                {"activities.label": {"$regex": escaped_s, "$options": "i"}},
+                {"activities.action": {"$regex": escaped_s, "$options": "i"}}
+            ]
+        })
 
+    query = {"$and": conditions} if len(conditions) > 1 else conditions[0]
     return await db.system_logs.count_documents(query)
 
 
@@ -298,36 +306,45 @@ async def get_system_logs(
 ) -> List[dict]:
     """Lấy danh sách các Log Cha có phân trang và bộ lọc"""
     db = get_database()
-    query: Dict[str, Any] = {"is_deleted": {"$ne": True}}
+    conditions: List[Dict[str, Any]] = [{"is_deleted": {"$ne": True}}]
 
     if category:
-        query["category"] = category
+        conditions.append({"category": category})
 
     if trip_id:
-        query["trip_id"] = trip_id
+        conditions.append({"trip_id": trip_id})
 
     if action_type:
-        query["action_type"] = action_type
+        conditions.append({"action_type": action_type})
     else:
         # Bỏ qua hoàn toàn các log đăng nhập / phiên đăng nhập (AUTH_SESSION)
-        query["action_type"] = {"$nin": ["AUTH_SESSION"]}
+        conditions.append({"action_type": {"$nin": ["AUTH_SESSION"]}})
 
     if user_id:
-        query["actor.user_id"] = user_id
+        conditions.append({
+            "$or": [
+                {"actor.user_id": user_id},
+                {"actor.username": user_id}
+            ]
+        })
 
     if search:
         s = search.strip()
         escaped_s = re.escape(s)
-        query["$or"] = [
-            {"title": {"$regex": escaped_s, "$options": "i"}},
-            {"trip_name": {"$regex": escaped_s, "$options": "i"}},
-            {"trip_code": {"$regex": escaped_s, "$options": "i"}},
-            {"actor.full_name": {"$regex": escaped_s, "$options": "i"}},
-            {"actor.username": {"$regex": escaped_s, "$options": "i"}},
-            {"activities.description": {"$regex": escaped_s, "$options": "i"}},
-            {"activities.label": {"$regex": escaped_s, "$options": "i"}},
-            {"activities.action": {"$regex": escaped_s, "$options": "i"}}
-        ]
+        conditions.append({
+            "$or": [
+                {"title": {"$regex": escaped_s, "$options": "i"}},
+                {"trip_name": {"$regex": escaped_s, "$options": "i"}},
+                {"trip_code": {"$regex": escaped_s, "$options": "i"}},
+                {"actor.full_name": {"$regex": escaped_s, "$options": "i"}},
+                {"actor.username": {"$regex": escaped_s, "$options": "i"}},
+                {"activities.description": {"$regex": escaped_s, "$options": "i"}},
+                {"activities.label": {"$regex": escaped_s, "$options": "i"}},
+                {"activities.action": {"$regex": escaped_s, "$options": "i"}}
+            ]
+        })
+
+    query = {"$and": conditions} if len(conditions) > 1 else conditions[0]
 
     cursor = db.system_logs.find(query).sort("updated_at", -1).skip(skip).limit(limit)
     logs = await cursor.to_list(length=limit)

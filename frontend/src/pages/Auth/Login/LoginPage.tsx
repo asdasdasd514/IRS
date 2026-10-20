@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { Eye, EyeOff, Lock, User, LogIn, AlertCircle } from 'lucide-react';
 import { useAppStore } from '../../../store/useAppStore';
 import { authApi } from '../../../services/api';
@@ -153,19 +153,6 @@ export function LoginPage() {
             )}
           </button>
         </form>
-
-        {/* Link to Register */}
-        <div className="mt-6 pt-6 border-t border-slate-100 text-center">
-          <p className="text-xs text-slate-500">
-            Chưa có tài khoản tham gia tuyển sinh?{' '}
-            <Link
-              to="/register"
-              className="text-[#0f3b7d] font-semibold hover:underline"
-            >
-              Đăng ký ngay
-            </Link>
-          </p>
-        </div>
       </div>
     </div>
   );
