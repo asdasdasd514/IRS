@@ -43,6 +43,66 @@ def clean_phone_number(raw_phone: str) -> str:
     return cleaned
 
 
+def build_default_questions(majors=None, fields_enabled=None):
+    majors_list = majors if (majors and len(majors) > 0) else list(DEFAULT_MAJORS_LIST)
+    fields = fields_enabled or {
+        "student_name": True,
+        "phone": True,
+        "grade": True,
+        "email": False,
+        "notes": True
+    }
+    questions = [
+        {
+            "id": "student_name",
+            "type": "text",
+            "title": "Họ và tên học sinh",
+            "placeholder": "Nhập họ và tên đầy đủ của bạn",
+            "required": True,
+            "is_core": True,
+            "options": []
+        },
+        {
+            "id": "phone",
+            "type": "text",
+            "title": "Số điện thoại liên hệ (10 số)",
+            "placeholder": "Ví dụ: 0912345678",
+            "required": True,
+            "is_core": True,
+            "options": []
+        }
+    ]
+    if fields.get("grade", True):
+        questions.append({
+            "id": "grade",
+            "type": "radio",
+            "title": "Khối lớp hiện tại",
+            "required": False,
+            "is_core": False,
+            "options": ["Khối 12", "Khối 11", "Khối 10"]
+        })
+    if len(majors_list) > 0:
+        questions.append({
+            "id": "majors",
+            "type": "checkbox",
+            "title": "Ngành học bạn quan tâm",
+            "required": False,
+            "is_core": False,
+            "options": list(majors_list)
+        })
+    if fields.get("notes", True):
+        questions.append({
+            "id": "notes",
+            "type": "textarea",
+            "title": "Ghi chú & Nguyện vọng khác",
+            "placeholder": "Để lại câu hỏi hoặc thắc mắc cần tư vấn thêm...",
+            "required": False,
+            "is_core": False,
+            "options": []
+        })
+    return questions
+
+
 # =========================================================================
 # 1. PUBLIC APIS DÀNH CHO HỌC SINH (KHÔNG CẦN ĐĂNG NHẬP)
 # =========================================================================
@@ -51,7 +111,7 @@ def clean_phone_number(raw_phone: str) -> str:
 async def get_public_survey_info(trip_id: str, waypoint_id: str):
     """
     API Công khai để học sinh quét QR tải thông tin trường và câu hỏi khảo sát.
-    Tự động xác định trường học và cấu hình ngành của chiến dịch.
+    Hỗ trợ cả chuyến đi đã deploy (campaign_waypoints) và chiến dịch đang lập kế hoạch (campaign.destinations).
     """
     db = get_database()
     
@@ -60,48 +120,106 @@ async def get_public_survey_info(trip_id: str, waypoint_id: str):
     if not wp:
         wp = await db.waypoints.find_one({"id": waypoint_id, "is_deleted": {"$ne": True}})
     if not wp:
-        # Thử tìm theo school_id nếu waypoint_id truyền vào là school_id
-        wp = await db.campaign_waypoints.find_one({"trip_id": trip_id, "school_id": waypoint_id, "is_deleted": {"$ne": True}})
+        wp = await db.campaign_waypoints.find_one({
+            "$or": [{"school_id": waypoint_id}, {"id": waypoint_id}],
+            "is_deleted": {"$ne": True}
+        })
     
+    # 2. Lấy thông tin chuyến đi hoặc chiến dịch
+    trip = await db.admission_trips.find_one({"id": trip_id, "is_deleted": {"$ne": True}})
+    trip_name = trip.get("name") if trip else "Chuyến đi tuyển sinh"
+    campaign_id = trip.get("campaign_id") if trip else (wp.get("campaign_id") if wp else trip_id)
+
+    camp = None
+    if campaign_id:
+        camp = await db.campaigns.find_one({"$or": [{"id": campaign_id}, {"_id": campaign_id}], "is_deleted": {"$ne": True}})
+
+    # Nếu chưa tìm thấy wp trong waypoints (trường hợp quét QR khi chiến dịch đang planning hoặc test mẫu)
+    if not wp:
+        if not camp:
+            # Tìm xem waypoint_id có thuộc về chiến dịch nào không
+            camp = await db.campaigns.find_one({
+                "$or": [
+                    {"id": trip_id},
+                    {"destinations.id": waypoint_id},
+                    {"destinations.school_id": waypoint_id}
+                ],
+                "is_deleted": {"$ne": True}
+            })
+
+        if camp:
+            campaign_id = camp.get("id") or str(camp.get("_id"))
+            campaign_name = camp.get("name") or "Chiến dịch tuyển sinh"
+            trip_name = campaign_name
+            # Tìm destination phù hợp
+            dest = None
+            for d in camp.get("destinations") or []:
+                if d.get("id") == waypoint_id or d.get("school_id") == waypoint_id:
+                    dest = d
+                    break
+            if not dest and camp.get("destinations"):
+                dest = camp["destinations"][0]
+
+            if dest:
+                wp = {
+                    "id": dest.get("id") or dest.get("school_id") or waypoint_id,
+                    "school_id": dest.get("school_id") or dest.get("id"),
+                    "name": dest.get("name") or "Điểm trường",
+                    "address": dest.get("address") or "",
+                    "campaign_id": campaign_id,
+                    "custom_survey_config": dest.get("custom_survey_config")
+                }
+
+    # Nếu vẫn chưa thấy wp, thử tìm trực tiếp trong danh bạ trường học (schools)
+    if not wp:
+        school = await db.schools.find_one({
+            "$or": [{"id": waypoint_id}, {"code": waypoint_id}],
+            "is_deleted": {"$ne": True}
+        })
+        if school:
+            wp = {
+                "id": school.get("id") or waypoint_id,
+                "school_id": school.get("id") or waypoint_id,
+                "name": school.get("name") or "Điểm trường",
+                "address": school.get("address") or "",
+                "campaign_id": campaign_id
+            }
+
     if not wp:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Không tìm thấy điểm trường khảo sát hoặc lộ trình đã thay đổi."
         )
 
-    # 2. Lấy thông tin chuyến đi
-    trip = await db.admission_trips.find_one({"id": trip_id, "is_deleted": {"$ne": True}})
-    trip_name = trip.get("name") if trip else "Chuyến đi tuyển sinh"
-    campaign_id = trip.get("campaign_id") if trip else wp.get("campaign_id")
+    # 3. Lấy cấu hình khảo sát: Ưu tiên form riêng của điểm trường (custom_survey_config), nếu không có thì lấy form chung của Campaign
+    survey_config = None
+    campaign_name = (camp.get("name") if camp else None) or trip_name or "Chiến dịch tuyển sinh"
+    if wp.get("custom_survey_config"):
+        survey_config = dict(wp["custom_survey_config"])
+    elif camp and camp.get("survey_config"):
+        survey_config = dict(camp["survey_config"])
 
-    # 3. Lấy cấu hình khảo sát từ Campaign (nếu có)
-    survey_config = {
-        "title": "Khảo Sát Nguyện Vọng Tuyển Sinh 2026",
-        "description": "Vui lòng để lại thông tin để nhận tư vấn học bổng và xét tuyển sớm.",
-        "majors": list(DEFAULT_MAJORS_LIST),
-        "fields_enabled": {
-            "student_name": True,
-            "phone": True,
-            "grade": True,
-            "email": False,
-            "notes": True
+    if not survey_config:
+        survey_config = {
+            "title": "Khảo Sát Nguyện Vọng Tuyển Sinh 2026",
+            "description": "Vui lòng để lại thông tin để nhận tư vấn học bổng và xét tuyển sớm.",
+            "questions": build_default_questions(list(DEFAULT_MAJORS_LIST)),
+            "majors": list(DEFAULT_MAJORS_LIST),
+            "fields_enabled": {
+                "student_name": True,
+                "phone": True,
+                "grade": True,
+                "email": False,
+                "notes": True
+            }
         }
-    }
-    campaign_name = "Chiến dịch tuyển sinh"
-    if campaign_id:
-        camp = await db.campaigns.find_one({"$or": [{"id": campaign_id}, {"_id": campaign_id}], "is_deleted": {"$ne": True}})
-        if camp:
-            campaign_name = camp.get("name") or campaign_name
-            if camp.get("survey_config"):
-                saved_cfg = camp["survey_config"]
-                if saved_cfg.get("title"):
-                    survey_config["title"] = saved_cfg["title"]
-                if saved_cfg.get("description") is not None:
-                    survey_config["description"] = saved_cfg["description"]
-                if saved_cfg.get("majors") and len(saved_cfg["majors"]) > 0:
-                    survey_config["majors"] = saved_cfg["majors"]
-                if saved_cfg.get("fields_enabled"):
-                    survey_config["fields_enabled"].update(saved_cfg["fields_enabled"])
+    else:
+        # Đảm bảo luôn có mảng questions chuẩn
+        if not survey_config.get("questions") or len(survey_config["questions"]) == 0:
+            survey_config["questions"] = build_default_questions(
+                survey_config.get("majors"),
+                survey_config.get("fields_enabled")
+            )
 
     return {
         "success": True,
@@ -126,7 +244,7 @@ async def submit_public_survey(data: PublicSurveySubmitRequest):
     """
     Học sinh nộp phiếu khảo sát online:
     - Kiểm tra số điện thoại hợp lệ (10 số)
-    - Nhúng phiếu vào mảng `tickets` của `campaign_waypoints` (0 bảng mới)
+    - Tự động nhúng phiếu vào `campaign_waypoints` hoặc `campaigns.tickets`
     - Tự động gọi `increment_school_tickets` để cập nhật bảng `schools`
     """
     db = get_database()
@@ -151,6 +269,56 @@ async def submit_public_survey(data: PublicSurveySubmitRequest):
         wp = await db.waypoints.find_one({"id": data.waypoint_id, "is_deleted": {"$ne": True}})
         col_name = "waypoints"
     if not wp:
+        wp = await db.campaign_waypoints.find_one({
+            "$or": [{"school_id": data.waypoint_id}, {"id": data.waypoint_id}],
+            "is_deleted": {"$ne": True}
+        })
+        if wp:
+            col_name = "campaign_waypoints"
+
+    camp = None
+    if not wp:
+        camp = await db.campaigns.find_one({
+            "$or": [
+                {"id": data.trip_id},
+                {"_id": data.trip_id},
+                {"destinations.id": data.waypoint_id},
+                {"destinations.school_id": data.waypoint_id}
+            ],
+            "is_deleted": {"$ne": True}
+        })
+        if camp:
+            dest = None
+            for d in camp.get("destinations") or []:
+                if d.get("id") == data.waypoint_id or d.get("school_id") == data.waypoint_id:
+                    dest = d
+                    break
+            if not dest and camp.get("destinations"):
+                dest = camp["destinations"][0]
+            if dest:
+                wp = {
+                    "id": dest.get("id") or dest.get("school_id") or data.waypoint_id,
+                    "school_id": dest.get("school_id") or dest.get("id"),
+                    "name": dest.get("name") or "Điểm trường",
+                    "campaign_id": camp.get("id") or str(camp.get("_id"))
+                }
+                col_name = "campaigns"
+
+    if not wp:
+        school = await db.schools.find_one({
+            "$or": [{"id": data.waypoint_id}, {"code": data.waypoint_id}],
+            "is_deleted": {"$ne": True}
+        })
+        if school:
+            wp = {
+                "id": school.get("id") or data.waypoint_id,
+                "school_id": school.get("id") or data.waypoint_id,
+                "name": school.get("name") or "Điểm trường",
+                "campaign_id": data.trip_id
+            }
+            col_name = "campaigns"
+
+    if not wp:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Không tìm thấy điểm trường của chuyến đi."
@@ -162,6 +330,8 @@ async def submit_public_survey(data: PublicSurveySubmitRequest):
     ticket_doc = {
         "id": ticket_id,
         "waypoint_id": data.waypoint_id,
+        "school_id": wp.get("school_id"),
+        "school_name": wp.get("name"),
         "student_name": name,
         "phone": phone,
         "grade": data.grade.strip() if data.grade else "",
@@ -175,15 +345,24 @@ async def submit_public_survey(data: PublicSurveySubmitRequest):
         "is_deleted": False
     }
 
-    # 2. Nhúng vào mảng tickets của waypoint
-    col = db.campaign_waypoints if col_name == "campaign_waypoints" else db.waypoints
-    await col.update_one(
-        {"id": data.waypoint_id},
-        {
-            "$push": {"tickets": ticket_doc},
-            "$set": {"updated_at": now}
-        }
-    )
+    # 2. Nhúng vào mảng tickets tương ứng
+    if col_name == "campaign_waypoints":
+        await db.campaign_waypoints.update_one(
+            {"id": wp.get("id", data.waypoint_id)},
+            {"$push": {"tickets": ticket_doc}, "$set": {"updated_at": now}}
+        )
+    elif col_name == "waypoints":
+        await db.waypoints.update_one(
+            {"id": wp.get("id", data.waypoint_id)},
+            {"$push": {"tickets": ticket_doc}, "$set": {"updated_at": now}}
+        )
+    else:
+        # Lưu vào campaign nếu đang ở giai đoạn planning hoặc test QR
+        target_camp_id = wp.get("campaign_id") or data.trip_id
+        await db.campaigns.update_one(
+            {"$or": [{"id": target_camp_id}, {"_id": target_camp_id}]},
+            {"$push": {"tickets": ticket_doc}, "$set": {"updated_at": now}}
+        )
 
     # 3. Tự động tăng tổng số phiếu tuyển sinh của trường trong collection `schools`
     school_id = wp.get("school_id")
@@ -205,25 +384,85 @@ async def submit_public_survey(data: PublicSurveySubmitRequest):
 # =========================================================================
 
 @router.get("/campaigns/{campaign_id}/survey-config")
-async def get_campaign_survey_config(campaign_id: str, current_user: dict = Depends(get_current_user)):
-    """Lấy cấu hình form khảo sát của một chiến dịch cụ thể."""
+async def get_campaign_survey_config(
+    campaign_id: str,
+    school_id: Optional[str] = Query(None, description="ID của điểm trường nếu muốn lấy cấu hình riêng"),
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Lấy cấu hình form khảo sát.
+    - Nếu truyền school_id: kiểm tra xem trường đó có cấu hình riêng (custom_survey_config) hay không.
+    - Nếu không: trả về cấu hình form chung của chiến dịch.
+    """
     db = get_database()
     camp = await db.campaigns.find_one({"$or": [{"id": campaign_id}, {"_id": campaign_id}], "is_deleted": {"$ne": True}})
     if not camp:
         raise HTTPException(status_code=404, detail="Không tìm thấy chiến dịch")
 
-    config = camp.get("survey_config") or {
-        "title": "Khảo Sát Nguyện Vọng Tuyển Sinh 2026",
-        "description": "Vui lòng để lại thông tin để nhận tư vấn học bổng và chỉ tiêu tuyển sinh mới nhất.",
-        "majors": list(DEFAULT_MAJORS_LIST),
-        "fields_enabled": {
-            "student_name": True,
-            "phone": True,
-            "grade": True,
-            "email": False,
-            "notes": True
-        }
+    # Mặc định lấy cấu hình chung của campaign
+    camp_cfg = camp.get("survey_config") or {}
+    title = camp_cfg.get("title") or "Khảo Sát Nguyện Vọng Tuyển Sinh 2026"
+    description = camp_cfg.get("description", "Vui lòng để lại thông tin để nhận tư vấn học bổng và chỉ tiêu tuyển sinh mới nhất.")
+    majors = camp_cfg.get("majors") or list(DEFAULT_MAJORS_LIST)
+    fields_enabled = camp_cfg.get("fields_enabled") or {
+        "student_name": True,
+        "phone": True,
+        "grade": True,
+        "email": False,
+        "notes": True
     }
+    questions = camp_cfg.get("questions")
+    if not questions or len(questions) == 0:
+        questions = build_default_questions(majors, fields_enabled)
+
+    config = {
+        "title": title,
+        "description": description,
+        "questions": questions,
+        "majors": majors,
+        "fields_enabled": fields_enabled,
+        "is_custom": False,
+        "school_id": None,
+        "school_name": None
+    }
+
+    if school_id and school_id != "default":
+        # Tìm trường trong campaign_waypoints hoặc destinations
+        wp = await db.campaign_waypoints.find_one({
+            "campaign_id": campaign_id,
+            "$or": [{"school_id": school_id}, {"id": school_id}],
+            "is_deleted": {"$ne": True}
+        })
+        school_name = (wp.get("name") if wp else "") or "Điểm trường"
+        if not wp:
+            # Thử tìm trong destinations của campaign
+            for d in camp.get("destinations") or []:
+                if d.get("school_id") == school_id or d.get("id") == school_id:
+                    school_name = d.get("name") or school_name
+                    if d.get("custom_survey_config"):
+                        wp = {"custom_survey_config": d["custom_survey_config"], "name": school_name}
+                    break
+
+        if wp and wp.get("custom_survey_config"):
+            custom_cfg = wp["custom_survey_config"]
+            c_questions = custom_cfg.get("questions")
+            if not c_questions or len(c_questions) == 0:
+                c_questions = build_default_questions(custom_cfg.get("majors"), custom_cfg.get("fields_enabled"))
+            config = {
+                "title": custom_cfg.get("title") or title,
+                "description": custom_cfg.get("description") if custom_cfg.get("description") is not None else description,
+                "questions": c_questions,
+                "majors": custom_cfg.get("majors") or majors,
+                "fields_enabled": custom_cfg.get("fields_enabled") or fields_enabled,
+                "is_custom": True,
+                "school_id": school_id,
+                "school_name": school_name
+            }
+        else:
+            config["school_id"] = school_id
+            config["school_name"] = school_name
+            config["is_custom"] = False
+
     return {
         "success": True,
         "campaign_id": campaign_id,
@@ -236,9 +475,14 @@ async def get_campaign_survey_config(campaign_id: str, current_user: dict = Depe
 async def update_campaign_survey_config(
     campaign_id: str,
     config: SurveyConfigSchema,
+    school_id: Optional[str] = Query(None, description="ID của điểm trường nếu muốn cập nhật cấu hình riêng"),
     current_user: dict = Depends(get_current_user)
 ):
-    """Cập nhật danh sách ngành học và các câu hỏi bật/tắt của chiến dịch."""
+    """
+    Cập nhật cấu hình form khảo sát (Google Form style).
+    - Nếu có school_id: lưu vào cấu hình riêng của trường (custom_survey_config).
+    - Nếu không: lưu vào cấu hình chung của toàn bộ chiến dịch.
+    """
     db = get_database()
     camp = await db.campaigns.find_one({"$or": [{"id": campaign_id}, {"_id": campaign_id}], "is_deleted": {"$ne": True}})
     if not camp:
@@ -247,14 +491,70 @@ async def update_campaign_survey_config(
     now = datetime.now(timezone.utc)
     config_dict = config.model_dump()
 
-    await db.campaigns.update_one(
-        {"$or": [{"id": campaign_id}, {"_id": campaign_id}]},
-        {"$set": {"survey_config": config_dict, "updated_at": now}}
+    target_school_id = school_id or config.school_id
+    if target_school_id and target_school_id != "default":
+        # Lưu vào cấu hình riêng cho trường
+        config_dict["is_custom"] = True
+        config_dict["school_id"] = target_school_id
+        await db.campaign_waypoints.update_many(
+            {"campaign_id": campaign_id, "$or": [{"school_id": target_school_id}, {"id": target_school_id}]},
+            {"$set": {"custom_survey_config": config_dict, "updated_at": now}}
+        )
+        # Cập nhật trong destinations của campaign
+        destinations = camp.get("destinations") or []
+        for d in destinations:
+            if d.get("school_id") == target_school_id or d.get("id") == target_school_id:
+                d["custom_survey_config"] = config_dict
+        await db.campaigns.update_one(
+            {"$or": [{"id": campaign_id}, {"_id": campaign_id}]},
+            {"$set": {"destinations": destinations, "updated_at": now}}
+        )
+        return {
+            "success": True,
+            "message": "Đã lưu cấu hình form riêng cho điểm trường thành công!",
+            "survey_config": config_dict
+        }
+    else:
+        # Lưu vào cấu hình chung của chiến dịch
+        config_dict["is_custom"] = False
+        config_dict["school_id"] = None
+        await db.campaigns.update_one(
+            {"$or": [{"id": campaign_id}, {"_id": campaign_id}]},
+            {"$set": {"survey_config": config_dict, "updated_at": now}}
+        )
+        return {
+            "success": True,
+            "message": "Đã lưu cấu hình form chung của chiến dịch thành công!",
+            "survey_config": config_dict
+        }
+
+
+@router.delete("/campaigns/{campaign_id}/survey-config/school/{school_id}")
+async def revert_school_survey_config(
+    campaign_id: str,
+    school_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Khôi phục điểm trường về sử dụng form chung của chiến dịch."""
+    db = get_database()
+    now = datetime.now(timezone.utc)
+    await db.campaign_waypoints.update_many(
+        {"campaign_id": campaign_id, "$or": [{"school_id": school_id}, {"id": school_id}]},
+        {"$unset": {"custom_survey_config": ""}, "$set": {"updated_at": now}}
     )
+    camp = await db.campaigns.find_one({"$or": [{"id": campaign_id}, {"_id": campaign_id}]})
+    if camp:
+        destinations = camp.get("destinations") or []
+        for d in destinations:
+            if d.get("school_id") == school_id or d.get("id") == school_id:
+                d.pop("custom_survey_config", None)
+        await db.campaigns.update_one(
+            {"$or": [{"id": campaign_id}, {"_id": campaign_id}]},
+            {"$set": {"destinations": destinations, "updated_at": now}}
+        )
     return {
         "success": True,
-        "message": "Đã cập nhật cấu hình form khảo sát thành công!",
-        "survey_config": config_dict
+        "message": "Đã khôi phục điểm trường về sử dụng mẫu form chung thành công!"
     }
 
 
@@ -312,6 +612,7 @@ async def get_campaign_survey_responses(
                     "phone": t.get("phone") or "",
                     "grade": t.get("grade") or "",
                     "interested_majors": t.get("interested_majors") or [],
+                    "answers": t.get("answers") or {},
                     "notes": t.get("notes") or "",
                     "source": t.get("source") or "QR_ONLINE",
                     "created_at": to_vietnam_time_str(t.get("created_at") or t.get("collection_date"))

@@ -670,12 +670,18 @@ export const surveyApi = {
   },
 
   // Campaign-level survey config & responses
-  getCampaignSurveyConfig: async (campaignId: string): Promise<any> => {
-    const { data } = await api.get(`/campaigns/${campaignId}/survey-config`);
+  getCampaignSurveyConfig: async (campaignId: string, schoolId?: string): Promise<any> => {
+    const params = schoolId && schoolId !== 'default' ? { school_id: schoolId } : undefined;
+    const { data } = await api.get(`/campaigns/${campaignId}/survey-config`, { params });
     return data;
   },
-  updateCampaignSurveyConfig: async (campaignId: string, config: any): Promise<any> => {
-    const { data } = await api.put(`/campaigns/${campaignId}/survey-config`, config);
+  updateCampaignSurveyConfig: async (campaignId: string, config: any, schoolId?: string): Promise<any> => {
+    const params = schoolId && schoolId !== 'default' ? { school_id: schoolId } : undefined;
+    const { data } = await api.put(`/campaigns/${campaignId}/survey-config`, config, { params });
+    return data;
+  },
+  revertSchoolSurveyConfig: async (campaignId: string, schoolId: string): Promise<any> => {
+    const { data } = await api.delete(`/campaigns/${campaignId}/survey-config/school/${schoolId}`);
     return data;
   },
   getCampaignSurveyResponses: async (campaignId: string): Promise<any> => {

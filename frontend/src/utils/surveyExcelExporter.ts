@@ -9,6 +9,7 @@ export interface SurveyExportItem {
   campaign_name?: string;
   trip_name?: string;
   interested_majors?: string[];
+  answers?: Record<string, any>;
   notes?: string;
   source?: string;
   created_at?: string;
@@ -16,6 +17,7 @@ export interface SurveyExportItem {
 
 /**
  * Xuất danh bạ học sinh điền phiếu khảo sát qua QR ra file Excel (.xlsx)
+ * Tự động tạo các cột cho các câu hỏi tùy biến động (Google Form style)
  */
 export const exportSurveysToExcel = (
   items: SurveyExportItem[],
@@ -36,24 +38,40 @@ export const exportSurveysToExcel = (
     ? `DANH SÁCH HỌC SINH KHẢO SÁT - CHIẾN DỊCH: ${campaignName.toUpperCase()}`
     : 'DANH SÁCH HỌC SINH ĐIỀN PHIẾU KHẢO SÁT NGUYỆN VỌNG TUYỂN SINH';
 
+  // Thu thập tất cả các câu hỏi tùy biến trong mảng answers (loại trừ các trường cơ bản đã có cột)
+  const customQuestionKeys = new Set<string>();
+  items.forEach((item) => {
+    if (item.answers && typeof item.answers === 'object') {
+      Object.keys(item.answers).forEach((k) => {
+        if (!['student_name', 'phone', 'grade', 'majors', 'notes'].includes(k)) {
+          customQuestionKeys.add(k);
+        }
+      });
+    }
+  });
+  const customQuestionsList = Array.from(customQuestionKeys);
+
+  const headerRow: string[] = [
+    'STT',
+    'Họ và tên học sinh',
+    'Số điện thoại',
+    'Lớp',
+    'Điểm trường',
+    'Chiến dịch tuyển sinh',
+    'Đợt thực địa',
+    'Ngành học quan tâm',
+    ...customQuestionsList,
+    'Ghi chú / Nguyện vọng khác',
+    'Nguồn thu',
+    'Thời gian gửi',
+  ];
+
   const sheetRows: any[][] = [
     [title],
     [`Thời điểm xuất báo cáo: ${exportDate}`],
     [`Tổng số phiếu thu được: ${items.length} học sinh`],
     [],
-    [
-      'STT',
-      'Họ và tên học sinh',
-      'Số điện thoại',
-      'Lớp',
-      'Điểm trường',
-      'Chiến dịch tuyển sinh',
-      'Đợt thực địa',
-      'Ngành học quan tâm',
-      'Ghi chú / Nguyện vọng khác',
-      'Nguồn thu',
-      'Thời gian gửi',
-    ],
+    headerRow,
   ];
 
   items.forEach((item, index) => {
@@ -67,6 +85,14 @@ export const exportSurveysToExcel = (
       ? item.interested_majors.join(', ')
       : (item.interested_majors || '');
 
+    // Giá trị các câu hỏi tùy biến
+    const customValues = customQuestionsList.map((qKey) => {
+      const val = item.answers?.[qKey];
+      if (val === undefined || val === null) return '';
+      if (Array.isArray(val)) return val.join(', ');
+      return String(val);
+    });
+
     sheetRows.push([
       index + 1,
       item.student_name || 'Học sinh',
@@ -76,6 +102,7 @@ export const exportSurveysToExcel = (
       item.campaign_name || 'Chiến dịch tuyển sinh',
       item.trip_name || '',
       majorsStr,
+      ...customValues,
       item.notes || '',
       item.source === 'QR_ONLINE' ? 'Mã QR Online' : (item.source || 'Trực tiếp'),
       item.created_at || '',

@@ -612,17 +612,32 @@ DEFAULT_MAJORS_LIST = [
 ]
 
 
+class SurveyQuestionSchema(BaseModel):
+    id: str
+    type: str = "text"  # text, textarea, radio, checkbox, dropdown
+    title: str
+    description: Optional[str] = None
+    required: bool = False
+    options: Optional[List[str]] = Field(default_factory=list)
+    placeholder: Optional[str] = None
+    is_core: Optional[bool] = False
+
+
 class SurveyConfigSchema(BaseModel):
     title: str = "Khảo Sát Nguyện Vọng Tuyển Sinh 2026"
     description: Optional[str] = "Vui lòng để lại thông tin để nhận tư vấn học bổng và chỉ tiêu tuyển sinh mới nhất."
-    majors: List[str] = Field(default_factory=lambda: list(DEFAULT_MAJORS_LIST))
-    fields_enabled: Dict[str, bool] = Field(default_factory=lambda: {
+    questions: Optional[List[SurveyQuestionSchema]] = Field(default_factory=list)
+    majors: Optional[List[str]] = Field(default_factory=lambda: list(DEFAULT_MAJORS_LIST))
+    fields_enabled: Optional[Dict[str, bool]] = Field(default_factory=lambda: {
         "student_name": True,
         "phone": True,
         "grade": True,
         "email": False,
         "notes": True
     })
+    is_custom: Optional[bool] = False
+    school_id: Optional[str] = None
+    school_name: Optional[str] = None
 
 
 class PublicSurveySubmitRequest(BaseModel):

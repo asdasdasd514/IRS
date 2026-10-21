@@ -486,4 +486,27 @@ export interface VisitsListResponse {
   };
 }
 
+// Survey & Lead Collection Form Types (Google Form style)
+export type SurveyQuestionType = 'text' | 'textarea' | 'radio' | 'checkbox' | 'dropdown';
 
+export interface SurveyQuestion {
+  id: string;
+  type: SurveyQuestionType;
+  title: string;
+  description?: string;
+  required: boolean;
+  options?: string[];
+  placeholder?: string;
+  is_core?: boolean;
+}
+
+export interface SurveyConfig {
+  title: string;
+  description: string;
+  questions: SurveyQuestion[];
+  majors?: string[];
+  fields_enabled?: Record<string, boolean>;
+  is_custom?: boolean;
+  school_id?: string | null;
+  school_name?: string | null;
+}
