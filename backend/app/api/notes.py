@@ -54,7 +54,7 @@ async def _get_all_embedded_notes(db) -> List[Dict[str, Any]]:
                 "id": f"fn-{s_id}",
                 "content": str(school["notes"]).strip(),
                 "author_name": "Đoàn tuyển sinh",
-                "category": "Đánh giá thực địa",
+                "category": "Ghi chú",
                 "trip_id": None,
                 "trip_name": "Ghi chú trường",
                 "campaign_id": None,
@@ -81,6 +81,9 @@ async def _get_all_embedded_notes(db) -> List[Dict[str, Any]]:
             else:
                 u_at_str = str(u_at) if u_at else c_at_str
 
+            raw_cat = fn.get("category") or "Ghi chú"
+            if raw_cat not in ["Tiềm năng", "Lưu ý", "Ghi chú"]:
+                raw_cat = "Ghi chú"
             note_item = {
                 "id": fn.get("id") or str(uuid.uuid4()),
                 "school_id": s_id,
@@ -90,7 +93,7 @@ async def _get_all_embedded_notes(db) -> List[Dict[str, Any]]:
                 "campaign_id": fn.get("campaign_id"),
                 "campaign_name": fn.get("campaign_name") or "Chiến dịch tuyển sinh",
                 "waypoint_id": fn.get("waypoint_id"),
-                "category": fn.get("category") or "Đánh giá thực địa",
+                "category": raw_cat,
                 "content": fn.get("content", "").strip(),
                 "author_name": fn.get("author_name") or "Cán bộ tuyển sinh",
                 "created_at": c_at_str,

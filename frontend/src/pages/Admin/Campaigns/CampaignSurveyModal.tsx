@@ -1027,11 +1027,21 @@ export function CampaignSurveyModal({
                                       {m}
                                     </span>
                                   ))}
-                                {item.answers && Object.keys(item.answers).length > 0 && (
-                                  <span className="px-1.5 py-0.2 rounded bg-amber-50 text-amber-800 text-[10px] font-bold">
-                                    +{Object.keys(item.answers).length} câu hỏi
-                                  </span>
-                                )}
+                                {(() => {
+                                  if (!item.answers || typeof item.answers !== 'object') return null;
+                                  const customKeys = Object.keys(item.answers).filter(
+                                    (k) => !['student_name', 'phone', 'grade', 'majors', 'notes'].includes(k)
+                                  );
+                                  if (customKeys.length === 0) return null;
+                                  return (
+                                    <span
+                                      className="px-1.5 py-0.2 rounded bg-amber-50 text-amber-800 text-[10px] font-bold"
+                                      title={customKeys.join(', ')}
+                                    >
+                                      +{customKeys.length} câu hỏi mở rộng
+                                    </span>
+                                  );
+                                })()}
                               </div>
                             </td>
                             <td className="py-2.5 px-3 whitespace-nowrap text-slate-500 text-[11px]">
