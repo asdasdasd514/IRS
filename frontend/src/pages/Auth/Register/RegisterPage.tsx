@@ -4,6 +4,7 @@ import { User, Mail, Lock, Shield, UserCheck, AlertCircle, CheckCircle2 } from '
 import { useAppStore } from '../../../store/useAppStore';
 import { authApi } from '../../../services/api';
 import { UserRole } from '../../../types';
+import { BrandLogo } from '../../../components/BrandLogo/BrandLogo';
 
 export function RegisterPage() {
   const navigate = useNavigate();
@@ -81,17 +82,17 @@ export function RegisterPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4 py-8">
-      <div className="w-full max-w-lg bg-white rounded-[5px] shadow-sm border border-slate-200/80 p-8 sm:p-10">
-        {/* Header */}
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-14 h-14 rounded-[5px] bg-gradient-to-tr from-[#0f3b7d] to-[#2563eb] text-white font-black text-2xl mb-3 shadow-md tracking-wider">
-            IRS
-          </div>
-          <h1 className="text-2xl font-black text-[#0f3b7d] tracking-tight">
-            Đăng Ký Tài Khoản IRS
-          </h1>
-          <p className="text-sm text-slate-500 font-medium mt-1">
+    <div className="min-h-screen bg-slate-900/95 flex items-center justify-center p-4 py-8 relative overflow-hidden">
+      <div className="absolute -top-32 -left-32 w-96 h-96 rounded-full bg-blue-600/20 blur-3xl pointer-events-none" />
+      <div className="absolute -bottom-32 -right-32 w-96 h-96 rounded-full bg-indigo-600/20 blur-3xl pointer-events-none" />
+      <div className="w-full max-w-lg bg-white rounded-2xl shadow-2xl border border-slate-100 p-8 sm:p-10 relative z-10">
+        {/* Header with New Icon Logo */}
+        <div className="flex flex-col items-center justify-center text-center mb-6">
+          <BrandLogo size="2xl" layout="vertical" textColor="text-slate-900" subtextColor="text-slate-500" className="mb-1" />
+          <h2 className="text-xl font-bold text-slate-800 tracking-tight mt-1">
+            Đăng Ký Tài Khoản
+          </h2>
+          <p className="text-xs text-slate-500 font-medium mt-0.5">
             Gia nhập nền tảng điều phối & quản trị tuyển sinh lưu động
           </p>
         </div>

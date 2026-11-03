@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Eye, EyeOff, Lock, User, LogIn, AlertCircle } from 'lucide-react';
 import { useAppStore } from '../../../store/useAppStore';
 import { authApi } from '../../../services/api';
+import { BrandLogo } from '../../../components/BrandLogo/BrandLogo';
 
 export function LoginPage() {
   const navigate = useNavigate();
@@ -49,24 +50,26 @@ export function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
-      <div className="w-full max-w-md bg-white rounded-[5px] shadow-sm border border-slate-200/80 p-8 sm:p-10">
-        {/* Brand Header */}
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-14 h-14 rounded-[5px] bg-gradient-to-tr from-[#0f3b7d] to-[#2563eb] text-white font-black text-2xl mb-3 shadow-md tracking-wider">
-            IRS
-          </div>
-          <h1 className="text-2xl font-black text-[#0f3b7d] tracking-tight">
-            IRS Admissions
-          </h1>
-          <p className="text-sm text-slate-500 font-medium mt-1">
-            Hệ thống Tuyển sinh & Định tuyến Lộ trình
-          </p>
+    <div className="min-h-screen bg-slate-900/95 flex items-center justify-center p-4 relative overflow-hidden">
+      {/* Background ambient lighting */}
+      <div className="absolute -top-32 -left-32 w-96 h-96 rounded-full bg-blue-600/20 blur-3xl pointer-events-none" />
+      <div className="absolute -bottom-32 -right-32 w-96 h-96 rounded-full bg-indigo-600/20 blur-3xl pointer-events-none" />
+
+      <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl border border-slate-100 p-8 sm:p-10 relative z-10">
+        {/* Brand Header with New Icon Logo (Concept 1) */}
+        <div className="flex flex-col items-center justify-center text-center mb-6">
+          <BrandLogo
+            size="2xl"
+            layout="vertical"
+            textColor="text-slate-900"
+            subtextColor="text-slate-500"
+            className="mb-1"
+          />
         </div>
 
         {/* Error Alert */}
         {error && (
-          <div className="mb-6 p-3.5 bg-red-50 border border-red-200/80 rounded-[5px] flex items-start gap-2.5 text-red-700 text-sm animate-slide-up">
+          <div className="mb-6 p-3.5 bg-red-50 border border-red-200/80 rounded-xl flex items-start gap-2.5 text-red-700 text-sm animate-slide-up">
             <AlertCircle className="w-5 h-5 shrink-0 mt-0.5 text-red-500" />
             <span>{error}</span>
           </div>
@@ -77,7 +80,7 @@ export function LoginPage() {
           <div>
             <label
               htmlFor="usernameOrEmail"
-              className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-2"
+              className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2"
             >
               Tài khoản hoặc Email
             </label>
@@ -92,7 +95,7 @@ export function LoginPage() {
                 value={usernameOrEmail}
                 onChange={(e) => setUsernameOrEmail(e.target.value)}
                 placeholder="admin hoặc email@domain.com"
-                className="w-full pl-10 pr-4 py-2.5 text-sm bg-slate-50/50 border border-slate-300 rounded-[5px] focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-[#0f3b7d] outline-none transition"
+                className="w-full pl-10 pr-4 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 outline-none transition"
                 required
               />
             </div>
@@ -102,7 +105,7 @@ export function LoginPage() {
           <div>
             <label
               htmlFor="password"
-              className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-2"
+              className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2"
             >
               Mật khẩu
             </label>
@@ -117,7 +120,7 @@ export function LoginPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
-                className="w-full pl-10 pr-10 py-2.5 text-sm bg-slate-50/50 border border-slate-300 rounded-[5px] focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-[#0f3b7d] outline-none transition"
+                className="w-full pl-10 pr-10 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 outline-none transition"
                 required
               />
               <button
@@ -138,7 +141,7 @@ export function LoginPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full mt-2 bg-[#0f3b7d] hover:bg-[#0c2f64] text-white font-semibold py-2.5 px-4 rounded-[5px] transition duration-200 flex items-center justify-center gap-2 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full mt-2 bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-bold py-2.5 px-4 rounded-xl transition duration-200 flex items-center justify-center gap-2 shadow-md shadow-indigo-500/25 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
           >
             {loading ? (
               <>
