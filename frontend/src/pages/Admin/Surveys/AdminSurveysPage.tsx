@@ -16,6 +16,7 @@ import {
   Eye,
 } from 'lucide-react';
 import { surveyApi } from '../../../services/api';
+import { AnimatedCounter } from '../../../components/common/AnimatedCounter';
 import { exportSurveysToExcel } from '../../../utils/surveyExcelExporter';
 
 export function AdminSurveysPage() {
@@ -172,41 +173,41 @@ export function AdminSurveysPage() {
         return (
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             {/* Card 1: Tổng số phiếu */}
-            <div className="bg-white rounded-[5px] border border-slate-200/80 p-5 shadow-xs flex items-center gap-4">
-              <div className="w-12 h-12 rounded-[5px] bg-blue-50 text-[#0f3b7d] flex items-center justify-center shrink-0">
-                <Users className="w-6 h-6" />
+            <div className="bg-white rounded-xl border border-slate-200/80 p-5 shadow-xs card-interactive flex items-center gap-4 animate-fade-in-up delay-50">
+              <div className="w-12 h-12 rounded-xl bg-gradient-to-tr from-blue-50 to-indigo-50 border border-blue-200/50 text-[#0f3b7d] flex items-center justify-center shrink-0 shadow-xs">
+                <Users className="w-6 h-6 text-blue-600" />
               </div>
               <div className="min-w-0">
                 <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
                   Tổng số phiếu thu được
                 </span>
                 <div className="text-2xl font-black text-slate-900 mt-0.5">
-                  {displaySummary.total_tickets.toLocaleString('vi-VN')}
+                  <AnimatedCounter value={displaySummary.total_tickets} />
                 </div>
                 <span className="text-[11px] text-slate-500">100% học sinh quét QR online</span>
               </div>
             </div>
 
             {/* Card 2: Số điểm trường */}
-            <div className="bg-white rounded-[5px] border border-slate-200/80 p-5 shadow-xs flex items-center gap-4">
-              <div className="w-12 h-12 rounded-[5px] bg-purple-50 text-purple-700 flex items-center justify-center shrink-0">
-                <Building2 className="w-6 h-6" />
+            <div className="bg-white rounded-xl border border-slate-200/80 p-5 shadow-xs card-interactive flex items-center gap-4 animate-fade-in-up delay-100">
+              <div className="w-12 h-12 rounded-xl bg-gradient-to-tr from-purple-50 to-pink-50 border border-purple-200/50 text-purple-700 flex items-center justify-center shrink-0 shadow-xs">
+                <Building2 className="w-6 h-6 text-purple-600" />
               </div>
               <div className="min-w-0">
                 <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
                   Điểm trường đã tiếp cận
                 </span>
                 <div className="text-2xl font-black text-slate-900 mt-0.5">
-                  {displaySummary.total_schools.toLocaleString('vi-VN')}
+                  <AnimatedCounter value={displaySummary.total_schools} />
                 </div>
                 <span className="text-[11px] text-slate-500">Đã cập nhật tự động tổng số phiếu</span>
               </div>
             </div>
 
             {/* Card 3: Top ngành hot */}
-            <div className="bg-white rounded-[5px] border border-slate-200/80 p-5 shadow-xs flex items-center gap-4">
-              <div className="w-12 h-12 rounded-[5px] bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
-                <Sparkles className="w-6 h-6" />
+            <div className="bg-white rounded-xl border border-slate-200/80 p-5 shadow-xs card-interactive flex items-center gap-4 animate-fade-in-up delay-150">
+              <div className="w-12 h-12 rounded-xl bg-gradient-to-tr from-amber-50 to-orange-50 border border-amber-200/50 text-amber-600 flex items-center justify-center shrink-0 shadow-xs">
+                <Sparkles className="w-6 h-6 text-amber-600" />
               </div>
               <div className="min-w-0">
                 <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">

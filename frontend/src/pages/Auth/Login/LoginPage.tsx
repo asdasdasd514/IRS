@@ -51,11 +51,11 @@ export function LoginPage() {
 
   return (
     <div className="min-h-screen bg-slate-900/95 flex items-center justify-center p-4 relative overflow-hidden">
-      {/* Background ambient lighting */}
-      <div className="absolute -top-32 -left-32 w-96 h-96 rounded-full bg-blue-600/20 blur-3xl pointer-events-none" />
-      <div className="absolute -bottom-32 -right-32 w-96 h-96 rounded-full bg-indigo-600/20 blur-3xl pointer-events-none" />
+      {/* Background ambient lighting with soft breathing glow */}
+      <div className="absolute -top-32 -left-32 w-96 h-96 rounded-full bg-blue-600/25 blur-3xl animate-glow-pulse pointer-events-none" />
+      <div className="absolute -bottom-32 -right-32 w-96 h-96 rounded-full bg-indigo-600/25 blur-3xl animate-glow-pulse delay-200 pointer-events-none" />
 
-      <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl border border-slate-100 p-8 sm:p-10 relative z-10">
+      <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl border border-slate-100 p-8 sm:p-10 relative z-10 animate-scale-in">
         {/* Brand Header with New Icon Logo (Concept 1) */}
         <div className="flex flex-col items-center justify-center text-center mb-6">
           <BrandLogo
@@ -137,11 +137,11 @@ export function LoginPage() {
             </div>
           </div>
 
-          {/* Submit Button */}
+          {/* Submit Button with Shimmer Sweep and Click Bounce */}
           <button
             type="submit"
             disabled={loading}
-            className="w-full mt-2 bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-bold py-2.5 px-4 rounded-xl transition duration-200 flex items-center justify-center gap-2 shadow-md shadow-indigo-500/25 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+            className="w-full mt-2 bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 active:scale-[0.98] text-white font-bold py-3 px-4 rounded-xl transition-all duration-200 flex items-center justify-center gap-2 shadow-lg shadow-indigo-500/25 btn-shimmer disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
           >
             {loading ? (
               <>

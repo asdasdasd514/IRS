@@ -95,6 +95,46 @@ body {
   animation: slide-up 0.3s ease-out;
 }
 
+/* Interactive SaaS Micro-animations */
+.card-interactive {
+  transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.22s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.22s ease;
+}
+.card-interactive:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.04);
+}
+
+.btn-shimmer {
+  position: relative;
+  overflow: hidden;
+}
+.btn-shimmer::after {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: linear-gradient(
+    60deg,
+    transparent 20%,
+    rgba(255, 255, 255, 0.2) 25%,
+    transparent 30%
+  );
+  transform: rotate(30deg) translateX(-100%);
+  transition: transform 0.75s ease;
+}
+.btn-shimmer:hover::after {
+  transform: rotate(30deg) translateX(100%);
+}
+
+/* Staggered animation delays */
+.delay-50 { animation-delay: 50ms; }
+.delay-100 { animation-delay: 100ms; }
+.delay-150 { animation-delay: 150ms; }
+.delay-200 { animation-delay: 200ms; }
+.delay-300 { animation-delay: 300ms; }
+
 /* Hide all scrollbars globally */
 *::-webkit-scrollbar {
   display: none;

@@ -179,7 +179,7 @@ export function AdminMembersPage() {
   });
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8 space-y-6">
+    <div className="p-4 sm:p-6 lg:p-8 space-y-6 animate-fade-in-up">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
@@ -193,7 +193,7 @@ export function AdminMembersPage() {
 
         <button
           onClick={handleOpenCreateModal}
-          className="bg-[#0f3b7d] hover:bg-[#0c2f64] text-white font-semibold py-2.5 px-4 rounded-[5px] transition duration-200 flex items-center justify-center gap-2 text-sm shadow-sm cursor-pointer"
+          className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold py-2.5 px-4 rounded-xl transition-all duration-200 flex items-center justify-center gap-2 text-sm shadow-md shadow-blue-500/20 btn-shimmer active:scale-95 cursor-pointer"
         >
           <Plus className="w-4 h-4" />
           <span>Thêm thành viên</span>

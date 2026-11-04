@@ -33,11 +33,11 @@ class CampaignStatus(str, Enum):
 class CampaignDestination(BaseModel):
     id: Optional[str] = None
     school_id: Optional[str] = None
-    name: str
+    name: Optional[str] = 'Điểm trường' 
     code: Optional[str] = None
     address: Optional[str] = None
-    lat: float
-    lng: float
+    lat: Optional[float] = None
+    lng: Optional[float] = None
     order: Optional[int] = None
     priority: Optional[int] = None
     distance_text: Optional[str] = None

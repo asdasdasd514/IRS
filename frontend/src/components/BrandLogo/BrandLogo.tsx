@@ -65,13 +65,16 @@ export const BrandLogo: React.FC<BrandLogoProps> = ({
         layout === 'vertical' ? 'flex-col items-center text-center gap-3' : 'items-center gap-3'
       } min-w-0 ${className}`}
     >
-      {/* Square Centered Concept 1 Logo (Pure White Background) */}
-      <img
-        src="/irs-logo.png"
-        alt="IRS Admissions Compass & Waypoint Logo"
-        className={`${s.img} aspect-square object-contain shrink-0 select-none rounded-xl transition-transform duration-200 group-hover:scale-105`}
-        draggable={false}
-      />
+      {/* Square Centered Concept 1 Logo (Pure White Background with Micro-interaction) */}
+      <div className="relative shrink-0 flex items-center justify-center group/logo">
+        <div className="absolute inset-0 rounded-2xl bg-cyan-500/25 blur-md opacity-0 group-hover/logo:opacity-100 transition-opacity duration-300 pointer-events-none" />
+        <img
+          src="/irs-logo.png"
+          alt="IRS Admissions Compass & Waypoint Logo"
+          className={`${s.img} aspect-square object-contain shrink-0 select-none rounded-xl relative z-10 transition-all duration-300 group-hover/logo:scale-105 group-hover/logo:rotate-1 drop-shadow-sm`}
+          draggable={false}
+        />
+      </div>
 
       {showText && (
         <div

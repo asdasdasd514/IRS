@@ -82,7 +82,7 @@ export function AdminMapPage() {
   });
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8 space-y-6">
+    <div className="p-4 sm:p-6 lg:p-8 space-y-6 animate-fade-in-up">
       {/* Header */}
       <div>
         <h1 className="text-2xl font-black text-slate-900 tracking-tight">
@@ -96,7 +96,7 @@ export function AdminMapPage() {
       {/* Main Grid: School Selector List + Map Container */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
         {/* Danh sách địa điểm bên trái (chiếm 4 cột trên lg, 3 cột trên xl) */}
-        <div className="lg:col-span-4 xl:col-span-3 bg-white rounded-[5px] border border-slate-200/80 p-3.5 shadow-xs space-y-3">
+        <div className="lg:col-span-4 xl:col-span-3 bg-white rounded-2xl border border-slate-200/80 p-3.5 shadow-xs space-y-3">
           <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
             <div className="flex items-center gap-2">
               <Building2 className="w-4 h-4 text-[#0f3b7d]" />
@@ -192,7 +192,7 @@ export function AdminMapPage() {
         </div>
 
         {/* Khung bản đồ bên phải mở rộng to hơn (8 cột trên lg, 9 cột trên xl) */}
-        <div className="lg:col-span-8 xl:col-span-9 bg-white rounded-[5px] border border-slate-200/80 p-3 shadow-xs">
+        <div className="lg:col-span-8 xl:col-span-9 bg-white rounded-2xl border border-slate-200/80 p-3 shadow-xs">
           <div className="h-[700px] w-full rounded-[5px] overflow-hidden relative border border-slate-100">
             {loading && (
               <div className="absolute inset-0 z-20 bg-white/75 backdrop-blur-xs flex items-center justify-center">

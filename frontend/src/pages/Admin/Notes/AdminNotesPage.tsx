@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { noteApi, campaignApi, tripApi, schoolApi } from '../../../services/api';
 import type { FieldNote } from '../../../types';
+import { AnimatedCounter } from '../../../components/common/AnimatedCounter';
 
 export const FIELD_NOTE_TAGS = [
   { label: '📝 Ghi chú', value: 'Ghi chú', badgeColor: 'bg-blue-50 text-blue-800 border-blue-300' },
@@ -249,7 +250,7 @@ export const AdminNotesPage: React.FC = () => {
 
           <button
             onClick={handleOpenCreateModal}
-            className="px-4 py-2.5 rounded-[5px] bg-[#0f3b7d] hover:bg-[#0c2f64] active:scale-[0.99] text-white text-xs sm:text-sm font-bold flex items-center gap-2 transition shadow-xs cursor-pointer"
+            className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 active:scale-95 text-white text-xs sm:text-sm font-bold flex items-center gap-2 transition-all duration-200 shadow-md shadow-blue-500/20 btn-shimmer cursor-pointer"
           >
             <Plus className="w-4 h-4" />
             <span>Thêm ghi chú</span>
@@ -257,51 +258,51 @@ export const AdminNotesPage: React.FC = () => {
         </div>
       </div>
 
-      {/* KPI Stats Cards */}
+      {/* KPI Stats Cards with Hover Lift and Animated Counter */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {/* Card 1: Tổng số ghi chú */}
-        <div className="bg-white rounded-[5px] border border-slate-200/80 p-5 shadow-xs flex items-center gap-4">
-          <div className="w-12 h-12 rounded-[5px] bg-blue-50 text-[#0f3b7d] flex items-center justify-center shrink-0">
-            <StickyNote className="w-6 h-6" />
+        <div className="bg-white rounded-xl border border-slate-200/80 p-5 shadow-xs card-interactive flex items-center gap-4 animate-fade-in-up delay-50">
+          <div className="w-12 h-12 rounded-xl bg-gradient-to-tr from-blue-50 to-indigo-50 border border-blue-200/50 text-[#0f3b7d] flex items-center justify-center shrink-0 shadow-xs">
+            <StickyNote className="w-6 h-6 text-blue-600" />
           </div>
           <div className="min-w-0">
             <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
               Tổng số ghi chú
             </span>
             <div className="text-2xl font-black text-slate-900 mt-0.5">
-              {stats.total_notes.toLocaleString('vi-VN')}
+              <AnimatedCounter value={stats.total_notes} />
             </div>
-            <span className="text-[11px] text-slate-500">Đánh giá & phản hồi thực tế</span>
+            <span className="text-[11px] text-slate-500">Đánh giá &amp; phản hồi thực tế</span>
           </div>
         </div>
 
         {/* Card 2: Điểm trường có nhận xét */}
-        <div className="bg-white rounded-[5px] border border-slate-200/80 p-5 shadow-xs flex items-center gap-4">
-          <div className="w-12 h-12 rounded-[5px] bg-purple-50 text-purple-700 flex items-center justify-center shrink-0">
-            <Building2 className="w-6 h-6" />
+        <div className="bg-white rounded-xl border border-slate-200/80 p-5 shadow-xs card-interactive flex items-center gap-4 animate-fade-in-up delay-100">
+          <div className="w-12 h-12 rounded-xl bg-gradient-to-tr from-purple-50 to-pink-50 border border-purple-200/50 text-purple-700 flex items-center justify-center shrink-0 shadow-xs">
+            <Building2 className="w-6 h-6 text-purple-600" />
           </div>
           <div className="min-w-0">
             <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
               Điểm trường có nhận xét
             </span>
             <div className="text-2xl font-black text-slate-900 mt-0.5">
-              {stats.total_schools.toLocaleString('vi-VN')}
+              <AnimatedCounter value={stats.total_schools} />
             </div>
             <span className="text-[11px] text-slate-500">Các trường đã có dữ liệu trao đổi</span>
           </div>
         </div>
 
         {/* Card 3: Đợt công tác ghi nhận */}
-        <div className="bg-white rounded-[5px] border border-slate-200/80 p-5 shadow-xs flex items-center gap-4">
-          <div className="w-12 h-12 rounded-[5px] bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
-            <Route className="w-6 h-6" />
+        <div className="bg-white rounded-xl border border-slate-200/80 p-5 shadow-xs card-interactive flex items-center gap-4 animate-fade-in-up delay-150">
+          <div className="w-12 h-12 rounded-xl bg-gradient-to-tr from-amber-50 to-orange-50 border border-amber-200/50 text-amber-600 flex items-center justify-center shrink-0 shadow-xs">
+            <Route className="w-6 h-6 text-amber-600" />
           </div>
           <div className="min-w-0">
             <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
               Đợt công tác ghi nhận
             </span>
             <div className="text-2xl font-black text-slate-900 mt-0.5">
-              {stats.total_trips.toLocaleString('vi-VN')}
+              <AnimatedCounter value={stats.total_trips} />
             </div>
             <span className="text-[11px] text-slate-500">Từ các đợt tuyển sinh thực địa</span>
           </div>
@@ -510,7 +511,7 @@ export const AdminNotesPage: React.FC = () => {
       {/* MODAL THÊM / SỬA GHI CHÚ */}
       {isModalOpen && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-3 sm:p-4 animate-fade-in">
-          <div className="bg-white rounded-xl shadow-2xl border border-slate-200/90 w-full max-w-lg overflow-hidden flex flex-col">
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200/90 w-full max-w-lg overflow-hidden flex flex-col animate-scale-in">
             {/* Header */}
             <div className="px-5 py-4 bg-gradient-to-r from-[#0f3b7d] to-[#1e58a8] text-white flex items-center justify-between">
               <div className="flex items-center gap-2">

@@ -80,7 +80,7 @@ export function Sidebar({ onCloseMobile }: SidebarProps) {
                       `flex items-center ${
                         isCollapsed
                           ? 'justify-center p-2.5 rounded-xl'
-                          : 'gap-3 px-3.5 py-2.5 rounded-xl text-xs'
+                          : 'gap-3 px-3.5 py-2.5 rounded-xl text-xs hover:translate-x-1'
                       } transition-all duration-200 group relative ${
                         isActive
                           ? 'bg-gradient-to-r from-blue-600/25 to-indigo-600/25 text-blue-400 border border-blue-500/35 font-bold shadow-sm shadow-indigo-950/40'
@@ -90,8 +90,12 @@ export function Sidebar({ onCloseMobile }: SidebarProps) {
                   >
                     {({ isActive }) => (
                       <>
+                        {/* Active Left Indicator Bar */}
+                        {isActive && !isCollapsed && (
+                          <span className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-5 rounded-r bg-gradient-to-b from-cyan-400 to-blue-500 shadow-sm shadow-cyan-400" />
+                        )}
                         <Icon
-                          className={`w-4.5 h-4.5 shrink-0 transition-colors ${
+                          className={`w-4.5 h-4.5 shrink-0 transition-transform duration-200 group-hover:scale-110 ${
                             isActive
                               ? 'text-blue-400'
                               : 'text-slate-400 group-hover:text-slate-200'
@@ -101,11 +105,11 @@ export function Sidebar({ onCloseMobile }: SidebarProps) {
                           <>
                             <span className="flex-1 text-[13px] truncate">{item.label}</span>
                             {item.badge ? (
-                              <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30 font-semibold shrink-0">
+                              <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30 font-semibold shrink-0 animate-pulse-soft">
                                 {item.badge}
                               </span>
                             ) : isActive ? (
-                              <span className="w-1.5 h-1.5 rounded-full bg-blue-400 shadow-xs shadow-blue-400 shrink-0" />
+                              <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 shadow-xs shadow-cyan-400 shrink-0" />
                             ) : null}
                           </>
                         )}

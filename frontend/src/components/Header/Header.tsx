@@ -99,7 +99,7 @@ export function Header({ onOpenMobileMenu, title, subtitle }: HeaderProps) {
             onClick={() => setDropdownOpen((prev) => !prev)}
             className="flex items-center gap-2 sm:gap-2.5 p-1 sm:p-1.5 rounded-xl hover:bg-slate-100 transition duration-150 border border-transparent hover:border-slate-200 group"
           >
-            <div className="w-8 h-8 rounded-full bg-[#0f3b7d] text-white flex items-center justify-center font-bold text-xs uppercase shadow-xs shrink-0 group-hover:scale-105 transition-transform">
+            <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center font-bold text-xs uppercase shadow-xs shrink-0 group-hover:scale-105 group-hover:shadow-md transition-all duration-200">
               {user?.full_name
                 ? user.full_name.charAt(0)
                 : user?.username
@@ -132,7 +132,7 @@ export function Header({ onOpenMobileMenu, title, subtitle }: HeaderProps) {
 
           {/* Dropdown Menu */}
           {dropdownOpen && (
-            <div className="absolute right-0 mt-2 w-60 bg-white rounded-[5px] shadow-xl border border-slate-200/80 py-1.5 z-50 animate-scale-in">
+            <div className="absolute right-0 mt-2 w-60 bg-white rounded-xl shadow-2xl border border-slate-200/90 py-1.5 z-50 animate-scale-in">
               {/* User summary */}
               <div className="px-4 py-3 border-b border-slate-100">
                 <div className="flex items-center gap-2.5">
