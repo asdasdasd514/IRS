@@ -18,6 +18,7 @@ import {
 import { noteApi, campaignApi, tripApi, schoolApi } from '../../../services/api';
 import type { FieldNote } from '../../../types';
 import { AnimatedCounter } from '../../../components/common/AnimatedCounter';
+import { Portal } from '../../../components/common/Portal';
 
 export const FIELD_NOTE_TAGS = [
   { label: '📝 Ghi chú', value: 'Ghi chú', badgeColor: 'bg-blue-50 text-blue-800 border-blue-300' },
@@ -510,8 +511,9 @@ export const AdminNotesPage: React.FC = () => {
 
       {/* MODAL THÊM / SỬA GHI CHÚ */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-3 sm:p-4 animate-fade-in">
-          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200/90 w-full max-w-lg overflow-hidden flex flex-col animate-scale-in">
+        <Portal>
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-3 sm:p-4 animate-fade-in">
+            <div className="bg-white rounded-2xl shadow-2xl border border-slate-200/90 w-full max-w-lg overflow-hidden flex flex-col animate-scale-in">
             {/* Header */}
             <div className="px-5 py-4 bg-gradient-to-r from-[#0f3b7d] to-[#1e58a8] text-white flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -645,6 +647,7 @@ export const AdminNotesPage: React.FC = () => {
             </form>
           </div>
         </div>
+        </Portal>
       )}
     </div>
   );

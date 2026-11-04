@@ -48,6 +48,7 @@ import 'leaflet/dist/leaflet.css';
 import { schoolApi } from '../../../services/api';
 import { useAppStore } from '../../../store/useAppStore';
 import { getGoogleMapsPlaceUrl } from '../../../utils/navigation';
+import { Portal } from '../../../components/common/Portal';
 import type { School, SchoolBlock } from '../../../types';
 
 // Cấu hình các Theme giao diện (Tone màu nền và viền trang)
@@ -2120,8 +2121,9 @@ export function AdminSchoolDetailPage() {
 
       {/* MODAL CHỌN ẢNH TỪ KHO ẢNH TRƯỜNG HỌC (MEDIA PICKER MODAL) */}
       {mediaPickerTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
-          <div className="bg-white w-full max-w-2xl rounded-[5px] shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[85vh] animate-scale-up">
+        <Portal>
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+            <div className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[85vh] animate-scale-up">
             {/* Header modal */}
             <div className="p-4 sm:p-5 border-b border-slate-200 flex items-center justify-between bg-slate-50/80">
               <div className="flex items-center gap-2.5">
@@ -2190,18 +2192,20 @@ export function AdminSchoolDetailPage() {
             <div className="p-3.5 border-t border-slate-200 bg-slate-50 flex items-center justify-end">
               <button
                 onClick={() => setMediaPickerTarget(null)}
-                className="px-4 py-2 border border-slate-300 hover:bg-slate-100 text-slate-700 text-xs font-semibold rounded-[5px] transition"
+                className="px-4 py-2 border border-slate-300 hover:bg-slate-100 text-slate-700 text-xs font-semibold rounded-lg transition"
               >
                 Đóng
               </button>
             </div>
           </div>
         </div>
+        </Portal>
       )}
 
       {/* 4. LIGHTBOX / PHOTO VIEWER MODAL VỚI THUMBNAIL CAROUSEL VÀ PHÍM ĐỔI ẢNH */}
       {lightboxData && (
-        <div className="fixed inset-0 z-50 bg-black/95 backdrop-blur-md flex flex-col justify-between select-none animate-fade-in">
+        <Portal>
+          <div className="fixed inset-0 z-[9999] bg-black/95 backdrop-blur-md flex flex-col justify-between select-none animate-fade-in">
           {/* Top Bar */}
           <div className="p-4 sm:p-5 flex items-center justify-between text-white border-b border-white/10 shrink-0">
             <div className="flex items-center gap-3">
@@ -2291,6 +2295,7 @@ export function AdminSchoolDetailPage() {
             </div>
           </div>
         </div>
+        </Portal>
       )}
     </div>
   );

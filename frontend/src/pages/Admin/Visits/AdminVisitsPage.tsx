@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { visitApi, campaignApi, schoolApi } from '../../../services/api';
 import { formatDateTime } from '../../../utils/formatters';
+import { Portal } from '../../../components/common/Portal';
 
 export const AdminVisitsPage: React.FC = () => {
   // Filter states
@@ -406,14 +407,15 @@ export const AdminVisitsPage: React.FC = () => {
 
       {/* MODAL CHI TIẾT LƯỢT THAM QUAN & TƯ LIỆU */}
       {selectedVisitDetail && (
-        <div
-          className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-fade-in"
-          onClick={() => setSelectedVisitDetail(null)}
-        >
+        <Portal>
           <div
-            className="bg-white rounded-xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-hidden flex flex-col border border-slate-200"
-            onClick={(e) => e.stopPropagation()}
+            className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-fade-in"
+            onClick={() => setSelectedVisitDetail(null)}
           >
+            <div
+              className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-hidden flex flex-col border border-slate-200"
+              onClick={(e) => e.stopPropagation()}
+            >
             {/* Modal Header */}
             <div className="p-4 sm:p-5 bg-gradient-to-r from-[#0f3b7d] to-[#1e4e96] text-white flex items-center justify-between">
               <div className="flex items-center gap-3">
@@ -535,13 +537,14 @@ export const AdminVisitsPage: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setSelectedVisitDetail(null)}
-                className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold rounded-[5px] text-xs transition cursor-pointer"
+                className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold rounded-lg text-xs transition cursor-pointer"
               >
                 Đóng
               </button>
             </div>
           </div>
         </div>
+        </Portal>
       )}
     </div>
   );

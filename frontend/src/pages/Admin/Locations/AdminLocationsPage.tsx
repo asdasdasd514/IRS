@@ -23,6 +23,7 @@ import {
 import { schoolApi, mapsApi } from '../../../services/api';
 import { getGoogleMapsPlaceUrl } from '../../../utils/navigation';
 import { WaypointInfoModal } from '../../../components/WaypointInfoModal/WaypointInfoModal';
+import { Portal } from '../../../components/common/Portal';
 
 export function AdminLocationsPage() {
   const navigate = useNavigate();
@@ -728,26 +729,27 @@ export function AdminLocationsPage() {
 
       {/* Modal Thêm Trường Học Mới Với Google Maps Integration */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs overflow-y-auto">
-          <div className="bg-white rounded-[5px] max-w-xl w-full p-6 shadow-2xl border border-slate-200 my-8 max-h-[90vh] overflow-y-auto animate-slide-up">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
-              <div>
-                <h3 className="text-lg font-bold text-slate-900">
-                  {editingSchool ? 'Chỉnh Sửa Trường Học & Tọa Độ' : 'Thêm Trường Học & Địa Điểm Mới'}
-                </h3>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  {editingSchool
-                    ? 'Cập nhật thông tin hồ sơ và định vị GPS trường học.'
-                    : 'Nhập thông tin hồ sơ trường và lấy tọa độ GPS tự động từ Google Maps.'}
-                </p>
+        <Portal>
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs overflow-y-auto">
+            <div className="bg-white rounded-2xl max-w-xl w-full p-6 shadow-2xl border border-slate-200 my-8 max-h-[90vh] overflow-y-auto animate-slide-up">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900">
+                    {editingSchool ? 'Chỉnh Sửa Trường Học & Tọa Độ' : 'Thêm Trường Học & Địa Điểm Mới'}
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    {editingSchool
+                      ? 'Cập nhật thông tin hồ sơ và định vị GPS trường học.'
+                      : 'Nhập thông tin hồ sơ trường và lấy tọa độ GPS tự động từ Google Maps.'}
+                  </p>
+                </div>
+                <button
+                  onClick={() => setIsModalOpen(false)}
+                  className="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg transition hover:bg-slate-100 cursor-pointer text-lg leading-none"
+                >
+                  ✕
+                </button>
               </div>
-              <button
-                onClick={() => setIsModalOpen(false)}
-                className="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg"
-              >
-                ✕
-              </button>
-            </div>
 
             <form onSubmit={handleSaveSchool} className="space-y-4">
               {/* KHỐI 1: TỌA ĐỘ MAP */}
@@ -981,6 +983,7 @@ export function AdminLocationsPage() {
             </form>
           </div>
         </div>
+        </Portal>
       )}
       {/* Modal Chi tiết & Lịch sử trường học (WaypointInfoModal) */}
       {selectedSchoolForDetail && (

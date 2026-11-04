@@ -18,6 +18,7 @@ import {
 import { surveyApi } from '../../../services/api';
 import { AnimatedCounter } from '../../../components/common/AnimatedCounter';
 import { exportSurveysToExcel } from '../../../utils/surveyExcelExporter';
+import { Portal } from '../../../components/common/Portal';
 
 export function AdminSurveysPage() {
   const [loading, setLoading] = useState(true);
@@ -516,23 +517,24 @@ export function AdminSurveysPage() {
 
       {/* Ticket Detail Modal */}
       {selectedTicket && (
-        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-[5px] shadow-xl max-w-lg w-full overflow-hidden border border-slate-200 animate-in fade-in zoom-in-95 duration-150">
-            {/* Modal Header */}
-            <div className="px-6 py-4 bg-[#0f3b7d] text-white flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <GraduationCap className="w-5 h-5 text-blue-200" />
-                <div>
-                  <h3 className="font-bold text-base">Thông Tin Phiếu Khảo Sát</h3>
-                  <p className="text-xs text-blue-100">Chi tiết nguyện vọng của học sinh</p>
+        <Portal>
+          <div className="fixed inset-0 z-[9999] bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
+            <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden border border-slate-200 animate-in fade-in zoom-in-95 duration-150">
+              {/* Modal Header */}
+              <div className="px-6 py-4 bg-[#0f3b7d] text-white flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <GraduationCap className="w-5 h-5 text-blue-200" />
+                  <div>
+                    <h3 className="font-bold text-base">Thông Tin Phiếu Khảo Sát</h3>
+                    <p className="text-xs text-blue-100">Chi tiết nguyện vọng của học sinh</p>
+                  </div>
                 </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setSelectedTicket(null)}
-                className="p-1.5 rounded-[5px] hover:bg-white/10 text-white transition cursor-pointer"
-              >
-                <X className="w-4 h-4" />
+                <button
+                  type="button"
+                  onClick={() => setSelectedTicket(null)}
+                  className="p-1.5 rounded-lg hover:bg-white/10 text-white transition cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
               </button>
             </div>
 
@@ -638,13 +640,14 @@ export function AdminSurveysPage() {
               <button
                 type="button"
                 onClick={() => setSelectedTicket(null)}
-                className="px-4 py-2 rounded-[5px] bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs cursor-pointer transition"
+                className="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs cursor-pointer transition"
               >
                 Đóng
               </button>
             </div>
           </div>
         </div>
+        </Portal>
       )}
     </div>
   );

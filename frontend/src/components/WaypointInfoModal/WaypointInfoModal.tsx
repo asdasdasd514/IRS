@@ -7,6 +7,7 @@ import { getGoogleMapsPlaceUrl } from '../../utils/navigation';
 import { DetailTab } from './DetailTab';
 import { VisitLogTab } from './VisitLogTab';
 import { TicketTab } from './TicketTab';
+import { Portal } from '../common/Portal';
 
 interface WaypointInfoModalProps {
   waypoint: Waypoint | null;
@@ -66,8 +67,9 @@ export const WaypointInfoModal: React.FC<WaypointInfoModalProps> = ({
   const showTicketsTab = waypoint.type === 'SCHOOL';
 
   return (
-    <div className="fixed inset-0 z-[9999] bg-black bg-opacity-50 flex items-end sm:items-center sm:justify-center">
-      <div className="bg-white w-full sm:max-w-3xl sm:rounded-[5px] rounded-t-[5px] max-h-[90vh] flex flex-col animate-slide-up">
+    <Portal>
+      <div className="fixed inset-0 z-[9999] bg-black bg-opacity-50 flex items-end sm:items-center sm:justify-center">
+        <div className="bg-white w-full sm:max-w-3xl sm:rounded-2xl rounded-t-2xl max-h-[90vh] flex flex-col animate-slide-up shadow-2xl overflow-hidden">
         {/* Header */}
         <div className="flex-shrink-0 flex items-start justify-between gap-3 p-4 border-b border-slate-200">
           <div className="min-w-0 flex-1">
@@ -192,5 +194,6 @@ export const WaypointInfoModal: React.FC<WaypointInfoModalProps> = ({
         </div>
       </div>
     </div>
+    </Portal>
   );
 };

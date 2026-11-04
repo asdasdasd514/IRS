@@ -25,6 +25,7 @@ import {
 import { surveyApi, tripApi } from '../../../services/api';
 import { exportSurveysToExcel } from '../../../utils/surveyExcelExporter';
 import { SurveyQuestion, SurveyQuestionType } from '../../../types';
+import { Portal } from '../../../components/common/Portal';
 
 interface CampaignSurveyModalProps {
   campaign: any;
@@ -431,8 +432,9 @@ export function CampaignSurveyModal({
   if (!isOpen || !campaign) return null;
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4">
-      <div className="bg-slate-50 rounded-[6px] shadow-2xl max-w-5xl w-full flex flex-col max-h-[94vh] overflow-hidden border border-slate-300 animate-in fade-in zoom-in-95 duration-150">
+    <Portal>
+      <div className="fixed inset-0 z-[9999] bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4">
+        <div className="bg-slate-50 rounded-2xl shadow-2xl max-w-5xl w-full flex flex-col max-h-[94vh] overflow-hidden border border-slate-300 animate-in fade-in zoom-in-95 duration-150">
         {/* Top Header */}
         <div className="px-5 py-3.5 bg-[#0f3b7d] text-white flex items-center justify-between shrink-0 shadow-xs">
           <div className="flex items-center gap-3">
@@ -1085,8 +1087,8 @@ export function CampaignSurveyModal({
 
       {/* POPUP XEM CHI TIẾT CÂU TRẢ LỜI CỦA 1 HỌC SINH */}
       {selectedResponseForDetail && (
-        <div className="fixed inset-0 z-60 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-3">
-          <div className="bg-white rounded-[6px] shadow-2xl max-w-lg w-full flex flex-col max-h-[85vh] overflow-hidden border border-slate-300 animate-in fade-in zoom-in-95">
+        <div className="fixed inset-0 z-[10000] bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-3">
+          <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full flex flex-col max-h-[85vh] overflow-hidden border border-slate-300 animate-in fade-in zoom-in-95">
             <div className="px-5 py-3.5 bg-[#0f3b7d] text-white flex items-center justify-between">
               <div>
                 <h3 className="font-bold text-sm">Chi Tiết Phiếu Khảo Sát</h3>
@@ -1205,6 +1207,7 @@ export function CampaignSurveyModal({
         </div>
       )}
     </div>
+    </Portal>
   );
 }
 

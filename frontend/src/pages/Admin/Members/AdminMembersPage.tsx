@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Users,
   Plus,
@@ -10,7 +11,11 @@ import {
   Trash2,
   Mail,
   CheckCircle2,
-  AlertCircle
+  AlertCircle,
+  Eye,
+  EyeOff,
+  UserPlus,
+  X
 } from 'lucide-react';
 import { authApi } from '../../../services/api';
 import { User, UserRole } from '../../../types';
@@ -24,6 +29,7 @@ export function AdminMembersPage() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const [modalError, setModalError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
@@ -54,6 +60,7 @@ export function AdminMembersPage() {
 
   const handleOpenCreateModal = () => {
     setModalError(null);
+    setShowPassword(false);
     setFormData({
       username: '',
       password: '',
@@ -179,7 +186,7 @@ export function AdminMembersPage() {
   });
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8 space-y-6 animate-fade-in-up">
+    <div className="p-4 sm:p-6 lg:p-8 space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
@@ -378,139 +385,184 @@ export function AdminMembersPage() {
         )}
       </div>
 
-      {/* Modal Thêm Thành Viên Mới */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs">
-          <div className="bg-white rounded-[5px] max-w-md w-full p-6 shadow-xl border border-slate-200 animate-slide-up">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-bold text-slate-900">
-                Cấp Tài Khoản Thành Viên Mới
-              </h3>
-              <button
-                type="button"
-                onClick={() => setIsModalOpen(false)}
-                className="text-slate-400 hover:text-slate-600 p-1 cursor-pointer"
-              >
-                ✕
-              </button>
-            </div>
-
-            {/* Thông báo lỗi nếu có */}
-            {modalError && (
-              <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded-[5px] flex items-start gap-2.5 animate-shake">
-                <AlertCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
-                <span className="font-semibold leading-relaxed">{modalError}</span>
-              </div>
-            )}
-
-            <form onSubmit={handleCreateUser} className="space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">
-                  Họ và tên
-                </label>
-                <input
-                  type="text"
-                  value={formData.full_name}
-                  onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
-                  placeholder="Ví dụ: Trần Văn Nam"
-                  className="w-full px-3.5 py-2 text-sm bg-slate-50 border border-slate-300 rounded-[5px] focus:bg-white focus:border-blue-500 outline-none"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
+      {/* Modal Thêm Thành Viên Mới - Dùng createPortal gắn vào body để phủ kín 100% màn hình, không bị hở trắng phía trên Header */}
+      {isModalOpen &&
+        createPortal(
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs overflow-y-auto">
+            <div className="bg-white rounded-2xl max-w-xl w-full p-6 shadow-2xl border border-slate-200 my-8 max-h-[90vh] overflow-y-auto animate-slide-up">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">
-                    Tên đăng nhập *
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.username}
-                    onChange={(e) => {
-                      setFormData({ ...formData, username: e.target.value.toLowerCase().trim() });
-                      if (modalError) setModalError(null);
-                    }}
-                    placeholder="namtv"
-                    minLength={3}
-                    maxLength={50}
-                    className="w-full px-3.5 py-2 text-sm bg-slate-50 border border-slate-300 rounded-[5px] focus:bg-white focus:border-blue-500 outline-none"
-                    required
-                  />
-                  <p className="text-[10px] text-slate-400 mt-1">Tối thiểu 3 ký tự (viết liền)</p>
+                  <h3 className="text-lg font-bold text-slate-900">
+                    Cấp Tài Khoản Thành Viên Mới
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Nhập thông tin hồ sơ và phân cấp quyền hạn cho nhân sự mới.
+                  </p>
                 </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">
-                    Mật khẩu *
-                  </label>
-                  <input
-                    type="password"
-                    value={formData.password}
-                    onChange={(e) => {
-                      setFormData({ ...formData, password: e.target.value });
-                      if (modalError) setModalError(null);
-                    }}
-                    placeholder="Tối thiểu 6 ký tự"
-                    minLength={6}
-                    className="w-full px-3.5 py-2 text-sm bg-slate-50 border border-slate-300 rounded-[5px] focus:bg-white focus:border-blue-500 outline-none"
-                    required
-                  />
-                  <p className="text-[10px] text-slate-400 mt-1">Tối thiểu 6 ký tự</p>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">
-                  Địa chỉ Email
-                </label>
-                <input
-                  type="email"
-                  value={formData.email}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  placeholder="namtv@gmail.com"
-                  className="w-full px-3.5 py-2 text-sm bg-slate-50 border border-slate-300 rounded-[5px] focus:bg-white focus:border-blue-500 outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">
-                  Vai trò (Phân quyền)
-                </label>
-                <select
-                  value={formData.role}
-                  onChange={(e) => setFormData({ ...formData, role: e.target.value as UserRole })}
-                  className="w-full px-3.5 py-2 text-sm bg-slate-50 border border-slate-300 rounded-[5px] focus:bg-white focus:border-blue-500 outline-none cursor-pointer"
-                >
-                  <option value="staff">Cán bộ tuyển sinh (Staff)</option>
-                  <option value="admin">Quản trị viên (Admin)</option>
-                </select>
-              </div>
-
-              <div className="flex items-center gap-3 pt-2">
                 <button
-                  type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="flex-1 py-2 px-4 rounded-[5px] border border-slate-300 text-slate-600 font-semibold text-xs hover:bg-slate-50 transition cursor-pointer"
+                  className="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg transition hover:bg-slate-100 cursor-pointer"
+                  title="Đóng"
                 >
-                  Hủy bỏ
-                </button>
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  className="flex-1 py-2 px-4 rounded-[5px] bg-[#0f3b7d] hover:bg-[#0c2f64] text-white font-semibold text-xs transition cursor-pointer disabled:opacity-60 flex items-center justify-center gap-1.5"
-                >
-                  {submitting ? (
-                    <>
-                      <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                      <span>Đang tạo...</span>
-                    </>
-                  ) : (
-                    <span>Tạo tài khoản</span>
-                  )}
+                  <X className="w-5 h-5" />
                 </button>
               </div>
-            </form>
-          </div>
-        </div>
-      )}
+
+              {/* Thông báo lỗi nếu có */}
+              {modalError && (
+                <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded-xl flex items-start gap-2.5 animate-shake">
+                  <AlertCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
+                  <span className="font-semibold leading-relaxed">{modalError}</span>
+                </div>
+              )}
+
+              <form onSubmit={handleCreateUser} autoComplete="off" className="space-y-4">
+                {/* Ngăn chặn trình duyệt tự động điền tài khoản admin đã lưu */}
+                <div className="sr-only" aria-hidden="true" style={{ position: 'absolute', opacity: 0, height: 0, width: 0, zIndex: -1 }}>
+                  <input type="text" name="chrome_autofill_decoy_user" tabIndex={-1} autoComplete="off" />
+                  <input type="password" name="chrome_autofill_decoy_pass" tabIndex={-1} autoComplete="off" />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">
+                    Họ và tên
+                  </label>
+                  <input
+                    id="new_member_fullname"
+                    name="new_member_fullname"
+                    type="text"
+                    autoComplete="off"
+                    value={formData.full_name}
+                    onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
+                    placeholder="Ví dụ: Trần Văn Nam"
+                    className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-300 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-[#0f3b7d] outline-none transition"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">
+                      Tên đăng nhập *
+                    </label>
+                    <input
+                      id="new_member_username"
+                      name="new_member_username"
+                      type="text"
+                      autoComplete="off"
+                      readOnly
+                      onFocus={(e) => { e.currentTarget.readOnly = false; }}
+                      value={formData.username}
+                      onChange={(e) => {
+                        setFormData({ ...formData, username: e.target.value.toLowerCase().trim() });
+                        if (modalError) setModalError(null);
+                      }}
+                      placeholder="namtv"
+                      minLength={3}
+                      maxLength={50}
+                      className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-300 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-[#0f3b7d] outline-none transition"
+                      required
+                    />
+                    <p className="text-[10px] text-slate-400 mt-1">Tối thiểu 3 ký tự (viết liền)</p>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">
+                      Mật khẩu *
+                    </label>
+                    <div className="relative">
+                      <input
+                        id="new_member_password"
+                        name="new_member_password"
+                        type={showPassword ? 'text' : 'password'}
+                        autoComplete="new-password"
+                        readOnly
+                        onFocus={(e) => { e.currentTarget.readOnly = false; }}
+                        value={formData.password}
+                        onChange={(e) => {
+                          setFormData({ ...formData, password: e.target.value });
+                          if (modalError) setModalError(null);
+                        }}
+                        placeholder="Tối thiểu 6 ký tự"
+                        minLength={6}
+                        className="w-full pl-3.5 pr-10 py-2.5 text-sm bg-slate-50 border border-slate-300 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-[#0f3b7d] outline-none transition"
+                        required
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 cursor-pointer"
+                        tabIndex={-1}
+                        title={showPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
+                      >
+                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                    <p className="text-[10px] text-slate-400 mt-1">Tối thiểu 6 ký tự</p>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">
+                    Địa chỉ Email
+                  </label>
+                  <input
+                    id="new_member_email"
+                    name="new_member_email"
+                    type="email"
+                    autoComplete="off"
+                    readOnly
+                    onFocus={(e) => { e.currentTarget.readOnly = false; }}
+                    value={formData.email}
+                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                    placeholder="namtv@gmail.com"
+                    className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-300 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-[#0f3b7d] outline-none transition"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">
+                    Vai trò (Phân quyền)
+                  </label>
+                  <select
+                    value={formData.role}
+                    onChange={(e) => setFormData({ ...formData, role: e.target.value as UserRole })}
+                    className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-300 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-[#0f3b7d] outline-none cursor-pointer"
+                  >
+                    <option value="staff">Cán bộ tuyển sinh (Staff)</option>
+                    <option value="admin">Quản trị viên (Admin)</option>
+                  </select>
+                </div>
+
+                <div className="flex items-center gap-3 pt-3 border-t border-slate-100">
+                  <button
+                    type="button"
+                    onClick={() => setIsModalOpen(false)}
+                    className="flex-1 py-2.5 px-4 rounded-xl border border-slate-300 text-slate-600 font-semibold text-xs hover:bg-slate-50 transition cursor-pointer"
+                  >
+                    Hủy bỏ
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={submitting}
+                    className="flex-1 py-2.5 px-4 rounded-xl bg-[#0f3b7d] hover:bg-[#0c2f64] text-white font-semibold text-xs transition cursor-pointer disabled:opacity-60 flex items-center justify-center gap-1.5 shadow-sm"
+                  >
+                    {submitting ? (
+                      <>
+                        <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                        <span>Đang tạo...</span>
+                      </>
+                    ) : (
+                      <>
+                      <UserPlus className="w-4 h-4" />
+                      <span>Tạo tài khoản</span>
+                    </>
+                    )}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>,
+          document.body
+        )}
     </div>
   );
 }

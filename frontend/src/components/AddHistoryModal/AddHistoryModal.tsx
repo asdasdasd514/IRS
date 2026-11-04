@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { X, Save } from 'lucide-react';
+import { Portal } from '../common/Portal';
 
 interface AddHistoryModalProps {
   waypointId: string;
@@ -60,18 +61,19 @@ export const AddHistoryModal: React.FC<AddHistoryModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 z-[9999] flex items-end sm:items-center justify-center">
-      <div
-        className="bg-white w-full sm:max-w-lg sm:rounded-xl shadow-2xl max-h-[90vh] flex flex-col"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b sticky top-0 bg-white sm:rounded-t-xl">
-          <h2 className="font-bold text-lg">Thêm lịch sử</h2>
-          <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full">
-            <X className="w-5 h-5" />
-          </button>
-        </div>
+    <Portal>
+      <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-[9999] flex items-end sm:items-center justify-center p-3 sm:p-4 animate-fade-in">
+        <div
+          className="bg-white w-full sm:max-w-lg rounded-2xl shadow-2xl max-h-[90vh] flex flex-col overflow-hidden"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* Header */}
+          <div className="flex items-center justify-between p-4 border-b sticky top-0 bg-white">
+            <h2 className="font-bold text-lg">Thêm lịch sử</h2>
+            <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full cursor-pointer">
+              <X className="w-5 h-5" />
+            </button>
+          </div>
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-4">
@@ -229,6 +231,7 @@ export const AddHistoryModal: React.FC<AddHistoryModalProps> = ({
         </form>
       </div>
     </div>
+    </Portal>
   );
 };
 

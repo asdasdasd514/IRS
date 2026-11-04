@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { logApi } from '../services/api';
 import type { SystemLog } from '../types';
+import { Portal } from './common/Portal';
 
 interface TripAuditHistoryModalProps {
   tripId: string;
@@ -120,10 +121,11 @@ export const TripAuditHistoryModal: React.FC<TripAuditHistoryModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div
-      className="fixed inset-0 z-[10000] bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 animate-in fade-in duration-150"
-      onClick={onClose}
-    >
+    <Portal>
+      <div
+        className="fixed inset-0 z-[10000] bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 animate-in fade-in duration-150"
+        onClick={onClose}
+      >
       <div
         className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[88vh] flex flex-col overflow-hidden border border-slate-200 animate-in zoom-in-95 duration-200"
         onClick={(e) => e.stopPropagation()}
@@ -369,5 +371,6 @@ export const TripAuditHistoryModal: React.FC<TripAuditHistoryModalProps> = ({
         </div>
       </div>
     </div>
+    </Portal>
   );
 };

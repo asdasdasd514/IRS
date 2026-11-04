@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { X, History, Plus, Phone, User, Ticket, Calendar, Award } from 'lucide-react';
 import type { Waypoint } from '../../types';
+import { Portal } from '../common/Portal';
 
 interface WaypointHistory {
   id: string;
@@ -38,26 +39,27 @@ export const WaypointDetailModal: React.FC<WaypointDetailModalProps> = ({
   const displayHistories = showAllHistory ? histories : histories.slice(0, 2);
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 z-[9999] flex items-end sm:items-center justify-center">
-      <div 
-        className="bg-white w-full sm:max-w-2xl sm:rounded-xl shadow-2xl max-h-[85vh] flex flex-col"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b sticky top-0 bg-white sm:rounded-t-xl">
-          <div className="flex-1">
-            <h2 className="font-bold text-lg">{waypoint.name}</h2>
-            {waypoint.address && (
-              <p className="text-sm text-gray-500">{waypoint.address}</p>
-            )}
+    <Portal>
+      <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-[9999] flex items-end sm:items-center justify-center p-3 sm:p-4 animate-fade-in">
+        <div 
+          className="bg-white w-full sm:max-w-2xl rounded-2xl shadow-2xl max-h-[85vh] flex flex-col overflow-hidden"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* Header */}
+          <div className="flex items-center justify-between p-4 border-b sticky top-0 bg-white">
+            <div className="flex-1">
+              <h2 className="font-bold text-lg">{waypoint.name}</h2>
+              {waypoint.address && (
+                <p className="text-sm text-gray-500">{waypoint.address}</p>
+              )}
+            </div>
+            <button
+              onClick={onClose}
+              className="p-2 hover:bg-gray-100 rounded-full cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
           </div>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-gray-100 rounded-full"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
 
         {/* Content - Scrollable */}
         <div className="flex-1 overflow-y-auto p-4">
@@ -208,6 +210,7 @@ export const WaypointDetailModal: React.FC<WaypointDetailModalProps> = ({
         </div>
       </div>
     </div>
+    </Portal>
   );
 };
 

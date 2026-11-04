@@ -5,6 +5,7 @@ import { ArrowLeft, Plus, Trash2, Save, X, MapPin, Coffee, School, Building2, Ed
 import { tripApi, mapsApi, schoolApi } from '../../services/api';
 import { useGeolocation } from '../../hooks';
 import type { Waypoint, CreateWaypointInput } from '../../types';
+import { Portal } from '../../components/common/Portal';
 
 export const EditTripPage: React.FC = () => {
   const { tripId } = useParams<{ tripId: string }>();
@@ -535,8 +536,9 @@ export const EditTripPage: React.FC = () => {
 
       {/* Add/Edit Waypoint Modal */}
       {showAddWaypointModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center z-[9999] p-3 sm:p-4">
-          <div className="bg-white rounded-[5px] max-w-xl w-full max-h-[92vh] flex flex-col shadow-2xl border border-slate-200 overflow-hidden">
+        <Portal>
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-[9999] p-3 sm:p-4">
+            <div className="bg-white rounded-2xl max-w-xl w-full max-h-[92vh] flex flex-col shadow-2xl border border-slate-200 overflow-hidden">
             {/* Modal Header */}
             <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/90 shrink-0">
               <div className="flex items-center gap-3">
@@ -913,12 +915,14 @@ export const EditTripPage: React.FC = () => {
             </div>
           </div>
         </div>
+        </Portal>
       )}
 
       {/* Add Rest Stop Modal */}
       {showAddRestStopModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999] p-4">
-          <div className="bg-white rounded-[5px] max-w-lg w-full max-h-[90vh] overflow-y-auto">
+        <Portal>
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-[9999] p-4">
+            <div className="bg-white rounded-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
             <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
               <h2 className="text-lg font-bold flex items-center gap-2">
                 <Coffee className="w-5 h-5 text-amber-600" />
@@ -981,6 +985,7 @@ export const EditTripPage: React.FC = () => {
             </div>
           </div>
         </div>
+        </Portal>
       )}
     </div>
   );

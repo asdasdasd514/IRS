@@ -5,6 +5,7 @@ import { ArrowLeft, RefreshCw, MapPin, Menu, Utensils, Search, X, QrCode, Sticky
 import polyline from '@mapbox/polyline';
 
 import { MapView, BottomSheet, WaypointInfoModal, TripAuditHistoryModal, QuickNoteModal } from '../../components';
+import { Portal } from '../../components/common/Portal';
 import { tripApi, ticketApi, reportApi } from '../../services/api';
 import { useAppStore } from '../../store/useAppStore';
 import { useWatchPosition } from '../../hooks';
@@ -1201,8 +1202,9 @@ export const TripMapPage: React.FC = () => {
 
       {/* Pop up xác nhận tạo chuyến đi mới */}
       {showCreateNextTripModal && (
-        <div className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full border border-slate-100 overflow-hidden animate-scale-up">
+        <Portal>
+          <div className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+            <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full border border-slate-100 overflow-hidden animate-scale-up">
             {/* Header */}
             <div className="bg-[#0f3b7d] px-6 py-4 text-white flex items-center justify-between">
               <div className="flex items-center gap-3">
@@ -1273,12 +1275,14 @@ export const TripMapPage: React.FC = () => {
             </div>
           </div>
         </div>
+        </Portal>
       )}
 
       {/* Pop up Form thông báo xác nhận Check-in thực địa (Bán kính 200m) */}
       {checkInModalData && (
-        <div className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full border border-slate-100 overflow-hidden animate-scale-up">
+        <Portal>
+          <div className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+            <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full border border-slate-100 overflow-hidden animate-scale-up">
             {/* Header */}
             <div className={`px-6 py-4 text-white flex items-center justify-between ${
               checkInModalData.isWithinRange
@@ -1385,6 +1389,7 @@ export const TripMapPage: React.FC = () => {
             </div>
           </div>
         </div>
+        </Portal>
       )}
     </div>
   );

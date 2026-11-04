@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { noteApi } from '../../services/api';
 import type { Waypoint, FieldNote } from '../../types';
+import { Portal } from '../common/Portal';
 
 interface QuickNoteModalProps {
   isOpen: boolean;
@@ -143,8 +144,9 @@ export const QuickNoteModal: React.FC<QuickNoteModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-3 sm:p-4 animate-fade-in">
-      <div className="bg-white rounded-xl shadow-2xl border border-slate-200/90 w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]">
+    <Portal>
+      <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-3 sm:p-4 animate-fade-in">
+        <div className="bg-white rounded-2xl shadow-2xl border border-slate-200/90 w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]">
         {/* Header */}
         <div className="px-5 py-4 bg-gradient-to-r from-[#0f3b7d] to-[#1e58a8] text-white flex items-center justify-between">
           <div className="flex items-center gap-2.5">
@@ -387,6 +389,7 @@ export const QuickNoteModal: React.FC<QuickNoteModalProps> = ({
         </div>
       </div>
     </div>
+    </Portal>
   );
 };
 

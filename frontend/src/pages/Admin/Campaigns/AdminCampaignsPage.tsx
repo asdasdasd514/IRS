@@ -39,6 +39,7 @@ import {
 } from 'lucide-react';
 import { campaignApi, schoolApi, authApi, tripApi } from '../../../services/api';
 import { CampaignSurveyModal } from './CampaignSurveyModal';
+import { Portal } from '../../../components/common/Portal';
 
 const routeMarkerIcon = (color: string, label: string) =>
   L.divIcon({
@@ -2431,8 +2432,9 @@ export function AdminCampaignsPage() {
       {/* MODAL XEM CHI TIẾT CHIẾN DỊCH & LỘ TRÌNH BẢN ĐỒ (CAMPAIGN DETAIL & ROUTE MAP) */}
       {/* ========================================================================= */}
       {selectedCampaignForView && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs">
-          <div className="bg-white rounded-[5px] max-w-6xl w-full max-h-[92vh] flex flex-col shadow-2xl border border-slate-200 animate-slide-up overflow-hidden">
+        <Portal>
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs">
+            <div className="bg-white rounded-2xl max-w-6xl w-full max-h-[92vh] flex flex-col shadow-2xl border border-slate-200 animate-slide-up overflow-hidden">
             {/* Header Modal */}
             <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/80 shrink-0">
               <div className="flex items-center gap-3">
@@ -2686,20 +2688,22 @@ export function AdminCampaignsPage() {
                   setSelectedCampaignForView(null);
                   setActiveSchoolInView(null);
                 }}
-                className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-semibold text-xs rounded-[5px] transition"
+                className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-semibold text-xs rounded-lg transition"
               >
                 Đóng
               </button>
             </div>
           </div>
         </div>
+        </Portal>
       )}
 
 
 
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/50 backdrop-blur-xs">
-          <div className="bg-white rounded-[5px] max-w-5xl w-full max-h-[92vh] flex flex-col shadow-2xl border border-slate-200 animate-slide-up overflow-hidden">
+        <Portal>
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center p-3 sm:p-4 bg-slate-900/50 backdrop-blur-xs">
+            <div className="bg-white rounded-2xl max-w-5xl w-full max-h-[92vh] flex flex-col shadow-2xl border border-slate-200 animate-slide-up overflow-hidden">
             {/* Header: Cố định */}
             <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-white shrink-0">
               <div>
@@ -3541,54 +3545,58 @@ export function AdminCampaignsPage() {
             </div>
           </div>
         </div>
+        </Portal>
       )}
 
       {/* ========================================================================= */}
       {/* MODAL GỢI Ý PHÂN CÔNG NGAY SAU KHI TẠO CHIẾN DỊCH */}
       {/* ========================================================================= */}
       {createdCampaignPrompt && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
-          <div className="bg-white rounded-xl max-w-md w-full p-6 shadow-2xl border border-slate-200 animate-slide-up text-center space-y-4">
-            <div className="w-14 h-14 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto shadow-xs">
-              <CheckCircle2 className="w-8 h-8" />
-            </div>
-            <div>
-              <h3 className="text-base sm:text-lg font-bold text-slate-900">Chiến dịch đã tạo thành công!</h3>
-              <p className="text-xs text-slate-600 mt-2 leading-relaxed">
-                Chiến dịch <strong className="text-[#0f3b7d]">"{createdCampaignPrompt.name}"</strong> đã được lưu với lộ trình tối ưu. Bạn có muốn phân công cán bộ đoàn công tác ngay bây giờ không?
-              </p>
-            </div>
-            <div className="grid grid-cols-2 gap-3 pt-2">
-              <button
-                type="button"
-                onClick={() => setCreatedCampaignPrompt(null)}
-                className="py-2.5 px-3 rounded-lg border border-slate-300 text-slate-600 text-xs font-semibold hover:bg-slate-100 transition cursor-pointer"
-              >
-                Để sau (Về danh sách)
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  const camp = createdCampaignPrompt;
-                  setCreatedCampaignPrompt(null);
-                  openAllocationModal(camp);
-                }}
-                className="py-2.5 px-3 rounded-lg bg-[#0f3b7d] hover:bg-[#0c2f64] text-white text-xs font-bold shadow-xs transition flex items-center justify-center gap-1.5 cursor-pointer"
-              >
-                <UserPlus className="w-4 h-4" />
-                <span>Phân công ngay</span>
-              </button>
+        <Portal>
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+            <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 animate-slide-up text-center space-y-4">
+              <div className="w-14 h-14 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto shadow-xs">
+                <CheckCircle2 className="w-8 h-8" />
+              </div>
+              <div>
+                <h3 className="text-base sm:text-lg font-bold text-slate-900">Chiến dịch đã tạo thành công!</h3>
+                <p className="text-xs text-slate-600 mt-2 leading-relaxed">
+                  Chiến dịch <strong className="text-[#0f3b7d]">"{createdCampaignPrompt.name}"</strong> đã được lưu với lộ trình tối ưu. Bạn có muốn phân công cán bộ đoàn công tác ngay bây giờ không?
+                </p>
+              </div>
+              <div className="grid grid-cols-2 gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setCreatedCampaignPrompt(null)}
+                  className="py-2.5 px-3 rounded-lg border border-slate-300 text-slate-600 text-xs font-semibold hover:bg-slate-100 transition cursor-pointer"
+                >
+                  Để sau (Về danh sách)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const camp = createdCampaignPrompt;
+                    setCreatedCampaignPrompt(null);
+                    openAllocationModal(camp);
+                  }}
+                  className="py-2.5 px-3 rounded-lg bg-[#0f3b7d] hover:bg-[#0c2f64] text-white text-xs font-bold shadow-xs transition flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <UserPlus className="w-4 h-4" />
+                  <span>Phân công ngay</span>
+                </button>
+              </div>
             </div>
           </div>
-        </div>
+        </Portal>
       )}
 
       {/* ========================================================================= */}
       {/* MODAL FORM PHÂN BỔ NHÂN SỰ & LỘ TRÌNH (ALL-IN-ONE ALLOCATION MODAL) */}
       {/* ========================================================================= */}
       {isAllocationModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-slate-900/60 backdrop-blur-xs">
-          <div className="bg-white rounded-[5px] max-w-7xl w-full max-h-[94vh] flex flex-col shadow-2xl border border-slate-200 animate-slide-up overflow-hidden">
+        <Portal>
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center p-3 sm:p-5 bg-slate-900/60 backdrop-blur-xs">
+            <div className="bg-white rounded-2xl max-w-7xl w-full max-h-[94vh] flex flex-col shadow-2xl border border-slate-200 animate-slide-up overflow-hidden">
             {/* Header Modal */}
             <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/80 shrink-0">
               <div className="flex items-center gap-3">
@@ -4372,14 +4380,16 @@ export function AdminCampaignsPage() {
             </div>
           </div>
         </div>
+        </Portal>
       )}
 
       {/* ========================================================================= */}
       {/* MODAL XEM NHANH LỘ TRÌNH & BẢN ĐỒ TUYẾN ĐI ĐÃ PHÂN BỔ */}
       {/* ========================================================================= */}
       {viewingAllocatedTrip && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-slate-900/60 backdrop-blur-xs">
-          <div className="bg-white rounded-[5px] max-w-6xl w-full max-h-[92vh] flex flex-col shadow-2xl border border-slate-200 animate-slide-up overflow-hidden">
+        <Portal>
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center p-3 sm:p-5 bg-slate-900/60 backdrop-blur-xs">
+            <div className="bg-white rounded-2xl max-w-6xl w-full max-h-[92vh] flex flex-col shadow-2xl border border-slate-200 animate-slide-up overflow-hidden">
             {/* Header */}
             <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/80 shrink-0">
               <div className="flex items-center gap-3">
@@ -4580,6 +4590,7 @@ export function AdminCampaignsPage() {
             </div>
           </div>
         </div>
+        </Portal>
       )}
 
       {/* Modal Khảo Sát & Mã QR Tuyển Sinh */}

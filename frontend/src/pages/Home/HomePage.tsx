@@ -6,6 +6,7 @@ import { useAppStore } from '../../store/useAppStore';
 
 import { tripApi } from '../../services/api';
 import type { TripListItem } from '../../types';
+import { Portal } from '../../components/common/Portal';
 
 export const HomePage: React.FC = () => {
   const navigate = useNavigate();
@@ -185,8 +186,9 @@ export const HomePage: React.FC = () => {
 
       {/* Guide Modal */}
       {showGuide && (
-        <div className="fixed inset-0 z-[9999] bg-black bg-opacity-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+        <Portal>
+          <div className="fixed inset-0 z-[9999] bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 animate-fade-in">
+            <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
               <h2 className="text-xl font-bold text-gray-800">📖 Hướng dẫn sử dụng hệ thống</h2>
               <button
@@ -349,6 +351,7 @@ export const HomePage: React.FC = () => {
             </div>
           </div>
         </div>
+        </Portal>
       )}
 
       {/* Floating Action Button - Tạo chuyến đi mới */}
