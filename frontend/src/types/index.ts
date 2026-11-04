@@ -359,6 +359,7 @@ export interface User {
   email?: string | null;
   full_name?: string | null;
   avatar_url?: string | null;
+  phone?: string | null;
   role: UserRole;
   is_admin: boolean;
   is_active: boolean;

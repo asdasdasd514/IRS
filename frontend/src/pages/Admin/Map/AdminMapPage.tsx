@@ -7,7 +7,8 @@ import {
   Search,
   ExternalLink,
   Globe,
-  School
+  School,
+  ChevronDown
 } from 'lucide-react';
 import { schoolApi } from '../../../services/api';
 import { getGoogleMapsPlaceUrl } from '../../../utils/navigation';
@@ -21,6 +22,58 @@ const schoolIcon = new L.Icon({
   popupAnchor: [1, -34],
   shadowSize: [41, 41],
 });
+
+export interface MapLayerConfig {
+  id: string;
+  name: string;
+  url: string;
+  attribution: string;
+  icon: string;
+  sub: string;
+}
+
+export const MAP_LAYERS: MapLayerConfig[] = [
+  {
+    id: 'streets',
+    name: 'Đường phố chuẩn',
+    url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+    icon: '🗺️',
+    sub: 'OpenStreetMap chuẩn',
+  },
+  {
+    id: 'satellite',
+    name: 'Ảnh Vệ tinh',
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    attribution: 'Tiles &copy; Esri',
+    icon: '🛰️',
+    sub: 'Esri World Imagery HD',
+  },
+  {
+    id: 'light',
+    name: 'Bản đồ Sáng',
+    url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+    attribution: '&copy; CARTO',
+    icon: '⚪',
+    sub: 'CartoDB Positron sạch',
+  },
+  {
+    id: 'dark',
+    name: 'Bản đồ Tối',
+    url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+    attribution: '&copy; CARTO',
+    icon: '⚫',
+    sub: 'CartoDB Dark Matter',
+  },
+  {
+    id: 'topo',
+    name: 'Địa hình Cao độ',
+    url: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
+    attribution: '&copy; OpenTopoMap',
+    icon: '⛰️',
+    sub: 'Đường đồng mức địa hình',
+  },
+];
 
 // Component điều khiển camera và fit bounds của bản đồ
 function MapController({
@@ -53,8 +106,22 @@ export function AdminMapPage() {
   const [selectedSchool, setSelectedSchool] = useState<any | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
 
+  // Chế độ xem bản đồ (lưu trữ trong localStorage để nhớ khi quay lại)
+  const [layerId, setLayerId] = useState<string>(() => {
+    return localStorage.getItem('irs_map_layer') || 'streets';
+  });
+  const [layerMenuOpen, setLayerMenuOpen] = useState(false);
+
   // Vị trí trung tâm mặc định (Đồng Nai / TP. Biên Hòa)
   const defaultCenter: [number, number] = [10.9574, 106.8427];
+
+  const currentLayer = MAP_LAYERS.find((l) => l.id === layerId) || MAP_LAYERS[0];
+
+  const handleSelectLayer = (id: string) => {
+    setLayerId(id);
+    localStorage.setItem('irs_map_layer', id);
+    setLayerMenuOpen(false);
+  };
 
   useEffect(() => {
     const fetchData = async () => {
@@ -84,13 +151,23 @@ export function AdminMapPage() {
   return (
     <div className="p-4 sm:p-6 lg:p-8 space-y-6 animate-fade-in-up">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-black text-slate-900 tracking-tight">
-          Bản Đồ Quản Trị Hệ Thống (IRS Map)
-        </h1>
-        <p className="text-sm text-slate-500 mt-1">
-          Hiển thị trực quan toàn bộ các điểm trường mục tiêu, tọa độ GPS từ Google Maps và hành trình thực địa.
-        </p>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-black text-slate-900 tracking-tight">
+            Bản Đồ Quản Trị Hệ Thống (IRS Map)
+          </h1>
+          <p className="text-sm text-slate-500 mt-1">
+            Hiển thị trực quan toàn bộ các điểm trường mục tiêu, tọa độ GPS từ Google Maps và hành trình thực địa.
+          </p>
+        </div>
+
+        {/* Lớp hiển thị trạng thái số lượng trường */}
+        <div className="flex items-center gap-2">
+          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200/80 shadow-xs">
+            <Building2 className="w-3.5 h-3.5" />
+            {filteredSchools.length} / {schools.length} trường
+          </span>
+        </div>
       </div>
 
       {/* Main Grid: School Selector List + Map Container */}
@@ -99,89 +176,96 @@ export function AdminMapPage() {
         <div className="lg:col-span-4 xl:col-span-3 bg-white rounded-2xl border border-slate-200/80 p-3.5 shadow-xs space-y-3">
           <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
             <div className="flex items-center gap-2">
-              <Building2 className="w-4 h-4 text-[#0f3b7d]" />
-              <h2 className="text-sm font-bold text-slate-900">Danh sách địa điểm</h2>
-            </div>
-            <div className="flex items-center gap-2">
-              {selectedSchool && (
-                <button
-                  type="button"
-                  onClick={() => setSelectedSchool(null)}
-                  className="text-xs font-semibold text-rose-600 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 px-2 py-0.5 rounded-[4px] transition cursor-pointer"
-                  title="Bỏ chọn trường đang xem"
-                >
-                  ✕ Bỏ chọn
-                </button>
-              )}
-              <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-50 text-[#0f3b7d]">
-                {filteredSchools.length} trường
+              <Building2 className="w-4 h-4 text-blue-600" />
+              <span className="font-bold text-slate-800 text-sm">
+                Danh sách trường THPT
               </span>
             </div>
+            <span className="text-xs text-slate-400 font-semibold">
+              {filteredSchools.length} điểm
+            </span>
           </div>
 
-          {/* Search Box */}
+          {/* Ô tìm kiếm nhanh */}
           <div className="relative">
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
-              <Search className="w-3.5 h-3.5" />
-            </div>
+            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               type="text"
+              placeholder="Tìm theo tên trường, mã, địa chỉ..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Tìm trường trên bản đồ..."
-              className="w-full pl-8.5 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-300 rounded-[5px] focus:bg-white focus:border-[#0f3b7d] outline-none"
+              className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border border-slate-200 bg-slate-50/50 focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all placeholder:text-slate-400"
             />
           </div>
 
-          {/* Danh sách trường hiển thị khoảng 8 địa điểm, quá 8 địa điểm có scrollbar */}
-          <div className="max-h-[580px] overflow-y-auto space-y-2 pr-1">
-            {filteredSchools.length === 0 ? (
-              <p className="text-xs text-slate-400 text-center py-8">
-                Không tìm thấy trường nào.
-              </p>
+          {/* Danh sách cuộn các trường */}
+          <div className="max-h-[600px] overflow-y-auto space-y-2 pr-1 no-scrollbar">
+            {loading ? (
+              <div className="py-8 text-center text-xs text-slate-400 space-y-2">
+                <div className="w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto" />
+                <p>Đang tải danh sách trường...</p>
+              </div>
+            ) : filteredSchools.length === 0 ? (
+              <div className="py-8 text-center text-xs text-slate-400">
+                Không tìm thấy trường nào phù hợp
+              </div>
             ) : (
-              filteredSchools.map((s) => {
-                const isSelected = Boolean(
-                  selectedSchool && (
-                    (selectedSchool.id && selectedSchool.id === s.id) ||
-                    (selectedSchool._id && selectedSchool._id === s._id)
-                  )
-                );
+              filteredSchools.map((school) => {
+                const isSelected =
+                  selectedSchool &&
+                  ((selectedSchool.id && selectedSchool.id === school.id) ||
+                    (selectedSchool._id && selectedSchool._id === school._id));
+
                 return (
                   <div
-                    key={s.id || s._id}
-                    onClick={() => setSelectedSchool(isSelected ? null : s)}
-                    className={`p-2.5 rounded-[5px] border text-xs cursor-pointer transition ${
+                    key={school.id || school._id}
+                    onClick={() => {
+                      setSelectedSchool(isSelected ? null : school);
+                    }}
+                    className={`p-3 rounded-xl border cursor-pointer transition-all ${
                       isSelected
-                        ? 'border-[#0f3b7d] bg-blue-50/70 shadow-xs'
-                        : 'border-slate-100 hover:border-slate-200 hover:bg-slate-50/80 bg-white'
+                        ? 'bg-blue-50/70 border-blue-300 ring-2 ring-blue-500/20 shadow-xs'
+                        : 'border-slate-100 hover:border-slate-200 hover:bg-slate-50/60'
                     }`}
                   >
-                    <div className="flex items-start justify-between gap-1">
-                      <p className="font-bold text-slate-900 leading-snug truncate">
-                        {s.name}
-                      </p>
-                      {s.code && (
-                        <span className="text-[10px] font-mono text-slate-500 bg-slate-100 px-1.5 py-0.2 rounded-[3px] shrink-0">
-                          {s.code}
-                        </span>
-                      )}
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="space-y-1 min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="text-[10px] font-black px-1.5 py-0.5 rounded bg-blue-100/80 text-blue-700 tracking-wide">
+                            {school.code || 'THPT'}
+                          </span>
+                          <h3 className="font-bold text-xs text-slate-900 truncate">
+                            {school.name}
+                          </h3>
+                        </div>
+                        <p className="text-[11px] text-slate-500 line-clamp-2 leading-relaxed">
+                          {school.address || 'Chưa có thông tin địa chỉ'}
+                        </p>
+                      </div>
                     </div>
 
-                    <p className="text-[11px] text-slate-500 mt-0.5 truncate">
-                      {s.address || 'Chưa có địa chỉ'}
-                    </p>
-
-                    <div className="mt-1.5 flex items-center justify-between text-[10.5px]">
-                      <span className="text-emerald-700 font-mono font-medium">
-                        {s.lat && s.lng
-                          ? `${Number(s.lat).toFixed(4)}, ${Number(s.lng).toFixed(4)}`
-                          : 'Chưa có tọa độ'}
+                    {/* Metadata chân thẻ */}
+                    <div className="mt-2 pt-2 border-t border-slate-100/80 flex items-center justify-between text-[11px] text-slate-500">
+                      <span>
+                        {school.lat && school.lng
+                          ? `${Number(school.lat).toFixed(3)}, ${Number(school.lng).toFixed(3)}`
+                          : 'Chưa có GPS'}
                       </span>
-                      {isSelected && (
-                        <span className="text-rose-600 font-semibold hover:underline">
-                          ✕ Bỏ chọn
-                        </span>
+                      {school.website && (
+                        <a
+                          href={
+                            school.website.startsWith('http')
+                              ? school.website
+                              : `https://${school.website}`
+                          }
+                          target="_blank"
+                          rel="noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="text-blue-600 hover:underline flex items-center gap-0.5 font-medium"
+                        >
+                          <span>Web</span>
+                          <ExternalLink className="w-2.5 h-2.5" />
+                        </a>
                       )}
                     </div>
                   </div>
@@ -193,7 +277,7 @@ export function AdminMapPage() {
 
         {/* Khung bản đồ bên phải mở rộng to hơn (8 cột trên lg, 9 cột trên xl) */}
         <div className="lg:col-span-8 xl:col-span-9 bg-white rounded-2xl border border-slate-200/80 p-3 shadow-xs">
-          <div className="h-[700px] w-full rounded-[5px] overflow-hidden relative border border-slate-100">
+          <div className="h-[700px] w-full rounded-xl overflow-hidden relative border border-slate-100">
             {loading && (
               <div className="absolute inset-0 z-20 bg-white/75 backdrop-blur-xs flex items-center justify-center">
                 <div className="text-center">
@@ -205,6 +289,63 @@ export function AdminMapPage() {
               </div>
             )}
 
+            {/* Floating Map Layer Switcher (Chế độ xem bản đồ trực tiếp trên trang bản đồ) */}
+            <div className="absolute top-3 right-3 z-[1000]">
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setLayerMenuOpen(!layerMenuOpen)}
+                  className="flex items-center gap-2 px-3 py-2 bg-white/95 backdrop-blur-md hover:bg-white text-slate-800 rounded-xl shadow-lg border border-slate-200/80 text-xs font-bold transition-all hover:scale-[1.02] active:scale-[0.98]"
+                >
+                  <span className="text-sm">{currentLayer.icon}</span>
+                  <span>{currentLayer.name}</span>
+                  <ChevronDown
+                    className={`w-3.5 h-3.5 text-slate-500 transition-transform duration-200 ${
+                      layerMenuOpen ? 'rotate-180' : ''
+                    }`}
+                  />
+                </button>
+
+                {layerMenuOpen && (
+                  <div className="absolute right-0 mt-2 w-56 bg-white/95 backdrop-blur-md rounded-2xl shadow-xl border border-slate-200/90 py-1.5 overflow-hidden animate-scale-in">
+                    <div className="px-3 py-1.5 text-[10px] font-black uppercase tracking-wider text-slate-400 border-b border-slate-100">
+                      Chọn góc nhìn bản đồ
+                    </div>
+                    <div className="p-1 space-y-1">
+                      {MAP_LAYERS.map((layer) => {
+                        const isSelected = layer.id === layerId;
+                        return (
+                          <button
+                            key={layer.id}
+                            type="button"
+                            onClick={() => handleSelectLayer(layer.id)}
+                            className={`w-full flex items-center justify-between px-2.5 py-2 rounded-xl text-left text-xs transition-all ${
+                              isSelected
+                                ? 'bg-blue-50 text-blue-700 font-bold border border-blue-200/60'
+                                : 'text-slate-700 hover:bg-slate-100/80 font-medium'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2">
+                              <span className="text-base">{layer.icon}</span>
+                              <div>
+                                <div className="leading-snug">{layer.name}</div>
+                                <div className="text-[10px] text-slate-400 font-normal">
+                                  {layer.sub}
+                                </div>
+                              </div>
+                            </div>
+                            {isSelected && (
+                              <span className="w-2 h-2 rounded-full bg-blue-600" />
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
             <MapContainer
               center={defaultCenter}
               zoom={12}
@@ -212,8 +353,9 @@ export function AdminMapPage() {
               className="w-full h-full z-0"
             >
               <TileLayer
-                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                key={currentLayer.id}
+                attribution={currentLayer.attribution}
+                url={currentLayer.url}
               />
 
               {/* Tự động fit bounds và zoom vào trường được chọn */}

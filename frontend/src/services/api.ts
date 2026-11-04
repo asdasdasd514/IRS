@@ -117,6 +117,47 @@ export const authApi = {
     });
     return data;
   },
+  changePassword: async (current_password: string, new_password: string): Promise<{ success: boolean; message: string }> => {
+    const token = localStorage.getItem('token');
+    const { data } = await axios.post(
+      `${API_BASE_URL}/auth/change-password`,
+      { current_password, new_password },
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    return data;
+  },
+
+  updateProfile: async (profileData: {
+    full_name?: string;
+    email?: string;
+    phone?: string;
+    avatar_url?: string;
+  }): Promise<User> => {
+    const token = localStorage.getItem('token');
+    const { data } = await axios.put(
+      `${API_BASE_URL}/auth/profile`,
+      profileData,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    return data;
+  },
+};
+
+// System & Cache API
+export const systemApi = {
+  getHealth: async (): Promise<{ status: string; database: string }> => {
+    const rootUrl = API_BASE_URL.replace(/\/api$/, '');
+    const { data } = await axios.get(`${rootUrl}/health`);
+    return data;
+  },
+  getCacheStats: async (): Promise<any> => {
+    const { data } = await axios.get(`${API_BASE_URL}/cache/stats`);
+    return data;
+  },
+  clearCache: async (): Promise<{ status: string; message: string }> => {
+    const { data } = await axios.post(`${API_BASE_URL}/cache/clear`);
+    return data;
+  },
 };
 
 

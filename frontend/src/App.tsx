@@ -19,6 +19,7 @@ import { PublicSurveyPage } from './pages/PublicSurvey/PublicSurveyPage';
 import { AdminSurveysPage } from './pages/Admin/Surveys/AdminSurveysPage';
 import { AdminNotesPage } from './pages/Admin/Notes/AdminNotesPage';
 import { AdminVisitsPage } from './pages/Admin/Visits/AdminVisitsPage';
+import { AdminSettingsPage } from './pages/Admin/Settings/AdminSettingsPage';
 import { TripQrPage } from './pages/TripQr/TripQrPage';
 import { MainLayout } from './layouts/MainLayout';
 import { useAppStore } from './store/useAppStore';
@@ -215,12 +216,13 @@ function App() {
         <Route path="notes" element={<AdminNotesPage />} />
         <Route path="visits" element={<AdminVisitsPage />} />
         <Route path="logs" element={<AdminLogsPage />} />
-        <Route path="settings" element={<AdminMembersPage />} />
+        <Route path="settings" element={<AdminSettingsPage />} />
       </Route>
 
       {/* Alias cho /notes và /visits */}
       <Route path="/notes" element={<Navigate to="/admin/notes" replace />} />
       <Route path="/visits" element={<Navigate to="/admin/visits" replace />} />
+      <Route path="/settings" element={<Navigate to="/admin/settings" replace />} />
 
       {/* Staff Dedicated Module with shared Layout & Sidebar */}
       <Route

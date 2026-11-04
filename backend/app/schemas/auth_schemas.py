@@ -14,6 +14,7 @@ class UserBase(BaseModel):
     email: Optional[str] = None
     full_name: Optional[str] = None
     avatar_url: Optional[str] = None
+    phone: Optional[str] = None
     role: UserRole = UserRole.STAFF
 
 
@@ -25,6 +26,7 @@ class UserUpdate(BaseModel):
     email: Optional[str] = None
     full_name: Optional[str] = None
     avatar_url: Optional[str] = None
+    phone: Optional[str] = None
     role: Optional[UserRole] = None
     is_active: Optional[bool] = None
     password: Optional[str] = Field(None, min_length=6)
@@ -36,6 +38,7 @@ class UserResponse(BaseModel):
     email: Optional[str] = None
     full_name: Optional[str] = None
     avatar_url: Optional[str] = None
+    phone: Optional[str] = None
     role: UserRole = UserRole.STAFF
     is_admin: bool = False
     is_active: bool = True
@@ -57,7 +60,20 @@ class RegisterRequest(BaseModel):
     password: str = Field(..., min_length=6)
     email: Optional[str] = None
     full_name: Optional[str] = None
+    phone: Optional[str] = None
     role: UserRole = UserRole.STAFF
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str = Field(..., min_length=1, description="Mật khẩu hiện tại")
+    new_password: str = Field(..., min_length=6, description="Mật khẩu mới (tối thiểu 6 ký tự)")
+
+
+class UpdateProfileRequest(BaseModel):
+    full_name: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    avatar_url: Optional[str] = None
 
 
 class Token(BaseModel):
@@ -69,4 +85,3 @@ class Token(BaseModel):
 class TokenData(BaseModel):
     username: Optional[str] = None
     user_id: Optional[str] = None
-

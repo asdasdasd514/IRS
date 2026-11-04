@@ -10,13 +10,16 @@ from app.schemas.auth_schemas import (
     RegisterRequest,
     Token,
     UserResponse,
-    UserRole
+    UserRole,
+    ChangePasswordRequest,
+    UpdateProfileRequest
 )
 from app.services.auth_service import (
     authenticate_user,
     create_access_token,
     get_current_user,
-    get_password_hash
+    get_password_hash,
+    verify_password
 )
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -124,6 +127,7 @@ async def register(register_data: RegisterRequest):
         "username": raw_username,
         "email": clean_email,
         "full_name": register_data.full_name.strip() if register_data.full_name else raw_username,
+        "phone": register_data.phone.strip() if register_data.phone else None,
         "avatar_url": None,
         "role": register_data.role.value,
         "hashed_password": get_password_hash(register_data.password),
@@ -149,3 +153,212 @@ async def register(register_data: RegisterRequest):
 async def get_me(current_user: dict = Depends(get_current_user)):
     """Lấy thông tin hồ sơ của user hiện tại đang đăng nhập"""
     return current_user
+
+
+@router.post("/change-password")
+async def change_password(
+    data: ChangePasswordRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Đổi mật khẩu người dùng hiện tại.
+    Yêu cầu mật khẩu cũ chính xác và mật khẩu mới >= 6 ký tự.
+    """
+    db = get_database()
+    if db is None:
+        raise HTTPException(status_code=500, detail="Không thể kết nối cơ sở dữ liệu")
+
+    # Xác thực mật khẩu cũ
+    if not verify_password(data.current_password, current_user.get("hashed_password", "")):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Mật khẩu hiện tại không chính xác"
+        )
+
+    # Kiểm tra mật khẩu mới không trùng mật khẩu cũ
+    if data.current_password == data.new_password:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Mật khẩu mới không được trùng với mật khẩu hiện tại"
+        )
+
+    now = datetime.now(timezone.utc)
+    new_hashed_password = get_password_hash(data.new_password)
+
+    await db.users.update_one(
+        {"id": current_user["id"]},
+        {"$set": {
+            "hashed_password": new_hashed_password,
+            "updated_at": now
+        }}
+    )
+
+    try:
+        from app.services.log_service import log_system_activity
+        await log_system_activity(
+            action_type="USER_SESSION",
+            session_title="Bảo mật tài khoản",
+            sub_action="CHANGE_PASSWORD",
+            sub_label="Đổi mật khẩu",
+            description=f"Người dùng '{current_user.get('username')}' đã thay đổi mật khẩu thành công",
+            actor_user=current_user,
+            details={"username": current_user.get("username")}
+        )
+    except Exception:
+        pass
+
+    return {
+        "success": True,
+        "message": "Đổi mật khẩu thành công! Hãy ghi nhớ mật khẩu mới của bạn."
+    }
+
+
+@router.put("/profile", response_model=UserResponse)
+async def update_profile(
+    profile_data: UpdateProfileRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Cập nhật thông tin hồ sơ của tài khoản đang đăng nhập (họ tên, email, sđt, avatar).
+    """
+    db = get_database()
+    if db is None:
+        raise HTTPException(status_code=500, detail="Không thể kết nối cơ sở dữ liệu")
+
+    now = datetime.now(timezone.utc)
+    update_fields = {}
+
+    if profile_data.full_name is not None:
+        update_fields["full_name"] = profile_data.full_name.strip()
+    if profile_data.phone is not None:
+        update_fields["phone"] = profile_data.phone.strip()
+    if profile_data.avatar_url is not None:
+        update_fields["avatar_url"] = profile_data.avatar_url
+
+    if profile_data.email is not None:
+        new_email = profile_data.email.strip()
+        if new_email and new_email != current_user.get("email"):
+            # Kiểm tra email đã có người dùng khác dùng chưa
+            existing = await db.users.find_one({
+                "email": new_email,
+                "id": {"$ne": current_user["id"]},
+                "is_deleted": {"$ne": True}
+            })
+            if existing:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Email '{new_email}' đã được liên kết với tài khoản khác"
+                )
+        update_fields["email"] = new_email or None
+
+    if update_fields:
+        update_fields["updated_at"] = now
+        await db.users.update_one({"id": current_user["id"]}, {"$set": update_fields})
+
+    updated_user = await db.users.find_one({"id": current_user["id"]})
+    return updated_user
+
+
+
+@router.post("/change-password")
+async def change_password(
+    data: ChangePasswordRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Đổi mật khẩu người dùng hiện tại.
+    Yêu cầu mật khẩu cũ chính xác và mật khẩu mới >= 6 ký tự.
+    """
+    db = get_database()
+    if db is None:
+        raise HTTPException(status_code=500, detail="Không thể kết nối cơ sở dữ liệu")
+
+    # Xác thực mật khẩu cũ
+    if not verify_password(data.current_password, current_user.get("hashed_password", "")):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Mật khẩu hiện tại không chính xác"
+        )
+
+    # Kiểm tra mật khẩu mới không trùng mật khẩu cũ
+    if data.current_password == data.new_password:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Mật khẩu mới không được trùng với mật khẩu hiện tại"
+        )
+
+    now = datetime.now(timezone.utc)
+    new_hashed_password = get_password_hash(data.new_password)
+
+    await db.users.update_one(
+        {"id": current_user["id"]},
+        {"$set": {
+            "hashed_password": new_hashed_password,
+            "updated_at": now
+        }}
+    )
+
+    try:
+        from app.services.log_service import log_system_activity
+        await log_system_activity(
+            action_type="USER_SESSION",
+            session_title="Bảo mật tài khoản",
+            sub_action="CHANGE_PASSWORD",
+            sub_label="Đổi mật khẩu",
+            description=f"Người dùng '{current_user.get('username')}' đã thay đổi mật khẩu thành công",
+            actor_user=current_user,
+            details={"username": current_user.get("username")}
+        )
+    except Exception:
+        pass
+
+    return {
+        "success": True,
+        "message": "Đổi mật khẩu thành công! Hãy ghi nhớ mật khẩu mới của bạn."
+    }
+
+
+@router.put("/profile", response_model=UserResponse)
+async def update_profile(
+    profile_data: UpdateProfileRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Cập nhật thông tin hồ sơ của tài khoản đang đăng nhập (họ tên, email, sđt, avatar).
+    """
+    db = get_database()
+    if db is None:
+        raise HTTPException(status_code=500, detail="Không thể kết nối cơ sở dữ liệu")
+
+    now = datetime.now(timezone.utc)
+    update_fields = {}
+
+    if profile_data.full_name is not None:
+        update_fields["full_name"] = profile_data.full_name.strip()
+    if profile_data.phone is not None:
+        update_fields["phone"] = profile_data.phone.strip()
+    if profile_data.avatar_url is not None:
+        update_fields["avatar_url"] = profile_data.avatar_url
+
+    if profile_data.email is not None:
+        new_email = profile_data.email.strip()
+        if new_email and new_email != current_user.get("email"):
+            # Kiểm tra email đã có người dùng khác dùng chưa
+            existing = await db.users.find_one({
+                "email": new_email,
+                "id": {"$ne": current_user["id"]},
+                "is_deleted": {"$ne": True}
+            })
+            if existing:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Email '{new_email}' đã được liên kết với tài khoản khác"
+                )
+        update_fields["email"] = new_email or None
+
+    if update_fields:
+        update_fields["updated_at"] = now
+        await db.users.update_one({"id": current_user["id"]}, {"$set": update_fields})
+
+    updated_user = await db.users.find_one({"id": current_user["id"]})
+    return updated_user
