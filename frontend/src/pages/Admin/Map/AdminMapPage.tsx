@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, Tooltip, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import {
@@ -7,71 +7,85 @@ import {
   Search,
   ExternalLink,
   Globe,
-  School,
-  ChevronDown
+  School
 } from 'lucide-react';
 import { schoolApi } from '../../../services/api';
 import { getGoogleMapsPlaceUrl } from '../../../utils/navigation';
 
-// Sửa lỗi hiển thị icon mặc định của Leaflet
-const schoolIcon = new L.Icon({
-  iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png',
-  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-  popupAnchor: [1, -34],
-  shadowSize: [41, 41],
-});
+// Tạo biểu tượng Marker trường học hiện đại (Huy hiệu Mũ Cử nhân)
+const createSchoolIcon = (isSelected: boolean) => {
+  const gradient = isSelected
+    ? 'linear-gradient(135deg, #0284c7, #2563eb, #7c3aed)'
+    : 'linear-gradient(135deg, #1d4ed8, #2563eb, #3b82f6)';
+
+  return L.divIcon({
+    className: 'custom-school-marker-icon',
+    html: `
+      <div style="position: relative; width: 34px; height: 42px; transform: translate(-50%, -100%); cursor: pointer;">
+        ${
+          isSelected
+            ? '<div style="position: absolute; inset: -4px; border-radius: 9999px; background: rgba(56, 189, 248, 0.45); animation: ping 1.5s cubic-bezier(0, 0, 0.2, 1) infinite;"></div>'
+            : ''
+        }
+        <div style="
+          position: relative;
+          width: 34px;
+          height: 34px;
+          border-radius: 50%;
+          background: ${gradient};
+          border: 2.5px solid #ffffff;
+          box-shadow: 0 4px 14px rgba(15, 23, 42, 0.35), 0 0 10px rgba(37, 99, 235, 0.45);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: white;
+          transition: transform 0.2s ease, box-shadow 0.2s ease;
+        ">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M22 10v6M2 10l10-5 10 5-10 5z"/>
+            <path d="M6 12v5c3 3 9 3 12 0v-5"/>
+          </svg>
+        </div>
+        <div style="
+          width: 0;
+          height: 0;
+          border-left: 5px solid transparent;
+          border-right: 5px solid transparent;
+          border-top: 7px solid ${isSelected ? '#2563eb' : '#1d4ed8'};
+          margin: -1px auto 0;
+          filter: drop-shadow(0 2px 2px rgba(0,0,0,0.3));
+        "></div>
+      </div>
+    `,
+    iconSize: [0, 0],
+    iconAnchor: [0, 0],
+    popupAnchor: [0, -42],
+    tooltipAnchor: [0, -44],
+  });
+};
 
 export interface MapLayerConfig {
-  id: string;
+  id: 'streets' | 'satellite';
   name: string;
   url: string;
   attribution: string;
   icon: string;
-  sub: string;
 }
 
 export const MAP_LAYERS: MapLayerConfig[] = [
   {
     id: 'streets',
-    name: 'Đường phố chuẩn',
+    name: 'Bản đồ chuẩn',
     url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
     icon: '🗺️',
-    sub: 'OpenStreetMap chuẩn',
   },
   {
     id: 'satellite',
-    name: 'Ảnh Vệ tinh',
+    name: 'Vệ tinh',
     url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
     attribution: 'Tiles &copy; Esri',
     icon: '🛰️',
-    sub: 'Esri World Imagery HD',
-  },
-  {
-    id: 'light',
-    name: 'Bản đồ Sáng',
-    url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
-    attribution: '&copy; CARTO',
-    icon: '⚪',
-    sub: 'CartoDB Positron sạch',
-  },
-  {
-    id: 'dark',
-    name: 'Bản đồ Tối',
-    url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
-    attribution: '&copy; CARTO',
-    icon: '⚫',
-    sub: 'CartoDB Dark Matter',
-  },
-  {
-    id: 'topo',
-    name: 'Địa hình Cao độ',
-    url: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
-    attribution: '&copy; OpenTopoMap',
-    icon: '⛰️',
-    sub: 'Đường đồng mức địa hình',
   },
 ];
 
@@ -106,21 +120,20 @@ export function AdminMapPage() {
   const [selectedSchool, setSelectedSchool] = useState<any | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
 
-  // Chế độ xem bản đồ (lưu trữ trong localStorage để nhớ khi quay lại)
-  const [layerId, setLayerId] = useState<string>(() => {
-    return localStorage.getItem('irs_map_layer') || 'streets';
+  // Chế độ xem bản đồ: 'streets' (Bản đồ chuẩn) hoặc 'satellite' (Vệ tinh)
+  const [layerId, setLayerId] = useState<'streets' | 'satellite'>(() => {
+    const saved = localStorage.getItem('irs_map_layer');
+    return saved === 'satellite' ? 'satellite' : 'streets';
   });
-  const [layerMenuOpen, setLayerMenuOpen] = useState(false);
 
   // Vị trí trung tâm mặc định (Đồng Nai / TP. Biên Hòa)
   const defaultCenter: [number, number] = [10.9574, 106.8427];
 
   const currentLayer = MAP_LAYERS.find((l) => l.id === layerId) || MAP_LAYERS[0];
 
-  const handleSelectLayer = (id: string) => {
+  const handleSelectLayer = (id: 'streets' | 'satellite') => {
     setLayerId(id);
     localStorage.setItem('irs_map_layer', id);
-    setLayerMenuOpen(false);
   };
 
   useEffect(() => {
@@ -279,71 +292,39 @@ export function AdminMapPage() {
         <div className="lg:col-span-8 xl:col-span-9 bg-white rounded-2xl border border-slate-200/80 p-3 shadow-xs">
           <div className="h-[700px] w-full rounded-xl overflow-hidden relative border border-slate-100">
             {loading && (
-              <div className="absolute inset-0 z-20 bg-white/75 backdrop-blur-xs flex items-center justify-center">
-                <div className="text-center">
-                  <div className="w-8 h-8 border-3 border-blue-600/30 border-t-blue-600 rounded-full animate-spin mx-auto mb-2" />
-                  <p className="text-xs font-semibold text-slate-600">
-                    Đang tải các điểm trường lên bản đồ...
-                  </p>
-                </div>
+              <div className="absolute top-3 left-1/2 -translate-x-1/2 z-[1000] bg-white/95 backdrop-blur-md px-3.5 py-1.5 rounded-full shadow-lg border border-slate-200/90 flex items-center gap-2 text-xs font-semibold text-slate-700 animate-slide-down pointer-events-none">
+                <div className="w-3.5 h-3.5 border-2 border-blue-600/30 border-t-blue-600 rounded-full animate-spin" />
+                <span>Đang tải các điểm trường lên bản đồ...</span>
               </div>
             )}
 
-            {/* Floating Map Layer Switcher (Chế độ xem bản đồ trực tiếp trên trang bản đồ) */}
-            <div className="absolute top-3 right-3 z-[1000]">
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={() => setLayerMenuOpen(!layerMenuOpen)}
-                  className="flex items-center gap-2 px-3 py-2 bg-white/95 backdrop-blur-md hover:bg-white text-slate-800 rounded-xl shadow-lg border border-slate-200/80 text-xs font-bold transition-all hover:scale-[1.02] active:scale-[0.98]"
-                >
-                  <span className="text-sm">{currentLayer.icon}</span>
-                  <span>{currentLayer.name}</span>
-                  <ChevronDown
-                    className={`w-3.5 h-3.5 text-slate-500 transition-transform duration-200 ${
-                      layerMenuOpen ? 'rotate-180' : ''
-                    }`}
-                  />
-                </button>
+            {/* Nút bật/tắt (Toggle Switch): Bản đồ chuẩn vs Vệ tinh */}
+            <div className="absolute top-3 right-3 z-[1000] bg-white/95 backdrop-blur-md p-1 rounded-2xl shadow-lg border border-slate-200/90 flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => handleSelectLayer('streets')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                  layerId === 'streets'
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/80'
+                }`}
+              >
+                <span className="text-sm">🗺️</span>
+                <span>Bản đồ chuẩn</span>
+              </button>
 
-                {layerMenuOpen && (
-                  <div className="absolute right-0 mt-2 w-56 bg-white/95 backdrop-blur-md rounded-2xl shadow-xl border border-slate-200/90 py-1.5 overflow-hidden animate-scale-in">
-                    <div className="px-3 py-1.5 text-[10px] font-black uppercase tracking-wider text-slate-400 border-b border-slate-100">
-                      Chọn góc nhìn bản đồ
-                    </div>
-                    <div className="p-1 space-y-1">
-                      {MAP_LAYERS.map((layer) => {
-                        const isSelected = layer.id === layerId;
-                        return (
-                          <button
-                            key={layer.id}
-                            type="button"
-                            onClick={() => handleSelectLayer(layer.id)}
-                            className={`w-full flex items-center justify-between px-2.5 py-2 rounded-xl text-left text-xs transition-all ${
-                              isSelected
-                                ? 'bg-blue-50 text-blue-700 font-bold border border-blue-200/60'
-                                : 'text-slate-700 hover:bg-slate-100/80 font-medium'
-                            }`}
-                          >
-                            <div className="flex items-center gap-2">
-                              <span className="text-base">{layer.icon}</span>
-                              <div>
-                                <div className="leading-snug">{layer.name}</div>
-                                <div className="text-[10px] text-slate-400 font-normal">
-                                  {layer.sub}
-                                </div>
-                              </div>
-                            </div>
-                            {isSelected && (
-                              <span className="w-2 h-2 rounded-full bg-blue-600" />
-                            )}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-              </div>
+              <button
+                type="button"
+                onClick={() => handleSelectLayer('satellite')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                  layerId === 'satellite'
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/80'
+                }`}
+              >
+                <span className="text-sm">🛰️</span>
+                <span>Vệ tinh</span>
+              </button>
             </div>
 
             <MapContainer
@@ -367,23 +348,68 @@ export function AdminMapPage() {
               {filteredSchools.map((school) => {
                 if (!school.lat || !school.lng) return null;
 
+                const isCurrent = Boolean(
+                  selectedSchool && (
+                    (selectedSchool.id && selectedSchool.id === school.id) ||
+                    (selectedSchool._id && selectedSchool._id === school._id)
+                  )
+                );
+
                 return (
                   <Marker
                     key={school.id || school._id}
                     position={[Number(school.lat), Number(school.lng)]}
-                    icon={schoolIcon}
+                    icon={createSchoolIcon(isCurrent)}
                     eventHandlers={{
+                      mouseover: (e) => {
+                        e.target.openTooltip();
+                      },
                       click: () => {
-                        const isCurrent = Boolean(
-                          selectedSchool && (
-                            (selectedSchool.id && selectedSchool.id === school.id) ||
-                            (selectedSchool._id && selectedSchool._id === school._id)
-                          )
-                        );
                         setSelectedSchool(isCurrent ? null : school);
                       },
                     }}
                   >
+                    {/* Tooltip hiển thị tức thì khi hover chuột qua điểm trường */}
+                    <Tooltip
+                      direction="top"
+                      offset={[0, -44]}
+                      opacity={1}
+                      className="school-map-tooltip"
+                      sticky={false}
+                    >
+                      <div className="p-3 max-w-[270px] space-y-1.5 text-slate-800">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[10px] font-black px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 uppercase tracking-wide">
+                            {school.code || 'THPT'}
+                          </span>
+                          <span className="text-[10.5px] font-semibold text-slate-400 truncate">
+                            {school.district || 'Đồng Nai'}
+                          </span>
+                        </div>
+
+                        <h4 className="font-bold text-slate-900 text-xs leading-snug">
+                          {school.name}
+                        </h4>
+
+                        <p className="text-[11px] text-slate-500 line-clamp-2 leading-relaxed">
+                          {school.address || 'Chưa cập nhật địa chỉ'}
+                        </p>
+
+                        {(school.principal_name || school.school_board?.principal_name) && (
+                          <div className="pt-1.5 border-t border-slate-100 text-[10.5px] text-slate-700 flex items-center justify-between">
+                            <span className="text-slate-400">Hiệu trưởng:</span>
+                            <strong className="text-slate-800">
+                              {school.principal_name || school.school_board?.principal_name}
+                            </strong>
+                          </div>
+                        )}
+
+                        <div className="pt-1 text-[9.5px] text-blue-600 font-semibold text-right">
+                          Bấm để xem thêm chi tiết →
+                        </div>
+                      </div>
+                    </Tooltip>
+
                     <Popup>
                       <div className="p-2 max-w-[260px] text-xs space-y-2">
                         <div>
@@ -447,3 +473,4 @@ export function AdminMapPage() {
     </div>
   );
 }
+export default AdminMapPage;

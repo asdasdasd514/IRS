@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
 import { Menu, ShieldCheck, ChevronDown, LogOut } from 'lucide-react';
 import { useAppStore } from '../../store/useAppStore';
 
@@ -10,9 +10,8 @@ interface HeaderProps {
 }
 
 export function Header({ onOpenMobileMenu, title, subtitle }: HeaderProps) {
-  const navigate = useNavigate();
   const location = useLocation();
-  const { user, logout } = useAppStore();
+  const { user, startSplitTransition } = useAppStore();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -45,8 +44,8 @@ export function Header({ onOpenMobileMenu, title, subtitle }: HeaderProps) {
   }, [dropdownOpen]);
 
   const handleLogout = () => {
-    logout();
-    navigate('/login');
+    setDropdownOpen(false);
+    startSplitTransition(user?.username || 'admin', 'close');
   };
 
   return (

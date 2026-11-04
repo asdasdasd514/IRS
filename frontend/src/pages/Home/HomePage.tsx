@@ -10,13 +10,12 @@ import type { TripListItem } from '../../types';
 export const HomePage: React.FC = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { logout } = useAppStore();
+  const { user, startSplitTransition } = useAppStore();
   const [showGuide, setShowGuide] = useState(false);
 
   const handleLogout = () => {
     if (window.confirm('Bạn có chắc muốn đăng xuất?')) {
-      logout();
-      navigate('/login');
+      startSplitTransition(user?.username || 'admin', 'close');
     }
   };
 

@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { useEffect } from 'react';
 import { HomePage } from './pages/Home/HomePage';
 import { TripMapPage } from './pages/TripMap/TripMapPage';
@@ -24,6 +24,7 @@ import { TripQrPage } from './pages/TripQr/TripQrPage';
 import { MainLayout } from './layouts/MainLayout';
 import { useAppStore } from './store/useAppStore';
 import { authApi } from './services/api';
+import { SplitShutterTransition } from './components/common/SplitShutterTransition';
 
 // Loading Screen khi xác thực token
 function AuthLoadingScreen() {
@@ -136,7 +137,29 @@ function RootRoute() {
 }
 
 function App() {
-  const { token, setAuth, setAuthChecked } = useAppStore();
+  const navigate = useNavigate();
+  const {
+    token,
+    setAuth,
+    setAuthChecked,
+    isSplitTransition,
+    splitDirection,
+    finishSplitTransition,
+    logout,
+  } = useAppStore();
+
+  const handleTransitionComplete = () => {
+    if (splitDirection === 'close') {
+      logout();
+      navigate('/login', { replace: true });
+      // Giữ shutter che thêm 120ms để LoginPage mount và paint xong hoàn toàn bên dưới
+      setTimeout(() => {
+        finishSplitTransition();
+      }, 120);
+    } else {
+      finishSplitTransition();
+    }
+  };
 
   // Kiểm tra tính hợp lệ của token khi khởi động
   useEffect(() => {
@@ -157,7 +180,15 @@ function App() {
   }, []);
 
   return (
-    <Routes>
+    <>
+      {/* Hiệu ứng cắt đôi màn hình: 'open' khi đăng nhập, 'close' khi đăng xuất */}
+      {isSplitTransition && (
+        <SplitShutterTransition
+          direction={splitDirection}
+          onComplete={handleTransitionComplete}
+        />
+      )}
+      <Routes>
       {/* Auth Routes */}
       <Route
         path="/login"
@@ -317,6 +348,7 @@ function App() {
       {/* Catch-all redirect */}
       <Route path="*" element={<Navigate to="/login" replace />} />
     </Routes>
+    </>
   );
 }
 

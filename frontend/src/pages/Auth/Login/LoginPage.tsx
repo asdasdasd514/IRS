@@ -4,16 +4,22 @@ import { Eye, EyeOff, Lock, User, LogIn, AlertCircle } from 'lucide-react';
 import { useAppStore } from '../../../store/useAppStore';
 import { authApi } from '../../../services/api';
 import { BrandLogo } from '../../../components/BrandLogo/BrandLogo';
+import { CompassPreloader } from '../../../components/common/CompassPreloader';
 
 export function LoginPage() {
   const navigate = useNavigate();
   const setAuth = useAppStore((state) => state.setAuth);
+  const startSplitTransition = useAppStore((state) => state.startSplitTransition);
+  const isPreloadCompleted = useAppStore((state) => state.isPreloadCompleted);
+  const setPreloadCompleted = useAppStore((state) => state.setPreloadCompleted);
+  const splitUsername = useAppStore((state) => state.splitUsername);
 
-  const [usernameOrEmail, setUsernameOrEmail] = useState('');
+  const [usernameOrEmail, setUsernameOrEmail] = useState(() => splitUsername || 'admin');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [isLoaded, setIsLoaded] = useState(() => isPreloadCompleted);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -25,37 +31,57 @@ export function LoginPage() {
       const loginRes = await authApi.login(usernameOrEmail.trim(), password);
       const token = loginRes.access_token;
 
+      // Lưu token vào localStorage
       localStorage.setItem('token', token);
 
       // 2. Lấy thông tin user đầy đủ (Role, Permissions)
       const user = loginRes.user || (await authApi.getMe());
+
+      // 3. Kích hoạt hiệu ứng cắt đôi màn hình (1 bên lên, 1 bên xuống)
+      startSplitTransition(usernameOrEmail.trim(), 'open');
+
+      // 4. Cập nhật phiên đăng nhập và chuyển hướng:
+      // Trang đích sẽ hiển thị ngay lập tức phía sau 2 nửa màn hình đang tách ra!
       setAuth(user, token);
 
-      // 3. Phân quyền chuyển hướng (RBAC)
       const isAdmin = user.is_admin || user.role === 'admin';
-      if (isAdmin) {
-        navigate('/admin/map');
-      } else {
-        navigate('/');
-      }
+      navigate(isAdmin ? '/admin/map' : '/', { replace: true });
     } catch (err: any) {
       console.error('Login error:', err);
       const msg =
         err.response?.data?.detail ||
         'Tài khoản hoặc mật khẩu không chính xác. Vui lòng thử lại.';
       setError(msg);
-    } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-slate-900/95 flex items-center justify-center p-4 relative overflow-hidden">
-      {/* Background ambient lighting with soft breathing glow */}
-      <div className="absolute -top-32 -left-32 w-96 h-96 rounded-full bg-blue-600/25 blur-3xl animate-glow-pulse pointer-events-none" />
-      <div className="absolute -bottom-32 -right-32 w-96 h-96 rounded-full bg-indigo-600/25 blur-3xl animate-glow-pulse delay-200 pointer-events-none" />
+    <div className="min-h-screen bg-[#0b1329] flex items-center justify-center p-4 relative overflow-hidden">
+      {/* Hiệu ứng Preloader La Bàn chỉ chạy lần đầu khi nạp hệ thống, không chạy lại khi đăng xuất */}
+      {!isPreloadCompleted && (
+        <CompassPreloader
+          onFinished={() => {
+            setIsLoaded(true);
+            setPreloadCompleted(true);
+          }}
+        />
+      )}
 
-      <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl border border-slate-100 p-8 sm:p-10 relative z-10 animate-scale-in">
+      {/* Background ambient lighting with soft breathing glow */}
+      <div className="absolute -top-32 -left-32 w-96 h-96 rounded-full bg-blue-600/20 blur-3xl pointer-events-none" />
+      <div className="absolute -bottom-32 -right-32 w-96 h-96 rounded-full bg-indigo-600/20 blur-3xl pointer-events-none" />
+
+      {/* Hộp đăng nhập: Khi đã nạp trước đó sẽ đứng tĩnh 100% không chạy lại transition để chống nhấp sáng */}
+      <div
+        className={`w-full max-w-md bg-white rounded-2xl shadow-2xl border border-slate-100 p-8 sm:p-10 relative z-10 ${
+          isPreloadCompleted
+            ? 'blur-0 opacity-100 pointer-events-auto'
+            : isLoaded
+            ? 'blur-0 opacity-100 pointer-events-auto transition-all duration-700 ease-out'
+            : 'blur-md opacity-35 pointer-events-none select-none transition-all duration-700 ease-out'
+        }`}
+      >
         {/* Brand Header with New Icon Logo (Concept 1) */}
         <div className="flex flex-col items-center justify-center text-center mb-6">
           <BrandLogo
@@ -95,7 +121,7 @@ export function LoginPage() {
                 value={usernameOrEmail}
                 onChange={(e) => setUsernameOrEmail(e.target.value)}
                 placeholder="admin hoặc email@domain.com"
-                className="w-full pl-10 pr-4 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 outline-none transition"
+                className="w-full pl-10 pr-4 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl text-slate-800 font-medium focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 outline-none transition"
                 required
               />
             </div>
@@ -120,7 +146,7 @@ export function LoginPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
-                className="w-full pl-10 pr-10 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 outline-none transition"
+                className="w-full pl-10 pr-10 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl placeholder:text-slate-400 placeholder:tracking-widest placeholder:font-mono focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 outline-none transition tracking-widest font-mono"
                 required
               />
               <button

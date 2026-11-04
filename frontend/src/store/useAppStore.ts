@@ -54,6 +54,19 @@ interface AppState {
   toggleSidebar: () => void;
   setSidebarCollapsed: (collapsed: boolean) => void;
 
+  // Split Shutter Transition state
+  // 'open': khi đăng nhập (tách đôi ra để lộ trang chính)
+  // 'close': khi đăng xuất (quay ngược lại, 2 bên khép lại để về trang đăng nhập)
+  isSplitTransition: boolean;
+  splitDirection: 'open' | 'close';
+  splitUsername: string;
+  startSplitTransition: (username?: string, direction?: 'open' | 'close') => void;
+  finishSplitTransition: () => void;
+
+  // Theo dõi trạng thái đã tải CompassPreloader xong trong phiên làm việc
+  isPreloadCompleted: boolean;
+  setPreloadCompleted: (completed: boolean) => void;
+
   // Reset all state
   reset: () => void;
 }
@@ -81,6 +94,32 @@ export const useAppStore = create<AppState>((set) => ({
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     set({ user: null, token: null, authChecked: true, currentTrip: null });
+  },
+
+  // Split Shutter Transition
+  isSplitTransition: false,
+  splitDirection: 'open',
+  splitUsername: 'admin',
+  startSplitTransition: (username, direction = 'open') =>
+    set({
+      isSplitTransition: true,
+      splitUsername: username || 'admin',
+      splitDirection: direction,
+    }),
+  finishSplitTransition: () => set({ isSplitTransition: false }),
+
+  // Preload state (lưu trạng thái để khi đăng xuất không bị tải lại animation la bàn)
+  isPreloadCompleted:
+    typeof window !== 'undefined' && sessionStorage.getItem('irs_preloaded') === '1',
+  setPreloadCompleted: (completed) => {
+    if (typeof window !== 'undefined') {
+      if (completed) {
+        sessionStorage.setItem('irs_preloaded', '1');
+      } else {
+        sessionStorage.removeItem('irs_preloaded');
+      }
+    }
+    set({ isPreloadCompleted: completed });
   },
 
   // Current trip
