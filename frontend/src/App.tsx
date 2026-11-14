@@ -6,6 +6,7 @@ import { CreateTripPage } from './pages/CreateTrip/CreateTripPage';
 import { EditTripPage } from './pages/EditTrip/EditTripPage';
 import { LoginPage } from './pages/Auth/Login/LoginPage';
 import { RegisterPage } from './pages/Auth/Register/RegisterPage';
+import { AdminDashboardPage } from './pages/Admin/Dashboard/AdminDashboardPage';
 import { AdminMapPage } from './pages/Admin/Map/AdminMapPage';
 import { AdminCampaignsPage } from './pages/Admin/Campaigns/AdminCampaignsPage';
 import { AdminLocationsPage } from './pages/Admin/Locations/AdminLocationsPage';
@@ -105,7 +106,7 @@ function PublicAuthRoute({ children }: { children: React.ReactNode }) {
 
   if (token && user) {
     const isAdmin = user.role === 'admin' || user.is_admin;
-    return <Navigate to={isAdmin ? "/admin/map" : "/staff/campaigns"} replace />;
+    return <Navigate to={isAdmin ? "/admin/dashboard" : "/staff/campaigns"} replace />;
   }
 
   return <>{children}</>;
@@ -129,7 +130,7 @@ function RootRoute() {
 
   const isAdmin = user.role === 'admin' || user.is_admin;
   if (isAdmin) {
-    return <Navigate to="/admin/map" replace />;
+    return <Navigate to="/admin/dashboard" replace />;
   }
 
   // Cán bộ thực địa: chuyển thẳng tới trang Chiến dịch phân bổ của Staff!
@@ -216,7 +217,8 @@ function App() {
           </PortalLayoutRoute>
         }
       >
-        <Route index element={<Navigate to="/admin/map" replace />} />
+        <Route index element={<Navigate to="/admin/dashboard" replace />} />
+        <Route path="dashboard" element={<AdminDashboardPage />} />
         <Route path="map" element={<AdminMapPage />} />
         <Route
           path="campaigns"

@@ -861,5 +861,95 @@ export const visitApi = {
   },
 };
 
+export interface DashboardStatsResponse {
+  status: string;
+  kpi_metrics: {
+    visitedSchools: number;
+    totalSchools: number;
+    totalSurveys: number;
+    surveyGrowthRate: string;
+    totalCampaigns?: number;
+    activeCampaigns: number;
+    totalUsers?: number;
+    activeBusCrews: number;
+    totalDistanceKm: number;
+    distanceTargetKm: number;
+    activeStaff?: number;
+    totalReports?: number;
+    targetProvinces?: number;
+  };
+  top_majors: Array<{
+    major: string;
+    count: number;
+    percentage: number;
+    color: string;
+    textColor: string;
+  }>;
+  exam_subject_combinations: Array<{
+    group: string;
+    percentage: number;
+    count: number;
+    color: string;
+  }>;
+  weekly_trend: Array<{
+    week: string;
+    surveys: number;
+    schools: number;
+    cumulativeSurveys: number;
+  }>;
+  regional_coverage: Array<{
+    province: string;
+    visited: number;
+    total: number;
+    percentage: number;
+    avgDistanceKm: number;
+    statusLabel: string;
+    badgeClass: string;
+    barColor: string;
+  }>;
+  active_campaigns?: Array<{
+    id: string;
+    name: string;
+    status: string;
+    deployed_trip_id?: string | null;
+    trip_code?: string | null;
+    destinations_count: number;
+    estimated_distance_km: number;
+    estimated_duration_text?: string;
+    start_date?: string | null;
+    end_date?: string | null;
+    leader_name?: string | null;
+    notes?: string;
+    created_at?: string;
+  }>;
+  recent_campaigns?: Array<{
+    id: string;
+    name: string;
+    status: string;
+    deployed_trip_id?: string | null;
+    trip_code?: string | null;
+    destinations_count: number;
+    estimated_distance_km: number;
+    estimated_duration_text?: string;
+    start_date?: string | null;
+    end_date?: string | null;
+    leader_name?: string | null;
+    notes?: string;
+    created_at?: string;
+  }>;
+  meta?: {
+    timestamp: string;
+    campaign_id: string;
+  };
+}
+
+export const dashboardApi = {
+  getStats: async (campaignId?: string): Promise<DashboardStatsResponse> => {
+    const params = campaignId && campaignId !== 'all' ? { campaign_id: campaignId } : undefined;
+    const { data } = await api.get('/dashboard/stats', { params });
+    return data;
+  },
+};
+
 export default api;
 

@@ -1,4 +1,5 @@
 import {
+  LayoutDashboard,
   Map,
   Compass,
   Building2,
@@ -34,6 +35,13 @@ export const NAV_GROUPS: NavGroupConfig[] = [
     id: 'overview',
     title: 'Tổng quan',
     items: [
+      {
+        id: 'dashboard',
+        label: 'Bảng điều khiển',
+        path: '/admin/dashboard',
+        icon: LayoutDashboard,
+        roles: ['admin', 'staff'],
+      },
       {
         id: 'map',
         label: 'Bản đồ',

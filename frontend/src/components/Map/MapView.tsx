@@ -159,10 +159,10 @@ export function MapView({
       style={{ width: '100%', height: '100%' }}
       className="rounded-lg shadow-lg"
     >
-      {/* FREE OpenStreetMap - NO API KEY */}
+      {/* OpenStreetMap Standard - Reliable Global Mirror */}
       <TileLayer
-        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        url="https://tile.openstreetmap.de/{z}/{x}/{y}.png"
       />
 
       <AutoFitBounds locations={allLocations} />

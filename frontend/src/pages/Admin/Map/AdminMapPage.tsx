@@ -75,9 +75,9 @@ export interface MapLayerConfig {
 export const MAP_LAYERS: MapLayerConfig[] = [
   {
     id: 'streets',
-    name: 'Bản đồ chuẩn',
-    url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+    name: 'Bản đồ chuẩn (OpenStreetMap)',
+    url: 'https://tile.openstreetmap.de/{z}/{x}/{y}.png',
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
     icon: '🗺️',
   },
   {
