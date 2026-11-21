@@ -314,6 +314,16 @@ async def delete_note(note_id: str):
     db = get_database()
     now_iso = datetime.now(timezone.utc).isoformat()
 
+    # Hỗ trợ xóa ghi chú tổng thể được tổng hợp tự động từ trường 'notes' của hồ sơ trường
+    if note_id.startswith("fn-"):
+        school_id = note_id[3:]
+        res = await db.schools.update_one(
+            {"$or": [{"id": school_id}, {"code": school_id}]},
+            {"$set": {"notes": None, "updated_at": datetime.now(timezone.utc)}}
+        )
+        if res.matched_count > 0:
+            return {"message": "Đã xóa ghi chú thành công", "id": note_id}
+
     res = await db.schools.update_one(
         {"field_notes.id": note_id},
         {

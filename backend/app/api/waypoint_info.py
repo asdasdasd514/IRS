@@ -379,23 +379,26 @@ async def get_visit_logs(waypoint_id: str):
             if not log.get("is_deleted") and log.get("id") not in seen_log_ids:
                 seen_log_ids.add(log.get("id"))
                 log_copy = dict(log)
+                log_copy["waypoint_id"] = log_copy.get("waypoint_id") or item.get("id") or waypoint_id
+                log_copy["visit_content"] = log_copy.get("visit_content") or log_copy.get("notes") or "Đoàn đã ghé thăm và làm việc tại trường"
                 log_copy["trip_id"] = t_id
                 log_copy["trip_code"] = t_code
                 log_copy["trip_name"] = t_name
                 log_copy["leader_name"] = leader_name
                 log_copy["members_names"] = members_names
-                log_copy["visit_date"] = parse_to_datetime(log.get("visit_date") or log.get("created_at"))
-                log_copy["created_at"] = parse_to_datetime(log.get("created_at") or log.get("visit_date"))
+                log_copy["visit_date"] = parse_to_datetime(log.get("visit_date") or log.get("check_in_at") or log.get("created_at"))
+                log_copy["created_at"] = parse_to_datetime(log.get("created_at") or log.get("check_in_at") or log.get("visit_date"))
                 active_logs.append(log_copy)
 
-        # Nếu điểm này đã check-in nhưng chưa có visit_log thủ công, tự sinh 1 bản ghi hiển thị chuyến đã ghé
-        if item.get("is_visited") and not item.get("visit_logs"):
+        # Nếu điểm này đã check-in nhưng chưa có visit_log thủ công đang hoạt động, tự sinh 1 bản ghi hiển thị chuyến đã ghé
+        active_manual_logs = [l for l in item.get("visit_logs", []) if isinstance(l, dict) and not l.get("is_deleted")]
+        if item.get("is_visited") and not active_manual_logs:
             auto_id = f"auto-visit-{item.get('id')}"
             if auto_id not in seen_log_ids:
                 seen_log_ids.add(auto_id)
-                v_date = item.get("visited_at") or item.get("updated_at") or item.get("created_at")
+                v_date = item.get("visited_at") or item.get("check_in_at") or item.get("updated_at") or item.get("created_at")
                 v_dt = parse_to_datetime(v_date)
-                vn_dt = v_dt + timedelta(hours=7)
+                vn_dt = v_dt.astimezone(timezone(timedelta(hours=7))) if v_dt.tzinfo else (v_dt + timedelta(hours=7))
                 time_str = vn_dt.strftime("%H:%M ngày %d/%m/%Y")
 
                 trip_desc = f" trong chuyến đi {t_code}" if t_code else (f" trong chuyến đi {t_name}" if t_name else "")
@@ -407,7 +410,7 @@ async def get_visit_logs(waypoint_id: str):
 
                 active_logs.append({
                     "id": auto_id,
-                    "waypoint_id": item.get("id"),
+                    "waypoint_id": item.get("id") or waypoint_id,
                     "visit_content": content,
                     "visit_date": v_dt,
                     "created_at": v_dt,

@@ -161,8 +161,12 @@ async def _gather_all_visits(db) -> List[Dict[str, Any]]:
                 "created_at": v_date_str
             })
 
-        # B. Check-in thực tế tự động (nếu đã ghé thăm)
-        if item.get("is_visited"):
+        # B. Check-in thực tế tự động (chỉ sinh khi chưa có visit_logs thủ công cho điểm dừng này)
+        has_manual_visit = any(
+            isinstance(log, dict) and not log.get("is_deleted")
+            for log in (item.get("visit_logs") or [])
+        )
+        if item.get("is_visited") and not has_manual_visit:
             auto_id = f"auto-visit-{wp_id}"
             if auto_id not in seen_ids:
                 seen_ids.add(auto_id)

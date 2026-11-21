@@ -38,7 +38,12 @@ class Settings(BaseSettings):
     CLOUDINARY_URL: str = ""
     
     class Config:
-        env_file = ".env"
+        env_file = [
+            ".env",
+            "backend/.env",
+            Path(__file__).resolve().parent.parent.parent / ".env",
+            Path(__file__).resolve().parent.parent / ".env"
+        ]
         extra = "ignore"
 
 
