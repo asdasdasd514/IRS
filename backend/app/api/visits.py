@@ -49,7 +49,7 @@ async def _gather_all_visits(db) -> List[Dict[str, Any]]:
 
         trips_cache[t_id] = {
             "trip_code": t.get("trip_code") or t.get("name") or "Chuyến đi",
-            "trip_name": t.get("name") or "Chuyến đi",
+            "trip_name": t.get("trip_name") or t.get("name") or "Chuyến đi",
             "campaign_id": t.get("campaign_id"),
             "leader_name": leader,
             "members_names": ", ".join(m_list) if m_list else None
@@ -153,6 +153,9 @@ async def _gather_all_visits(db) -> List[Dict[str, Any]]:
                 "campaign_name": camp_name,
                 "leader_name": t_info.get("leader_name"),
                 "members_names": t_info.get("members_names"),
+                "author_name": log.get("author_name") or t_info.get("leader_name") or "Quản Trị Viên Hệ Thống",
+                "check_in_at": log.get("check_in_at") or item.get("check_in_at"),
+                "check_out_at": log.get("check_out_at") or item.get("check_out_at"),
                 "visit_date": v_date_str,
                 "visit_content": log.get("visit_content") or "Đoàn đã ghé làm việc tại trường",
                 "is_checkin": False,

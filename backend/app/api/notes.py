@@ -53,7 +53,7 @@ async def _get_all_embedded_notes(db) -> List[Dict[str, Any]]:
             fnotes = [{
                 "id": f"fn-{s_id}",
                 "content": str(school["notes"]).strip(),
-                "author_name": "Đoàn tuyển sinh",
+                "author_name": "Quản Trị Viên Hệ Thống",
                 "category": "Ghi chú",
                 "trip_id": None,
                 "trip_name": "Ghi chú trường",

@@ -295,6 +295,7 @@ async def get_dashboard_stats(
             }
 
         active_statuses = {"assigned", "in_progress", "active", "ongoing", "deployed"}
+        inactive_statuses = {"completed", "cancelled", "archived", "closed", "draft"}
         sorted_campaigns = sorted(
             campaigns,
             key=lambda x: str(x.get("created_at") or x.get("start_date") or ""),
@@ -304,7 +305,9 @@ async def get_dashboard_stats(
         active_campaigns_list = [
             serialize_campaign(c)
             for c in sorted_campaigns
-            if str(c.get("status", "")).lower() in active_statuses or c.get("deployed_trip_id") or (c.get("team") or {}).get("leader_name")
+            if str(c.get("status", "")).lower() not in inactive_statuses and (
+                str(c.get("status", "")).lower() in active_statuses or c.get("deployed_trip_id") or (c.get("team") or {}).get("leader_name")
+            )
         ]
 
         recent_campaigns_list = [

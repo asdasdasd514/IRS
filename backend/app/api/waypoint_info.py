@@ -153,6 +153,16 @@ async def create_waypoint(waypoint_data: WaypointCreate):
     return await format_waypoint_response_async(db, wp_doc)
 
 
+@router.get("/{waypoint_id}", response_model=WaypointResponse)
+async def get_waypoint_by_id(waypoint_id: str):
+    """Lấy thông tin điểm dừng theo ID (hỗ trợ cả id, school_id, hoặc code)"""
+    db = get_database()
+    wp, _ = await find_any_point(db, waypoint_id)
+    if not wp:
+        raise HTTPException(status_code=404, detail="Không tìm thấy điểm dừng")
+    return await format_waypoint_response_async(db, wp)
+
+
 @router.patch("/{waypoint_id}", response_model=WaypointResponse)
 async def update_waypoint(waypoint_id: str, waypoint_data: WaypointUpdate):
     """Cập nhật tọa độ, tên hoặc ghi chú của điểm dừng"""
