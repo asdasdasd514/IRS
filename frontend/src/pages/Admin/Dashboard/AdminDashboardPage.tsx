@@ -97,11 +97,17 @@ export const AdminDashboardPage: React.FC = () => {
   const formatDate = (dateStr?: string | null) => {
     if (!dateStr) return '';
     try {
+      const cleanStr = String(dateStr).trim();
+      const datePart = cleanStr.includes('T') ? cleanStr.split('T')[0] : cleanStr.split(' ')[0];
+      const parts = datePart.split('-');
+      if (parts.length === 3 && parts[0].length === 4) {
+        return `${parts[2]}/${parts[1]}/${parts[0]}`;
+      }
       const d = new Date(dateStr);
       if (isNaN(d.getTime())) return dateStr;
       return `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getFullYear()}`;
     } catch {
-      return dateStr;
+      return String(dateStr);
     }
   };
 
@@ -686,9 +692,9 @@ export const AdminDashboardPage: React.FC = () => {
                   {recentCampaigns.map((camp: any) => {
                     const destCount = camp.destinations_count ?? camp.destinations?.length ?? 0;
                     const distKm = camp.estimated_distance_km ? `${camp.estimated_distance_km} km` : 'Đang tính';
-                    const dateDisplay = camp.created_at
-                      ? formatDate(camp.created_at)
-                      : (camp.start_date ? formatDate(camp.start_date) : '');
+                    const dateDisplay = camp.start_date
+                      ? formatDate(camp.start_date)
+                      : (camp.created_at ? formatDate(camp.created_at) : '');
 
                     return (
                       <div

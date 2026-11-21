@@ -300,7 +300,7 @@ async def get_dashboard_stats(
         inactive_statuses = {"completed", "cancelled", "archived", "closed", "draft"}
         sorted_campaigns = sorted(
             campaigns,
-            key=lambda x: str(x.get("created_at") or x.get("start_date") or ""),
+            key=lambda x: str(x.get("start_date") or x.get("created_at") or ""),
             reverse=True
         )
 
