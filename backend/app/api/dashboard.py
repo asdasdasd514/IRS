@@ -84,9 +84,11 @@ async def get_dashboard_stats(
         total_campaigns_count = len(campaigns)
         # Số chiến dịch đang triển khai thực tế
         in_progress_campaigns_count = sum(
-            1 for c in campaigns if str(c.get("status", "")).lower() in ["assigned", "in_progress", "active", "ongoing"]
+            1 for c in campaigns if str(c.get("status", "")).lower() in ["assigned", "in_progress", "active", "ongoing", "deployed"]
         )
-        active_bus_crews_count = len(trips)
+        active_bus_crews_count = sum(
+            1 for t in trips if str(t.get("status", "")).lower() in ["assigned", "in_progress", "active", "ongoing", "deployed"]
+        )
 
         # 6. Tổng cự ly hành trình (km)
         total_distance = sum(float(t.get("estimated_distance_km") or 0) for t in trips)

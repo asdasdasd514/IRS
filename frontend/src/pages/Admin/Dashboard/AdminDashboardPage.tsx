@@ -69,21 +69,25 @@ export const AdminDashboardPage: React.FC = () => {
 
   // Danh sách Chiến dịch đang triển khai (Active / Deployed / Assigned)
   const activeCampaigns = useMemo(() => {
-    if (dashboardData?.active_campaigns && dashboardData.active_campaigns.length > 0) {
+    if (Array.isArray(dashboardData?.active_campaigns)) {
       return dashboardData.active_campaigns;
     }
     const activeStatuses = ['assigned', 'in_progress', 'active', 'ongoing', 'deployed'];
-    return directCampaigns.filter(
-      (c: any) =>
-        activeStatuses.includes(String(c.status || '').toLowerCase()) ||
+    const inactiveStatuses = ['completed', 'cancelled', 'archived', 'closed', 'draft'];
+    return directCampaigns.filter((c: any) => {
+      const st = String(c.status || '').toLowerCase();
+      if (inactiveStatuses.includes(st)) return false;
+      return (
+        activeStatuses.includes(st) ||
         Boolean(c.deployed_trip_id) ||
         Boolean(c.team?.leader_name)
-    );
+      );
+    });
   }, [dashboardData?.active_campaigns, directCampaigns]);
 
   // Danh sách Chiến dịch gần nhất (Recent Campaigns)
   const recentCampaigns = useMemo(() => {
-    if (dashboardData?.recent_campaigns && dashboardData.recent_campaigns.length > 0) {
+    if (Array.isArray(dashboardData?.recent_campaigns) && dashboardData.recent_campaigns.length > 0) {
       return dashboardData.recent_campaigns;
     }
     return directCampaigns.slice(0, 5);
@@ -533,8 +537,12 @@ export const AdminDashboardPage: React.FC = () => {
                 </div>
 
                 <div className="flex items-center gap-2">
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                  <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold ${
+                    activeCampaigns.length > 0
+                      ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                      : 'bg-slate-100 text-slate-500 border border-slate-200'
+                  }`}>
+                    {activeCampaigns.length > 0 && <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />}
                     {activeCampaigns.length} đang chạy
                   </span>
                 </div>
